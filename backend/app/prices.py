@@ -25,8 +25,8 @@ def fetch_prices(ticker: str, period: str = "30d") -> list:
     for date, row in data.iterrows():
         prices.append({
             "ticker": ticker,
-            "close_price": round(float(row["Close"]), 2),
-            "volume": round(float(row["Volume"]), 2),
+            "close_price": round(float(row["Close"].iloc[0]), 2),
+            "volume": round(float(row["Volume"].iloc[0]), 2),
             "date": date.to_pydatetime()
         })
 
