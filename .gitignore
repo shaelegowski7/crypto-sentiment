@@ -1,0 +1,65 @@
+# ========================
+# Python / FastAPI
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ========================
+# Environment Variables
+# ========================
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ========================
+# Node / React
+# ========================
+node_modules/
+dist/
+build/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# Database
+# ========================
+*.sqlite3
+*.db
+*.sql.bak
+
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# IDEs
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+# Logs
+# ========================
+*.log
+logs/
