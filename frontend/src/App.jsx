@@ -92,7 +92,10 @@ export default function App() {
                 <YAxis yAxisId="sentiment" orientation="left" domain={[-1, 1]} stroke="#94a3b8" />
                 <Tooltip
                   contentStyle={{ background: "#1e293b", border: "1px solid #334155" }}
-                  formatter={(value, name) => [value, name === "price" ? "Price (£)" : "Sentiment"]}
+                  formatter={(value, name) => {
+                    if (name === "Price (£)") return [`£${value}`, "Price"]
+                    return [value, "Sentiment Score"]
+                  }}
                 />
                 <Legend />
                 <Bar yAxisId="sentiment" dataKey="sentiment" fill="#6366f1" opacity={0.7} name="Sentiment Score" />
