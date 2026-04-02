@@ -7,6 +7,12 @@ from .sentiment import analyse_sentiment
 from .prices import fetch_prices
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.background import BackgroundScheduler
+from .scraper import fetch_headlines
+from .sentiment import analyse_sentiment
+from .prices import fetch_prices
+from . import models
+from .database import SessionLocal
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -18,6 +24,50 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+TICKERS = ["BTC", "ETH", "SOL", "XRP"]
+
+def scrape_all():
+    db = SessionLocal()
+    try:
+        for ticker in TICKERS:
+            # Scrape and save headlines
+            headlines = fetch_headlines(ticker)
+            for h in headlines:
+                sentiment = analyse_sentiment(h["title"])
+                headline = models.Headline(
+                    ticker=h["ticker"],
+                    title=h["title"],
+                    source=h["source"],
+                    url=h["url"],
+                    sentiment_score=sentiment["score"],
+                    sentiment_label=sentiment["label"],
+                    published_at=h["published_at"]
+                )
+                db.add(headline)
+
+            # Fetch and save prices
+            prices = fetch_prices(ticker)
+            for p in prices:
+                price = models.Price(
+                    ticker=p["ticker"],
+                    close_price=p["close_price"],
+                    volume=p["volume"],
+                    date=p["date"]
+                )
+                db.add(price)
+
+        db.commit()
+        print("Scheduled scrape complete")
+    except Exception as e:
+        print(f"Scheduler error: {e}")
+    finally:
+        db.close()
+
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(scrape_all, "interval", hours=1)
+scheduler.start()
 
 @app.get("/")
 def root():
