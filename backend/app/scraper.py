@@ -5,8 +5,8 @@ import os
 
 load_dotenv()
 
-NEWS_API_KEY = os.getenv("NEWSAPI_KEY")
-BASE_URL = "https://newsapi.org/v2/everything"
+GNEWS_API_KEY = os.getenv("GNEWS_API_KEY")
+BASE_URL = "https://gnews.io/api/v4/search"
 
 TICKERS = {
     "BTC": "bitcoin",
@@ -17,17 +17,16 @@ TICKERS = {
 
 def fetch_headlines(ticker: str) -> list:
     query = TICKERS.get(ticker)
-    
+
     if not query:
         print(f"Unknown ticker: {ticker}")
         return []
 
     params = {
         "q": query,
-        "language": "en",
-        "sortBy": "publishedAt",
-        "pageSize": 10,
-        "apiKey": NEWS_API_KEY
+        "lang": "en",
+        "max": 10,
+        "apikey": GNEWS_API_KEY
     }
 
     response = requests.get(BASE_URL, params=params)
