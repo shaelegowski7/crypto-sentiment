@@ -31,16 +31,32 @@ export default function App() {
         priceMap[date] = p.close_price
       })
 
-      const merged = sentiment.map(s => ({
-        date: s.date.split("T")[0],
-        sentiment: parseFloat(s.score.toFixed(2)),
-        price: priceMap[s.date.split("T")[0]] || null,
-        label: s.label,
-        title: s.title
-      }))
+      // Average sentiment scores by date
+const sentimentByDate = {}
+sentiment.forEach(s => {
+  const date = s.date.split("T")[0]
+  if (!sentimentByDate[date]) {
+    sentimentByDate[date] = { scores: [], labels: [] }
+  }
+  sentimentByDate[date].scores.push(s.score)
+  sentimentByDate[date].labels.push(s.label)
+})
 
-      setData(merged)
-      setHeadlines(sentiment)
+const merged = Object.keys(sentimentByDate).map(date => {
+  const scores = sentimentByDate[date].scores
+  const avgScore = parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
+  return {
+    date,
+    sentiment: avgScore,
+    price: priceMap[date] || null,
+  }
+})
+
+// Sort by date
+merged.sort((a, b) => new Date(a.date) - new Date(b.date))
+
+setData(merged)
+setHeadlines(sentiment)
     } catch (err) {
       console.error(err)
     }
