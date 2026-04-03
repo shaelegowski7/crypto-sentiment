@@ -6,7 +6,7 @@ import {
 } from "recharts"
 
 const TICKERS = ["BTC", "ETH", "SOL", "XRP"]
-const API = "http://127.0.0.1:8000"
+const API = "https://crypto-sentiment-production.up.railway.app"
 
 export default function App() {
   const [ticker, setTicker] = useState("BTC")
