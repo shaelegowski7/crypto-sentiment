@@ -180,3 +180,21 @@ def get_stats(db: Session = Depends(get_db)):
         "total_prices": db.query(models.Price).count(),
         "tickers": tickers
     }
+
+@app.delete("/cleanup/duplicates")
+def cleanup_duplicates(db: Session = Depends(get_db)):
+    # Get all headlines ordered by id
+    all_headlines = db.query(models.Headline).order_by(models.Headline.id).all()
+    
+    seen_urls = set()
+    deleted = 0
+    
+    for headline in all_headlines:
+        if headline.url in seen_urls:
+            db.delete(headline)
+            deleted += 1
+        else:
+            seen_urls.add(headline.url)
+    
+    db.commit()
+    return {"message": f"Deleted {deleted} duplicate headlines"}
