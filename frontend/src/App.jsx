@@ -56,7 +56,7 @@ const merged = Object.keys(sentimentByDate).map(date => {
 merged.sort((a, b) => new Date(a.date) - new Date(b.date))
 
 setData(merged)
-setHeadlines(sentiment)
+setHeadlines(sentiment.slice(0, 10))
     } catch (err) {
       console.error(err)
     }
