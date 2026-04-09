@@ -171,3 +171,11 @@ def get_dashboard(ticker: str, db: Session = Depends(get_db)):
             } for p in prices
         ]
     }
+
+@app.get("/stats")
+def get_stats(db: Session = Depends(get_db)):
+    return {
+        "total_headlines": db.query(models.Headline).count(),
+        "total_prices": db.query(models.Price).count(),
+        "tickers": db.query(models.Headline.ticker).distinct().all()
+    }
