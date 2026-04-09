@@ -31,9 +31,13 @@ def scrape_all():
     db = SessionLocal()
     try:
         for ticker in TICKERS:
-            # Scrape and save headlines
             headlines = fetch_headlines(ticker)
             for h in headlines:
+                exists = db.query(models.Headline).filter(
+                    models.Headline.url == h["url"]
+                ).first()
+                if exists:
+                    continue
                 sentiment = analyse_sentiment(h["title"])
                 headline = models.Headline(
                     ticker=h["ticker"],
@@ -46,7 +50,6 @@ def scrape_all():
                 )
                 db.add(headline)
 
-            # Fetch and save prices
             prices = fetch_prices(ticker)
             for p in prices:
                 price = models.Price(
@@ -83,6 +86,11 @@ def scrape(ticker: str, db: Session = Depends(get_db)):
 
     saved = []
     for h in headlines:
+        exists = db.query(models.Headline).filter(
+            models.Headline.url == h["url"]
+        ).first()
+        if exists:
+            continue
         sentiment = analyse_sentiment(h["title"])
         headline = models.Headline(
             ticker=h["ticker"],
