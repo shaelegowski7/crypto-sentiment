@@ -52,6 +52,12 @@ def scrape_all():
 
             prices = fetch_prices(ticker)
             for p in prices:
+                exists = db.query(models.Price).filter(
+                    models.Price.ticker == p["ticker"],
+                    models.Price.date == p["date"]
+                ).first()
+                if exists:
+                    continue
                 price = models.Price(
                     ticker=p["ticker"],
                     close_price=p["close_price"],
@@ -116,6 +122,14 @@ def save_prices(ticker: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No price data found")
 
     for p in prices:
+        exists = db.query(models.Price).filter(
+            models.Price.ticker == p["ticker"],
+            models.Price.date == p["date"]
+        ).first()
+        
+        if exists:
+            continue
+            
         price = models.Price(
             ticker=p["ticker"],
             close_price=p["close_price"],
