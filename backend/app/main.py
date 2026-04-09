@@ -25,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TICKERS = ["BTC", "ETH", "SOL", "XRP"]
+TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
 
 def scrape_all():
     db = SessionLocal()

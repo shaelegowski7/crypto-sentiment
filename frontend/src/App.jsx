@@ -5,7 +5,7 @@ import {
   Tooltip, Legend, ResponsiveContainer
 } from "recharts"
 
-const TICKERS = ["BTC", "ETH", "SOL", "XRP"]
+const TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
 const API = "https://crypto-sentiment-production.up.railway.app"
 
 export default function App() {

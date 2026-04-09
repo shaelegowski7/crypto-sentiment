@@ -12,7 +12,12 @@ TICKERS = {
     "BTC": "bitcoin",
     "ETH": "ethereum",
     "SOL": "solana",
-    "XRP": "ripple XRP"
+    "XRP": "ripple XRP",
+    "BNB": "BNB binance",
+    "ADA": "cardano",
+    "AVAX": "avalanche crypto",
+    "LINK": "chainlink crypto",
+    "DOGE": "dogecoin"
 }
 
 def fetch_headlines(ticker: str) -> list:

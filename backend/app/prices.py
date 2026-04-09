@@ -5,7 +5,12 @@ TICKER_MAP = {
     "BTC": "BTC-GBP",
     "ETH": "ETH-GBP",
     "SOL": "SOL-GBP",
-    "XRP": "XRP-GBP"
+    "XRP": "XRP-GBP",
+    "BNB": "BNB-GBP",
+    "ADA": "ADA-GBP",
+    "AVAX": "AVAX-GBP",
+    "LINK": "LINK-GBP",
+    "DOGE": "DOGE-GBP"
 }
 
 def fetch_prices(ticker: str, period: str = "30d") -> list:
