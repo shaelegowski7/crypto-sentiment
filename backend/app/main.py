@@ -198,3 +198,21 @@ def cleanup_duplicates(db: Session = Depends(get_db)):
     
     db.commit()
     return {"message": f"Deleted {deleted} duplicate headlines"}
+
+@app.delete("/cleanup/duplicate-prices")
+def cleanup_duplicate_prices(db: Session = Depends(get_db)):
+    all_prices = db.query(models.Price).order_by(models.Price.id).all()
+    
+    seen = set()
+    deleted = 0
+    
+    for price in all_prices:
+        key = (price.ticker, str(price.date))
+        if key in seen:
+            db.delete(price)
+            deleted += 1
+        else:
+            seen.add(key)
+    
+    db.commit()
+    return {"message": f"Deleted {deleted} duplicate prices"}
