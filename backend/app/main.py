@@ -174,8 +174,9 @@ def get_dashboard(ticker: str, db: Session = Depends(get_db)):
 
 @app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
+    tickers = [r[0] for r in db.query(models.Headline.ticker).distinct().all()]
     return {
         "total_headlines": db.query(models.Headline).count(),
         "total_prices": db.query(models.Price).count(),
-        "tickers": db.query(models.Headline.ticker).distinct().all()
+        "tickers": tickers
     }
