@@ -13,6 +13,7 @@ export default function App() {
   const [data, setData] = useState([])
   const [headlines, setHeadlines] = useState([])
   const [loading, setLoading] = useState(false)
+  const [correlation, setCorrelation] = useState(null)
 
   useEffect(() => {
     fetchDashboard()
@@ -24,39 +25,40 @@ export default function App() {
       const res = await axios.get(`${API}/dashboard/${ticker}`)
       const { sentiment, prices } = res.data
 
-      // Merge prices and sentiment by date
       const priceMap = {}
       prices.forEach(p => {
         const date = p.date.split("T")[0]
         priceMap[date] = p.close_price
       })
 
-      // Average sentiment scores by date
-const sentimentByDate = {}
-sentiment.forEach(s => {
-  const date = s.date.split("T")[0]
-  if (!sentimentByDate[date]) {
-    sentimentByDate[date] = { scores: [], labels: [] }
-  }
-  sentimentByDate[date].scores.push(s.score)
-  sentimentByDate[date].labels.push(s.label)
-})
+      const sentimentByDate = {}
+      sentiment.forEach(s => {
+        const date = s.date.split("T")[0]
+        if (!sentimentByDate[date]) {
+          sentimentByDate[date] = { scores: [], labels: [] }
+        }
+        sentimentByDate[date].scores.push(s.score)
+        sentimentByDate[date].labels.push(s.label)
+      })
 
-const merged = Object.keys(sentimentByDate).map(date => {
-  const scores = sentimentByDate[date].scores
-  const avgScore = parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
-  return {
-    date,
-    sentiment: avgScore,
-    price: priceMap[date] || null,
-  }
-})
+      const merged = Object.keys(sentimentByDate).map(date => {
+        const scores = sentimentByDate[date].scores
+        const avgScore = parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
+        return {
+          date,
+          sentiment: avgScore,
+          price: priceMap[date] || null,
+        }
+      })
 
-// Sort by date
-merged.sort((a, b) => new Date(a.date) - new Date(b.date))
+      merged.sort((a, b) => new Date(a.date) - new Date(b.date))
 
-setData(merged)
-setHeadlines(sentiment.slice(0, 10))
+      setData(merged)
+      setHeadlines(sentiment.slice(0, 10))
+
+      const corrRes = await axios.get(`${API}/correlation/${ticker}`)
+      setCorrelation(corrRes.data)
+
     } catch (err) {
       console.error(err)
     }
@@ -74,8 +76,7 @@ setHeadlines(sentiment.slice(0, 10))
       <h1 style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>📈 Crypto Sentiment Dashboard</h1>
       <p style={{ color: "#94a3b8", marginBottom: "1.5rem" }}>News sentiment vs price — powered by FinBERT</p>
 
-      {/* Ticker selector */}
-      <div style={{ marginBottom: "2rem", display: "flex", gap: "0.5rem" }}>
+      <div style={{ marginBottom: "2rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         {TICKERS.map(t => (
           <button
             key={t}
@@ -97,7 +98,6 @@ setHeadlines(sentiment.slice(0, 10))
 
       {loading ? <p>Loading...</p> : (
         <>
-          {/* Chart */}
           <div style={{ background: "#1e293b", borderRadius: "12px", padding: "1.5rem", marginBottom: "2rem" }}>
             <h2 style={{ marginBottom: "1rem" }}>{ticker} — Sentiment vs Price</h2>
             <ResponsiveContainer width="100%" height={350}>
@@ -120,7 +120,25 @@ setHeadlines(sentiment.slice(0, 10))
             </ResponsiveContainer>
           </div>
 
-          {/* Headlines */}
+          {correlation && correlation.correlation !== undefined && (
+            <div style={{
+              background: "#1e293b",
+              borderRadius: "12px",
+              padding: "1.5rem",
+              marginBottom: "2rem",
+              borderLeft: "4px solid #6366f1"
+            }}>
+              <h2 style={{ marginBottom: "0.5rem" }}>📊 Correlation Insight</h2>
+              <p style={{ margin: 0, fontSize: "1.1rem" }}>
+                {correlation.interpretation}
+              </p>
+              <p style={{ margin: "0.5rem 0 0", color: "#94a3b8", fontSize: "0.85rem" }}>
+                Correlation: {correlation.correlation} —
+                {correlation.correlation < 0 ? " negative (contrarian signal)" : " positive (momentum signal)"}
+              </p>
+            </div>
+          )}
+
           <div style={{ background: "#1e293b", borderRadius: "12px", padding: "1.5rem" }}>
             <h2 style={{ marginBottom: "1rem" }}>Latest Headlines</h2>
             {headlines.map((h, i) => (
