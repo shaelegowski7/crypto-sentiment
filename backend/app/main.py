@@ -282,3 +282,21 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         "correlation": round(best_corr, 3),
         "interpretation": f"Sentiment {best_lag} days ago has {round(abs(best_corr)*100)}% correlation with price"
     }
+
+@app.post("/waitlist")
+def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.WaitlistEmail).filter(
+        models.WaitlistEmail.email == data.email
+    ).first()
+    if existing:
+        return {"message": "Already on the waitlist!"}
+    entry = models.WaitlistEmail(email=data.email)
+    db.add(entry)
+    db.commit()
+    return {"message": "You're on the list!"}
+
+
+@app.get("/waitlist/count")
+def waitlist_count(db: Session = Depends(get_db)):
+    count = db.query(models.WaitlistEmail).count()
+    return {"count": count}

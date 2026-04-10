@@ -37,3 +37,14 @@ class PriceResponse(PriceBase):
 
     class Config:
         from_attributes = True
+
+class WaitlistCreate(BaseModel):
+    email: str
+
+class WaitlistResponse(BaseModel):
+    id: int
+    email: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

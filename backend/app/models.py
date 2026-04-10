@@ -25,3 +25,10 @@ class Price(Base):
     volume = Column(Float)                     # trading volume
     date = Column(DateTime)                    # date of the price
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class WaitlistEmail(Base):
+    __tablename__ = "waitlist"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
