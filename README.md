@@ -3,10 +3,13 @@
 
 Full-stack dashboard tracking news sentiment vs. crypto prices in real time, powered by FinBERT AI.
 
-## Live Demo
- [crypto-sentiment-five.vercel.app](https://crypto-sentiment-five.vercel.app)
 
-![Dashboard](screenshot.png)
+## Live Links
+- Landing page: [sentimentfx.vercel.app](https://sentimentfx.vercel.app)
+- Dashboard: [crypto-sentiment-five.vercel.app](https://crypto-sentiment-five.vercel.app)
+
+
+
 
 ## Tech Stack
 - **Backend:** Python, FastAPI, PostgreSQL, FinBERT
@@ -40,8 +43,3 @@ npm install
 npm run dev
 ```
 
-## Environment Variables
-```
-NEWSAPI_KEY=your_gnews_key
-DATABASE_URL=postgresql://user:password@localhost/crypto_sentiment
-```
