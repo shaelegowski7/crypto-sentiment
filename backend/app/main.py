@@ -13,6 +13,8 @@ from .sentiment import analyse_sentiment
 from .prices import fetch_prices
 from . import models
 from .database import SessionLocal
+from scipy.stats import pearsonr
+import numpy as np
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -230,3 +232,53 @@ def cleanup_duplicate_prices(db: Session = Depends(get_db)):
     
     db.commit()
     return {"message": f"Deleted {deleted} duplicate prices"}
+
+@app.get("/correlation/{ticker}")
+def get_correlation(ticker: str, db: Session = Depends(get_db)):
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper()
+    ).order_by(models.Headline.published_at).all()
+    
+    prices = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper()
+    ).order_by(models.Price.date).all()
+
+    # Average sentiment by date
+    sentiment_by_date = {}
+    for h in headlines:
+        date = str(h.published_at.date())
+        if date not in sentiment_by_date:
+            sentiment_by_date[date] = []
+        sentiment_by_date[date].append(h.sentiment_score)
+    
+    avg_sentiment = {date: sum(scores)/len(scores) 
+                    for date, scores in sentiment_by_date.items()}
+
+    # Price by date
+    price_by_date = {str(p.date.date()): p.close_price for p in prices}
+
+    # Find common dates
+    common_dates = sorted(set(avg_sentiment.keys()) & set(price_by_date.keys()))
+
+    if len(common_dates) < 5:
+        return {"message": "Not enough data yet"}
+
+    best_corr = 0
+    best_lag = 0
+
+    for lag in range(0, 4):
+        s = [avg_sentiment[d] for d in common_dates[lag:]]
+        p = [price_by_date[d] for d in common_dates[:len(common_dates)-lag]]
+        if len(s) < 5:
+            continue
+        corr, _ = pearsonr(s, p)
+        if abs(corr) > abs(best_corr):
+            best_corr = corr
+            best_lag = lag
+
+    return {
+        "ticker": ticker.upper(),
+        "best_lag_days": best_lag,
+        "correlation": round(best_corr, 3),
+        "interpretation": f"Sentiment {best_lag} days ago has {round(abs(best_corr)*100)}% correlation with price"
+    }
