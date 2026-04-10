@@ -856,59 +856,56 @@
         <script>
     const API = "https://crypto-sentiment-production.up.railway.app"
 
-async function submitWaitlist() {
-  const email = document.getElementById('email-input').value
-  if (!email || !email.includes('@')) {
-    document.getElementById('email-input').focus()
-    return
-  }
-  const btn = document.getElementById('waitlist-btn')
-  btn.disabled = true
-  btn.textContent = 'Joining...'
+    async function submitWaitlist() {
+      const email = document.getElementById('email-input').value
+      if (!email || !email.includes('@')) {
+        document.getElementById('email-input').focus()
+        return
+      }
+      const btn = document.getElementById('waitlist-btn')
+      btn.disabled = true
+      btn.textContent = 'Joining...'
+      try {
+        const res = await fetch(`${API}/waitlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        })
+        const data = await res.json()
+        btn.textContent = 'Joined!'
+        document.getElementById('success-msg').style.display = 'block'
+        document.getElementById('success-msg').textContent = data.message
+        document.getElementById('email-input').value = ''
+      } catch (err) {
+        btn.disabled = false
+        btn.textContent = 'Join Waitlist'
+      }
+    }
 
-  try {
-    const res = await fetch(`${API}/waitlist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+    async function submitWaitlist2() {
+      const email = document.getElementById('email-input-2').value
+      if (!email || !email.includes('@')) return
+      try {
+        const res = await fetch(`${API}/waitlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        })
+        const data = await res.json()
+        document.getElementById('email-input-2').value = ''
+        document.getElementById('email-input-2').placeholder = data.message
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    document.getElementById('email-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitWaitlist()
     })
-    const data = await res.json()
-    btn.textContent = 'Joined!'
-    document.getElementById('success-msg').style.display = 'block'
-    document.getElementById('success-msg').textContent = data.message
-    document.getElementById('email-input').value = ''
-  } catch (err) {
-    btn.disabled = false
-    btn.textContent = 'Join Waitlist'
-  }
-}
 
-async function submitWaitlist2() {
-  const email = document.getElementById('email-input-2').value
-  if (!email || !email.includes('@')) return
-
-  try {
-    const res = await fetch(`${API}/waitlist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+    document.getElementById('email-input-2').addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitWaitlist2()
     })
-    const data = await res.json()
-    document.getElementById('email-input-2').value = ''
-    document.getElementById('email-input-2').placeholder = data.message
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-document.getElementById('email-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') submitWaitlist()
-})
-
-document.getElementById('email-input-2').addEventListener('keydown', e => {
-  if (e.key === 'Enter') submitWaitlist2()
-})
-    
   </script>
 
     </body>
