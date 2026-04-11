@@ -13,7 +13,7 @@ TICKER_MAP = {
     "DOGE": "DOGE-GBP"
 }
 
-def fetch_prices(ticker: str, period: str = "30d") -> list:
+def fetch_prices(ticker: str, period: str = "2y") -> list:
     yf_ticker = TICKER_MAP.get(ticker)
 
     if not yf_ticker:
