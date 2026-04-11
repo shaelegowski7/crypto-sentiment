@@ -547,7 +547,7 @@ export default function App() {
                       tick={{ fill: "#7d8590", fontSize: 9, fontFamily: "IBM Plex Mono" }}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={v => `£${(v/1000).toFixed(0)}k`}
+                      tickFormatter={v => v >= 1000 ? `£${(v/1000).toFixed(0)}k` : `£${v.toFixed(2)}`}
                     />
                     <YAxis
                       yAxisId="sentiment"
