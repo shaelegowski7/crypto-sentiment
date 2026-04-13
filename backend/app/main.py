@@ -15,6 +15,7 @@ from . import models
 from .database import SessionLocal
 from scipy.stats import pearsonr
 import numpy as np
+import resend
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -290,9 +291,33 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
     ).first()
     if existing:
         return {"message": "Already on the waitlist!"}
+    
     entry = models.WaitlistEmail(email=data.email)
     db.add(entry)
     db.commit()
+
+    try:
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        resend.Emails.send({
+            "from": "SentimentFX <onboarding@resend.dev>",
+            "to": data.email,
+            "subject": "You're on the SentimentFX waitlist",
+            "html": """
+                <div style="background:#080c10;color:#e6edf3;padding:40px;font-family:monospace;">
+                    <h1 style="color:#f0b429;letter-spacing:0.1em;">SENTIMENTFX</h1>
+                    <p style="margin-top:24px;">You're on the list.</p>
+                    <p style="color:#7d8590;">We'll reach out when early access opens.</p>
+                    <p style="margin-top:24px;">In the meantime, check out the live dashboard:</p>
+                    <a href="https://crypto-sentiment-five.vercel.app" style="color:#f0b429;">
+                        crypto-sentiment-five.vercel.app
+                    </a>
+                    <p style="margin-top:40px;color:#7d8590;font-size:12px;">— SentimentFX team</p>
+                </div>
+            """
+        })
+    except Exception as e:
+        print(f"Email error: {e}")
+
     return {"message": "You're on the list!"}
 
 
