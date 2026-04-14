@@ -365,7 +365,10 @@ def backfill(ticker: str, db: Session = Depends(get_db)):
 
         try:
             response = requests.get("https://gnews.io/api/v4/search", params=params)
+            print(f"GNews response for {ticker} day {i}: {response.status_code}")
+            print(f"Response: {response.json()}")
             articles = response.json().get("articles", [])
+
 
             for article in articles:
                 exists = db.query(models.Headline).filter(
