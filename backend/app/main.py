@@ -14,8 +14,9 @@ from .prices import fetch_prices
 from . import models
 from .database import SessionLocal
 from scipy.stats import pearsonr
+from datetime import datetime, timedelta
 import numpy as np
-import resend
+import resend   
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -325,3 +326,68 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
 def waitlist_count(db: Session = Depends(get_db)):
     count = db.query(models.WaitlistEmail).count()
     return {"count": count}
+
+@app.post("/backfill/{ticker}")
+def backfill(ticker: str, db: Session = Depends(get_db)):
+    query = {
+        "BTC": "bitcoin price BTC market",
+        "ETH": "ethereum price ETH market",
+        "SOL": "solana price SOL market",
+        "XRP": "ripple XRP price market",
+        "BNB": "BNB binance price market",
+        "ADA": "cardano ADA price market",
+        "AVAX": "avalanche AVAX price market",
+        "LINK": "chainlink LINK price market",
+        "DOGE": "dogecoin DOGE price market"
+    }.get(ticker.upper())
+
+    if not query:
+        raise HTTPException(status_code=404, detail="Unknown ticker")
+
+    saved = 0
+    # Go back 30 days to start — don't do all 5 years at once
+    start_date = datetime.utcnow() - timedelta(days=30)
+
+    for i in range(30):
+        from_date = (start_date + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        to_date = (start_date + timedelta(days=i+1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        params = {
+            "q": query,
+            "lang": "en",
+            "max": 25,
+            "from": from_date,
+            "to": to_date,
+            "sortby": "publishedAt",
+            "apikey": os.getenv("GNEWS_API_KEY")
+        }
+
+        try:
+            response = requests.get("https://gnews.io/api/v4/search", params=params)
+            articles = response.json().get("articles", [])
+
+            for article in articles:
+                exists = db.query(models.Headline).filter(
+                    models.Headline.url == article["url"]
+                ).first()
+                if exists:
+                    continue
+
+                sentiment = analyse_sentiment(article["title"])
+                headline = models.Headline(
+                    ticker=ticker.upper(),
+                    title=article["title"],
+                    source=article["source"]["name"],
+                    url=article["url"],
+                    sentiment_score=sentiment["score"],
+                    sentiment_label=sentiment["label"],
+                    published_at=datetime.strptime(article["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
+                )
+                db.add(headline)
+                saved += 1
+
+        except Exception as e:
+            print(f"Backfill error for {ticker} day {i}: {e}")
+
+    db.commit()
+    return {"message": f"Backfilled {saved} headlines for {ticker}"}
