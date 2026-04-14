@@ -336,10 +336,11 @@ def backfill(ticker: str, db: Session = Depends(get_db)):
         "ETH": "ethereum crypto",
         "SOL": "solana crypto",
         "BNB": "binance BNB crypto",
+        "XRP": "ripple XRP crypto",
         "ADA": "cardano crypto",
         "AVAX": "avalanche crypto",
         "LINK": "chainlink crypto",
-        "DOGE": "dogecoin crypto",
+        "DOGE": "dogecoin crypto"
     }.get(ticker.upper())
 
     if not query:
