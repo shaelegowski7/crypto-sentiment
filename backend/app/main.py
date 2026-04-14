@@ -332,15 +332,14 @@ def waitlist_count(db: Session = Depends(get_db)):
 @app.post("/backfill/{ticker}")
 def backfill(ticker: str, db: Session = Depends(get_db)):
     query = {
-        "BTC": "bitcoin price BTC market",
-        "ETH": "ethereum price ETH market",
-        "SOL": "solana price SOL market",
-        "XRP": "ripple XRP price market",
-        "BNB": "BNB binance price market",
-        "ADA": "cardano ADA price market",
-        "AVAX": "avalanche AVAX price market",
-        "LINK": "chainlink LINK price market",
-        "DOGE": "dogecoin DOGE price market"
+        "BTC": "bitcoin crypto",
+        "ETH": "ethereum crypto",
+        "SOL": "solana crypto",
+        "BNB": "binance BNB crypto",
+        "ADA": "cardano crypto",
+        "AVAX": "avalanche crypto",
+        "LINK": "chainlink crypto",
+        "DOGE": "dogecoin crypto",
     }.get(ticker.upper())
 
     if not query:
