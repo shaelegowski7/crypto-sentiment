@@ -16,7 +16,8 @@ from .database import SessionLocal
 from scipy.stats import pearsonr
 from datetime import datetime, timedelta
 import numpy as np
-import resend   
+import resend 
+import os  
 
 models.Base.metadata.create_all(bind=engine)
 
