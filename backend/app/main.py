@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import resend 
 import os  
+import requests
 
 models.Base.metadata.create_all(bind=engine)
 
