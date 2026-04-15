@@ -348,9 +348,9 @@ def backfill(ticker: str, db: Session = Depends(get_db)):
 
     saved = 0
     # Go back 30 days to start — don't do all 5 years at once
-    start_date = datetime.utcnow() - timedelta(days=30)
+    start_date = datetime.utcnow() - timedelta(days=120)
 
-    for i in range(30):
+    for i in range(90):
         from_date = (start_date + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
         to_date = (start_date + timedelta(days=i+1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
