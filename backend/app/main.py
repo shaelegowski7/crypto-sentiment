@@ -315,7 +315,7 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
     ).first()
     if existing:
         return {"message": "Already on the waitlist!"}
-    
+
     entry = models.WaitlistEmail(email=data.email)
     db.add(entry)
     db.commit()
@@ -323,20 +323,97 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
     try:
         resend.api_key = os.getenv("RESEND_API_KEY")
         resend.Emails.send({
-            "from": "SentimentFX <onboarding@resend.dev>",
+            "from": "SentimentFX <hello@sentimentfx.org>",
             "to": data.email,
             "subject": "You're on the SentimentFX waitlist",
             "html": """
-                <div style="background:#080c10;color:#e6edf3;padding:40px;font-family:monospace;">
-                    <h1 style="color:#f0b429;letter-spacing:0.1em;">SENTIMENTFX</h1>
-                    <p style="margin-top:24px;">You're on the list.</p>
-                    <p style="color:#7d8590;">We'll reach out when early access opens.</p>
-                    <p style="margin-top:24px;">In the meantime, check out the live dashboard:</p>
-                    <a href="https://crypto-sentiment-five.vercel.app" style="color:#f0b429;">
-                        crypto-sentiment-five.vercel.app
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#080c10;font-family:'Courier New',monospace;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#080c10;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="border-bottom:1px solid #21262d;padding-bottom:20px;margin-bottom:32px;">
+              <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">
+                SentimentFX
+              </span>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px 0 32px;">
+              <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">
+                — Waitlist Confirmed
+              </p>
+              <h1 style="font-size:28px;font-weight:600;color:#e6edf3;margin:0 0 16px;line-height:1.2;letter-spacing:-0.01em;">
+                You're on the list.
+              </h1>
+              <p style="font-size:14px;color:#7d8590;margin:0 0 32px;line-height:1.7;">
+                We'll reach out when early access opens — you'll get founder pricing
+                and first access to the full signal suite.
+              </p>
+
+              <!-- Ticker chips -->
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                <tr>
+                  <td style="padding-right:6px;">
+                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(63,185,80,0.4);border-radius:2px;color:#3fb950;background:rgba(63,185,80,0.06);">BTC +0.76</span>
+                  </td>
+                  <td style="padding-right:6px;">
+                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(248,81,73,0.4);border-radius:2px;color:#f85149;background:rgba(248,81,73,0.06);">ETH −0.54</span>
+                  </td>
+                  <td style="padding-right:6px;">
+                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(63,185,80,0.4);border-radius:2px;color:#3fb950;background:rgba(63,185,80,0.06);">SOL +0.61</span>
+                  </td>
+                  <td>
+                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(248,81,73,0.4);border-radius:2px;color:#f85149;background:rgba(248,81,73,0.06);">XRP −0.39</span>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA button -->
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                <tr>
+                  <td style="background:#f0b429;border-radius:2px;">
+                    <a href="https://app.sentimentfx.org"
+                       style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">
+                      View Live Dashboard →
                     </a>
-                    <p style="margin-top:40px;color:#7d8590;font-size:12px;">— SentimentFX team</p>
-                </div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size:12px;color:#7d8590;margin:0;line-height:1.6;">
+                No spam. We'll only email you when something worth knowing happens.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="border-top:1px solid #21262d;padding-top:20px;">
+              <p style="font-size:10px;color:#7d8590;margin:0;letter-spacing:0.05em;line-height:1.7;">
+                SentimentFX · Crypto sentiment intelligence<br>
+                <a href="mailto:hello@sentimentfx.org" style="color:#f0b429;text-decoration:none;">hello@sentimentfx.org</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
             """
         })
     except Exception as e:
