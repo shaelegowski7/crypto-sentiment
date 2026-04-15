@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react"
 import axios from "axios"
+import { supabase } from "./supabaseClient"
+import AuthModal from "./AuthModal"
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from "recharts"
 
 const TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
+const FREE_TICKERS = ["BTC"]
 const API = "https://crypto-sentiment-production.up.railway.app"
 const HEADLINES_PER_PAGE = 10
 
@@ -83,6 +86,12 @@ const styles = `
     font-family: var(--mono);
   }
 
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
   .live-indicator {
     display: flex;
     align-items: center;
@@ -133,7 +142,7 @@ const styles = `
     white-space: nowrap;
   }
 
-  .ticker-btn:hover {
+  .ticker-btn:hover:not(.locked) {
     color: var(--text);
     border-color: var(--border2);
     background: var(--surface2);
@@ -143,6 +152,16 @@ const styles = `
     color: var(--accent);
     border-color: var(--accent);
     background: rgba(240, 180, 41, 0.06);
+  }
+
+  .ticker-btn.locked {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .ticker-btn.locked::after {
+    content: ' 🔒';
+    font-size: 9px;
   }
 
   .main {
@@ -281,9 +300,7 @@ const styles = `
     transition: background 0.1s;
   }
 
-  .headline-item:hover {
-    background: var(--surface2);
-  }
+  .headline-item:hover { background: var(--surface2); }
 
   .sentiment-pill {
     font-family: var(--mono);
@@ -359,6 +376,48 @@ const styles = `
     cursor: not-allowed;
   }
 
+  .upgrade-banner {
+    background: rgba(240, 180, 41, 0.04);
+    border: 1px solid rgba(240, 180, 41, 0.2);
+    border-radius: 4px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .upgrade-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .upgrade-text strong {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .upgrade-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 6px 16px;
+    background: var(--accent);
+    border: none;
+    border-radius: 2px;
+    color: #080c10;
+    cursor: pointer;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+
+  .upgrade-btn:hover { opacity: 0.85; }
+
   .loading {
     display: flex;
     align-items: center;
@@ -418,6 +477,7 @@ const styles = `
     .stat-row { grid-template-columns: repeat(2, 1fr); }
     .tagline { display: none; }
     .logo-divider { display: none; }
+    .upgrade-banner { flex-direction: column; align-items: flex-start; }
   }
 `
 
@@ -430,9 +490,7 @@ const CustomTooltip = ({ active, payload, label, symbol }) => {
         <div className="tooltip-row" key={i}>
           <span className="tooltip-key">{p.name}</span>
           <span className="tooltip-val" style={{ color: p.color }}>
-            {p.name === "Price"
-              ? `${symbol}${p.value?.toLocaleString()}`
-              : p.value}
+            {p.name === "Price" ? `${symbol}${p.value?.toLocaleString()}` : p.value}
           </span>
         </div>
       ))}
@@ -451,6 +509,21 @@ export default function App() {
   const [currency, setCurrency] = useState("GBP")
   const [gbpToUsd, setGbpToUsd] = useState(null)
   const [headlinePage, setHeadlinePage] = useState(1)
+  const [user, setUser] = useState(null)
+  const [showAuth, setShowAuth] = useState(false)
+
+  const isPro = user?.user_metadata?.tier === "pro"
+  const isLoggedIn = !!user
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     fetchDashboard()
@@ -504,7 +577,20 @@ export default function App() {
     setLoading(false)
   }
 
-  const filteredData = range === 999 ? allData : allData.slice(-range)
+  const handleTickerClick = (t) => {
+    const isLocked = !FREE_TICKERS.includes(t) && !isPro
+    if (isLocked) {
+      setShowAuth(true)
+      return
+    }
+    setTicker(t)
+  }
+
+  const filteredData = (() => {
+    const base = range === 999 ? allData : allData.slice(-range)
+    if (!isPro && range > 30) return allData.slice(-30)
+    return base
+  })()
 
   const rate = currency === "USD" && gbpToUsd ? gbpToUsd : 1
   const symbol = currency === "USD" ? "$" : "£"
@@ -522,10 +608,7 @@ export default function App() {
     ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
     : null
 
-  const latestPrice = displayData.length
-    ? displayData[displayData.length - 1]?.price
-    : null
-
+  const latestPrice = displayData.length ? displayData[displayData.length - 1]?.price : null
   const priceDisplay = latestPrice != null
     ? `${symbol}${latestPrice >= 1000 ? latestPrice.toLocaleString() : latestPrice.toFixed(2)}`
     : "—"
@@ -544,26 +627,21 @@ export default function App() {
   }
 
   const rangeCtrlStyle = (r) => ({
-    fontFamily: "var(--mono)",
-    fontSize: "10px",
-    letterSpacing: "0.08em",
+    fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
     padding: "4px 10px",
     border: `1px solid ${range === r ? "var(--accent)" : "var(--border)"}`,
-    borderRadius: "2px",
-    cursor: "pointer",
+    borderRadius: "2px", cursor: !isPro && r > 30 ? "not-allowed" : "pointer",
     background: range === r ? "rgba(240,180,41,0.08)" : "transparent",
-    color: range === r ? "var(--accent)" : "var(--muted)",
+    color: range === r ? "var(--accent)" : !isPro && r > 30 ? "var(--border2)" : "var(--muted)",
     transition: "all 0.15s",
+    opacity: !isPro && r > 30 ? 0.4 : 1,
   })
 
   const currencyCtrlStyle = (c) => ({
-    fontFamily: "var(--mono)",
-    fontSize: "10px",
-    letterSpacing: "0.08em",
+    fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
     padding: "4px 10px",
     border: `1px solid ${currency === c ? "var(--accent2)" : "var(--border)"}`,
-    borderRadius: "2px",
-    cursor: "pointer",
+    borderRadius: "2px", cursor: "pointer",
     background: currency === c ? "rgba(88,166,255,0.08)" : "transparent",
     color: currency === c ? "var(--accent2)" : "var(--muted)",
     transition: "all 0.15s",
@@ -584,25 +662,81 @@ export default function App() {
             <div className="logo-divider" />
             <span className="tagline">CRYPTO SENTIMENT INTELLIGENCE</span>
           </div>
-          <div className="live-indicator">
-            <div className="live-dot" />
-            LIVE
+          <div className="topbar-right">
+            {user ? (
+              <>
+                <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
+                  {user.email}
+                </span>
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  style={{
+                    fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                    padding: "4px 10px", border: "1px solid var(--border)", borderRadius: "2px",
+                    cursor: "pointer", background: "transparent", color: "var(--muted)",
+                  }}
+                >
+                  SIGN OUT
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setShowAuth(true)}
+                style={{
+                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                  padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
+                  cursor: "pointer", background: "rgba(240,180,41,0.06)", color: "var(--accent)",
+                }}
+              >
+                SIGN IN
+              </button>
+            )}
+            <div className="live-indicator">
+              <div className="live-dot" />
+              LIVE
+            </div>
           </div>
         </header>
 
         <nav className="ticker-bar">
-          {TICKERS.map(t => (
-            <button
-              key={t}
-              className={`ticker-btn ${ticker === t ? "active" : ""}`}
-              onClick={() => setTicker(t)}
-            >
-              {t}
-            </button>
-          ))}
+          {TICKERS.map(t => {
+            const locked = !FREE_TICKERS.includes(t) && !isPro
+            return (
+              <button
+                key={t}
+                className={`ticker-btn ${ticker === t ? "active" : ""} ${locked ? "locked" : ""}`}
+                onClick={() => handleTickerClick(t)}
+              >
+                {t}
+              </button>
+            )
+          })}
         </nav>
 
         <main className="main">
+
+          {!isLoggedIn && (
+            <div className="upgrade-banner">
+              <span className="upgrade-text">
+                <strong>Free tier:</strong> BTC only · 30 day history · Sign in to unlock all 9 tickers, full history, API access and alerts.
+              </span>
+              <button className="upgrade-btn" onClick={() => setShowAuth(true)}>
+                Sign In / Sign Up
+              </button>
+            </div>
+          )}
+
+          {isLoggedIn && !isPro && (
+            <div className="upgrade-banner">
+              <span className="upgrade-text">
+                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all 9 tickers, full history, API access and alerts.
+              </span>
+              <button className="upgrade-btn" onClick={() => window.open("https://sentimentfx.org/#pricing", "_blank")}>
+                Upgrade to Pro
+              </button>
+            </div>
+          )}
+
           <div className="stat-row">
             <div className="stat-card">
               <div className="stat-label">Asset</div>
@@ -642,13 +776,18 @@ export default function App() {
               <span className="panel-title">{ticker} / SENTIMENT vs PRICE ({currency})</span>
               <div className="panel-controls">
                 {["GBP", "USD"].map(c => (
-                  <button key={c} onClick={() => setCurrency(c)} style={currencyCtrlStyle(c)}>
-                    {c}
-                  </button>
+                  <button key={c} onClick={() => setCurrency(c)} style={currencyCtrlStyle(c)}>{c}</button>
                 ))}
                 <div className="control-divider" />
                 {[7, 30, 90, 999].map(r => (
-                  <button key={r} onClick={() => setRange(r)} style={rangeCtrlStyle(r)}>
+                  <button
+                    key={r}
+                    onClick={() => {
+                      if (!isPro && r > 30) { setShowAuth(true); return }
+                      setRange(r)
+                    }}
+                    style={rangeCtrlStyle(r)}
+                  >
                     {r === 999 ? "ALL" : `${r}D`}
                   </button>
                 ))}
@@ -687,26 +826,9 @@ export default function App() {
                       axisLine={false}
                     />
                     <Tooltip content={<CustomTooltip symbol={symbol} />} />
-                    <Legend
-                      wrapperStyle={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", paddingTop: "12px" }}
-                    />
-                    <Bar
-                      yAxisId="sentiment"
-                      dataKey="sentiment"
-                      name="Sentiment"
-                      fill="#f0b429"
-                      opacity={0.6}
-                      radius={[1, 1, 0, 0]}
-                    />
-                    <Line
-                      yAxisId="price"
-                      type="monotone"
-                      dataKey="price"
-                      name="Price"
-                      stroke="#58a6ff"
-                      dot={false}
-                      strokeWidth={1.5}
-                    />
+                    <Legend wrapperStyle={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", paddingTop: "12px" }} />
+                    <Bar yAxisId="sentiment" dataKey="sentiment" name="Sentiment" fill="#f0b429" opacity={0.6} radius={[1, 1, 0, 0]} />
+                    <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke="#58a6ff" dot={false} strokeWidth={1.5} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -735,19 +857,12 @@ export default function App() {
                         <div style={{ marginTop: "8px" }}>
                           {Object.entries(correlation.all_lags).map(([lag, corr]) => (
                             <div key={lag} style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              padding: "3px 0",
-                              borderBottom: "1px solid var(--border)",
-                              fontFamily: "var(--mono)",
-                              fontSize: "10px"
+                              display: "flex", justifyContent: "space-between",
+                              padding: "3px 0", borderBottom: "1px solid var(--border)",
+                              fontFamily: "var(--mono)", fontSize: "10px"
                             }}>
                               <span style={{ color: "var(--muted)" }}>{lag}d lag</span>
-                              <span style={{
-                                color: Math.abs(corr) > 0.3
-                                  ? corr < 0 ? "var(--negative)" : "var(--positive)"
-                                  : "var(--muted)"
-                              }}>
+                              <span style={{ color: Math.abs(corr) > 0.3 ? corr < 0 ? "var(--negative)" : "var(--positive)" : "var(--muted)" }}>
                                 {corr > 0 ? "+" : ""}{corr}
                               </span>
                             </div>
@@ -788,41 +903,23 @@ export default function App() {
               </div>
               {totalPages > 1 && (
                 <div className="pagination">
-                  <button
-                    className="page-btn"
-                    onClick={() => setHeadlinePage(p => p - 1)}
-                    disabled={headlinePage === 1}
-                  >
-                    &lt;
-                  </button>
+                  <button className="page-btn" onClick={() => setHeadlinePage(p => p - 1)} disabled={headlinePage === 1}>&lt;</button>
                   {getPageNumbers().map((p, i) =>
                     p === "..." ? (
-                      <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>
-                        ...
-                      </span>
+                      <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>...</span>
                     ) : (
-                      <button
-                        key={p}
-                        className={`page-btn ${headlinePage === p ? "active" : ""}`}
-                        onClick={() => setHeadlinePage(p)}
-                      >
-                        {p}
-                      </button>
+                      <button key={p} className={`page-btn ${headlinePage === p ? "active" : ""}`} onClick={() => setHeadlinePage(p)}>{p}</button>
                     )
                   )}
-                  <button
-                    className="page-btn"
-                    onClick={() => setHeadlinePage(p => p + 1)}
-                    disabled={headlinePage === totalPages}
-                  >
-                    &gt;
-                  </button>
+                  <button className="page-btn" onClick={() => setHeadlinePage(p => p + 1)} disabled={headlinePage === totalPages}>&gt;</button>
                 </div>
               )}
             </div>
           </div>
         </main>
       </div>
+
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </>
   )
 }
