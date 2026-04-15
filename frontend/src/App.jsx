@@ -7,6 +7,7 @@ import {
 
 const TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
 const API = "https://crypto-sentiment-production.up.railway.app"
+const HEADLINES_PER_PAGE = 10
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
@@ -316,6 +317,48 @@ const styles = `
     flex-shrink: 0;
   }
 
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .page-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 4px 9px;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.15s;
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .page-btn:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--border2);
+    background: var(--surface);
+  }
+
+  .page-btn.active {
+    color: var(--accent2);
+    border-color: var(--accent2);
+    background: rgba(88, 166, 255, 0.08);
+  }
+
+  .page-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
   .loading {
     display: flex;
     align-items: center;
@@ -367,16 +410,6 @@ const styles = `
   .tooltip-key { color: var(--muted); }
   .tooltip-val { color: var(--text); font-weight: 500; }
 
-  .ctrl-btn {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    padding: 4px 10px;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
   @media (max-width: 768px) {
     .topbar { padding: 10px 16px; }
     .ticker-bar { padding: 10px 16px; }
@@ -417,6 +450,7 @@ export default function App() {
   const [range, setRange] = useState(30)
   const [currency, setCurrency] = useState("GBP")
   const [gbpToUsd, setGbpToUsd] = useState(null)
+  const [headlinePage, setHeadlinePage] = useState(1)
 
   useEffect(() => {
     fetchDashboard()
@@ -435,6 +469,7 @@ export default function App() {
 
   const fetchDashboard = async () => {
     setLoading(true)
+    setHeadlinePage(1)
     try {
       const res = await axios.get(`${API}/dashboard/${ticker}`)
       const { sentiment, prices } = res.data
@@ -459,7 +494,7 @@ export default function App() {
       })).sort((a, b) => new Date(a.date) - new Date(b.date))
 
       setAllData(merged)
-      setHeadlines(sentiment.slice(0, 10))
+      setHeadlines(sentiment)
 
       const corrRes = await axios.get(`${API}/correlation/${ticker}`)
       setCorrelation(corrRes.data)
@@ -494,6 +529,19 @@ export default function App() {
   const priceDisplay = latestPrice != null
     ? `${symbol}${latestPrice >= 1000 ? latestPrice.toLocaleString() : latestPrice.toFixed(2)}`
     : "—"
+
+  const totalPages = Math.ceil(headlines.length / HEADLINES_PER_PAGE)
+  const pagedHeadlines = headlines.slice(
+    (headlinePage - 1) * HEADLINES_PER_PAGE,
+    headlinePage * HEADLINES_PER_PAGE
+  )
+
+  const getPageNumbers = () => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    if (headlinePage <= 3) return [1, 2, 3, 4, "...", totalPages]
+    if (headlinePage >= totalPages - 2) return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    return [1, "...", headlinePage - 1, headlinePage, headlinePage + 1, "...", totalPages]
+  }
 
   const rangeCtrlStyle = (r) => ({
     fontFamily: "var(--mono)",
@@ -717,10 +765,12 @@ export default function App() {
             <div className="panel">
               <div className="panel-header">
                 <span className="panel-title">LATEST HEADLINES</span>
-                <span className="panel-title" style={{ color: "#7d8590" }}>{headlines.length} ITEMS</span>
+                <span className="panel-title" style={{ color: "#7d8590" }}>
+                  {headlines.length} ITEMS · PG {headlinePage}/{totalPages || 1}
+                </span>
               </div>
               <div className="headlines-list">
-                {headlines.map((h, i) => (
+                {pagedHeadlines.map((h, i) => (
                   <div className="headline-item" key={i}>
                     <div>
                       <span className={`sentiment-pill pill-${h.label}`}>
@@ -736,6 +786,39 @@ export default function App() {
                   </div>
                 ))}
               </div>
+              {totalPages > 1 && (
+                <div className="pagination">
+                  <button
+                    className="page-btn"
+                    onClick={() => setHeadlinePage(p => p - 1)}
+                    disabled={headlinePage === 1}
+                  >
+                    &lt;
+                  </button>
+                  {getPageNumbers().map((p, i) =>
+                    p === "..." ? (
+                      <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        className={`page-btn ${headlinePage === p ? "active" : ""}`}
+                        onClick={() => setHeadlinePage(p)}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                  <button
+                    className="page-btn"
+                    onClick={() => setHeadlinePage(p => p + 1)}
+                    disabled={headlinePage === totalPages}
+                  >
+                    &gt;
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </main>
