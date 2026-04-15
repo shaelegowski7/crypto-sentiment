@@ -330,7 +330,7 @@ def waitlist_count(db: Session = Depends(get_db)):
     return {"count": count}
 
 @app.post("/backfill/{ticker}")
-def backfill(ticker: str, db: Session = Depends(get_db)):
+def backfill(ticker: str, days: int = 30, offset: int = 0, db: Session = Depends(get_db)):
     query = {
         "BTC": "bitcoin crypto",
         "ETH": "ethereum crypto",
@@ -347,10 +347,10 @@ def backfill(ticker: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Unknown ticker")
 
     saved = 0
-    # Go back 30 days to start — don't do all 5 years at once
-    start_date = datetime.utcnow() - timedelta(days=120)
+    
+    start_date = datetime.utcnow() - timedelta(days=offset + days)
 
-    for i in range(90):
+    for i in range(days):
         from_date = (start_date + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
         to_date = (start_date + timedelta(days=i+1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
