@@ -239,13 +239,19 @@ def cleanup_duplicate_prices(db: Session = Depends(get_db)):
 
 @app.get("/correlation/{ticker}")
 def get_correlation(ticker: str, db: Session = Depends(get_db)):
+    from scipy.stats import pearsonr
+    import numpy as np
+
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
     ).order_by(models.Headline.published_at).all()
-    
+
     prices = db.query(models.Price).filter(
         models.Price.ticker == ticker.upper()
     ).order_by(models.Price.date).all()
+
+    if len(headlines) < 10 or len(prices) < 10:
+        return {"message": "Not enough data yet"}
 
     # Average sentiment by date
     sentiment_by_date = {}
@@ -254,37 +260,52 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         if date not in sentiment_by_date:
             sentiment_by_date[date] = []
         sentiment_by_date[date].append(h.sentiment_score)
-    
-    avg_sentiment = {date: sum(scores)/len(scores) 
-                    for date, scores in sentiment_by_date.items()}
 
-    # Price by date
-    price_by_date = {str(p.date.date()): p.close_price for p in prices}
+    avg_sentiment = {
+        date: sum(scores) / len(scores)
+        for date, scores in sentiment_by_date.items()
+    }
+
+    # Calculate daily price RETURNS instead of raw price
+    price_by_date = {}
+    sorted_prices = sorted(prices, key=lambda p: p.date)
+    for i in range(1, len(sorted_prices)):
+        date = str(sorted_prices[i].date.date())
+        prev_price = sorted_prices[i-1].close_price
+        curr_price = sorted_prices[i].close_price
+        if prev_price > 0:
+            price_by_date[date] = (curr_price - prev_price) / prev_price * 100
 
     # Find common dates
     common_dates = sorted(set(avg_sentiment.keys()) & set(price_by_date.keys()))
 
-    if len(common_dates) < 5:
-        return {"message": "Not enough data yet"}
+    if len(common_dates) < 10:
+        return {"message": "Not enough overlapping data yet"}
 
     best_corr = 0
     best_lag = 0
+    all_lags = {}
 
-    for lag in range(0, 4):
+    for lag in range(0, 8):
         s = [avg_sentiment[d] for d in common_dates[lag:]]
-        p = [price_by_date[d] for d in common_dates[:len(common_dates)-lag]]
-        if len(s) < 5:
+        p = [price_by_date[d] for d in common_dates[:len(common_dates) - lag]]
+        if len(s) < 10:
             continue
-        corr, _ = pearsonr(s, p)
+        corr, pvalue = pearsonr(s, p)
+        all_lags[lag] = round(corr, 3)
         if abs(corr) > abs(best_corr):
             best_corr = corr
             best_lag = lag
+
+    direction = "negative (contrarian)" if best_corr < 0 else "positive (momentum)"
 
     return {
         "ticker": ticker.upper(),
         "best_lag_days": best_lag,
         "correlation": round(best_corr, 3),
-        "interpretation": f"Sentiment {best_lag} days ago has {round(abs(best_corr)*100)}% correlation with price"
+        "all_lags": all_lags,
+        "interpretation": f"Sentiment {best_lag} days ago has {round(abs(best_corr) * 100)}% correlation with price returns",
+        "signal_type": direction
     }
 
 @app.post("/waitlist")
