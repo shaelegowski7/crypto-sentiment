@@ -192,6 +192,7 @@ const styles = `
   .negative-text { color: var(--negative); }
   .neutral-text { color: var(--neutral); }
   .accent-text { color: var(--accent); }
+  .accent2-text { color: var(--accent2); }
 
   .panel {
     background: var(--surface);
@@ -220,6 +221,18 @@ const styles = `
 
   .panel-body {
     padding: 16px;
+  }
+
+  .panel-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .control-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border2);
   }
 
   .correlation-panel {
@@ -354,6 +367,16 @@ const styles = `
   .tooltip-key { color: var(--muted); }
   .tooltip-val { color: var(--text); font-weight: 500; }
 
+  .ctrl-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
   @media (max-width: 768px) {
     .topbar { padding: 10px 16px; }
     .ticker-bar { padding: 10px 16px; }
@@ -365,7 +388,7 @@ const styles = `
   }
 `
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, symbol }) => {
   if (!active || !payload || !payload.length) return null
   return (
     <div className="custom-tooltip">
@@ -374,7 +397,9 @@ const CustomTooltip = ({ active, payload, label }) => {
         <div className="tooltip-row" key={i}>
           <span className="tooltip-key">{p.name}</span>
           <span className="tooltip-val" style={{ color: p.color }}>
-            {p.name === "Price (£)" ? `£${p.value?.toLocaleString()}` : p.value}
+            {p.name === "Price"
+              ? `${symbol}${p.value?.toLocaleString()}`
+              : p.value}
           </span>
         </div>
       ))}
@@ -390,6 +415,8 @@ export default function App() {
   const [correlation, setCorrelation] = useState(null)
   const [stats, setStats] = useState(null)
   const [range, setRange] = useState(30)
+  const [currency, setCurrency] = useState("GBP")
+  const [gbpToUsd, setGbpToUsd] = useState(null)
 
   useEffect(() => {
     fetchDashboard()
@@ -397,6 +424,13 @@ export default function App() {
 
   useEffect(() => {
     axios.get(`${API}/stats`).then(r => setStats(r.data)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch("https://api.exchangerate-api.com/v4/latest/GBP")
+      .then(r => r.json())
+      .then(d => setGbpToUsd(d.rates.USD))
+      .catch(() => setGbpToUsd(1.27))
   }, [])
 
   const fetchDashboard = async () => {
@@ -437,6 +471,14 @@ export default function App() {
 
   const filteredData = range === 999 ? allData : allData.slice(-range)
 
+  const rate = currency === "USD" && gbpToUsd ? gbpToUsd : 1
+  const symbol = currency === "USD" ? "$" : "£"
+
+  const displayData = filteredData.map(d => ({
+    ...d,
+    price: d.price != null ? parseFloat((d.price * rate).toFixed(2)) : null,
+  }))
+
   const avgSentiment = filteredData.length
     ? (filteredData.reduce((a, b) => a + b.sentiment, 0) / filteredData.length).toFixed(3)
     : null
@@ -444,6 +486,45 @@ export default function App() {
   const sentimentSignal = avgSentiment
     ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
     : null
+
+  const latestPrice = displayData.length
+    ? displayData[displayData.length - 1]?.price
+    : null
+
+  const priceDisplay = latestPrice != null
+    ? `${symbol}${latestPrice >= 1000 ? latestPrice.toLocaleString() : latestPrice.toFixed(2)}`
+    : "—"
+
+  const rangeCtrlStyle = (r) => ({
+    fontFamily: "var(--mono)",
+    fontSize: "10px",
+    letterSpacing: "0.08em",
+    padding: "4px 10px",
+    border: `1px solid ${range === r ? "var(--accent)" : "var(--border)"}`,
+    borderRadius: "2px",
+    cursor: "pointer",
+    background: range === r ? "rgba(240,180,41,0.08)" : "transparent",
+    color: range === r ? "var(--accent)" : "var(--muted)",
+    transition: "all 0.15s",
+  })
+
+  const currencyCtrlStyle = (c) => ({
+    fontFamily: "var(--mono)",
+    fontSize: "10px",
+    letterSpacing: "0.08em",
+    padding: "4px 10px",
+    border: `1px solid ${currency === c ? "var(--accent2)" : "var(--border)"}`,
+    borderRadius: "2px",
+    cursor: "pointer",
+    background: currency === c ? "rgba(88,166,255,0.08)" : "transparent",
+    color: currency === c ? "var(--accent2)" : "var(--muted)",
+    transition: "all 0.15s",
+  })
+
+  const yAxisTickFormatter = v => {
+    if (v >= 1000) return `${symbol}${(v / 1000).toFixed(0)}k`
+    return `${symbol}${v.toFixed(2)}`
+  }
 
   return (
     <>
@@ -488,6 +569,13 @@ export default function App() {
               <div className="stat-sub">{sentimentSignal ?? "Loading..."}</div>
             </div>
             <div className="stat-card">
+              <div className="stat-label">Latest Price</div>
+              <div className="stat-value accent2-text">{priceDisplay}</div>
+              <div className="stat-sub">
+                {currency === "GBP" ? "British pound" : `USD · rate: ${gbpToUsd?.toFixed(4) ?? "..."}`}
+              </div>
+            </div>
+            <div className="stat-card">
               <div className="stat-label">Correlation</div>
               <div className={`stat-value ${correlation?.correlation < 0 ? "negative-text" : "positive-text"}`}>
                 {correlation?.correlation ?? "—"}
@@ -503,24 +591,16 @@ export default function App() {
 
           <div className="panel">
             <div className="panel-header">
-              <span className="panel-title">{ticker} / SENTIMENT vs PRICE (GBP)</span>
-              <div style={{ display: "flex", gap: "4px" }}>
+              <span className="panel-title">{ticker} / SENTIMENT vs PRICE ({currency})</span>
+              <div className="panel-controls">
+                {["GBP", "USD"].map(c => (
+                  <button key={c} onClick={() => setCurrency(c)} style={currencyCtrlStyle(c)}>
+                    {c}
+                  </button>
+                ))}
+                <div className="control-divider" />
                 {[7, 30, 90, 999].map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setRange(r)}
-                    style={{
-                      fontFamily: "var(--mono)",
-                      fontSize: "10px",
-                      letterSpacing: "0.08em",
-                      padding: "4px 10px",
-                      border: `1px solid ${range === r ? "var(--accent)" : "var(--border)"}`,
-                      borderRadius: "2px",
-                      cursor: "pointer",
-                      background: range === r ? "rgba(240,180,41,0.08)" : "transparent",
-                      color: range === r ? "var(--accent)" : "var(--muted)",
-                    }}
-                  >
+                  <button key={r} onClick={() => setRange(r)} style={rangeCtrlStyle(r)}>
                     {r === 999 ? "ALL" : `${r}D`}
                   </button>
                 ))}
@@ -531,7 +611,7 @@ export default function App() {
                 <div className="loading">FETCHING DATA</div>
               ) : (
                 <ResponsiveContainer width="100%" height={320}>
-                  <ComposedChart data={filteredData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+                  <ComposedChart data={displayData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke="#21262d" vertical={false} />
                     <XAxis
                       dataKey="date"
@@ -547,7 +627,7 @@ export default function App() {
                       tick={{ fill: "#7d8590", fontSize: 9, fontFamily: "IBM Plex Mono" }}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={v => v >= 1000 ? `£${(v/1000).toFixed(0)}k` : `£${v.toFixed(2)}`}
+                      tickFormatter={yAxisTickFormatter}
                     />
                     <YAxis
                       yAxisId="sentiment"
@@ -558,7 +638,7 @@ export default function App() {
                       tickLine={false}
                       axisLine={false}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip symbol={symbol} />} />
                     <Legend
                       wrapperStyle={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", paddingTop: "12px" }}
                     />
@@ -574,7 +654,7 @@ export default function App() {
                       yAxisId="price"
                       type="monotone"
                       dataKey="price"
-                      name="Price (£)"
+                      name="Price"
                       stroke="#58a6ff"
                       dot={false}
                       strokeWidth={1.5}
