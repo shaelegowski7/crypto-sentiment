@@ -418,6 +418,20 @@ const styles = `
 
   .upgrade-btn:hover { opacity: 0.85; }
 
+  .tier-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+
+  .tier-free { background: rgba(139,148,158,0.12); color: var(--muted); border: 1px solid rgba(139,148,158,0.3); }
+  .tier-pro { background: rgba(240,180,41,0.12); color: var(--accent); border: 1px solid rgba(240,180,41,0.3); }
+  .tier-data { background: rgba(88,166,255,0.12); color: var(--accent2); border: 1px solid rgba(88,166,255,0.3); }
+
   .loading {
     display: flex;
     align-items: center;
@@ -510,9 +524,11 @@ export default function App() {
   const [gbpToUsd, setGbpToUsd] = useState(null)
   const [headlinePage, setHeadlinePage] = useState(1)
   const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
 
-  const isPro = user?.user_metadata?.tier === "pro"
+  const isPro = profile?.tier === "pro" || profile?.tier === "data"
+  const isData = profile?.tier === "data"
   const isLoggedIn = !!user
 
   useEffect(() => {
@@ -524,6 +540,16 @@ export default function App() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (!user) { setProfile(null); return }
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => setProfile(data))
+  }, [user])
 
   useEffect(() => {
     fetchDashboard()
@@ -579,17 +605,13 @@ export default function App() {
 
   const handleTickerClick = (t) => {
     const isLocked = !FREE_TICKERS.includes(t) && !isPro
-    if (isLocked) {
-      setShowAuth(true)
-      return
-    }
+    if (isLocked) { setShowAuth(true); return }
     setTicker(t)
   }
 
   const filteredData = (() => {
-    const base = range === 999 ? allData : allData.slice(-range)
     if (!isPro && range > 30) return allData.slice(-30)
-    return base
+    return range === 999 ? allData : allData.slice(-range)
   })()
 
   const rate = currency === "USD" && gbpToUsd ? gbpToUsd : 1
@@ -630,7 +652,8 @@ export default function App() {
     fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
     padding: "4px 10px",
     border: `1px solid ${range === r ? "var(--accent)" : "var(--border)"}`,
-    borderRadius: "2px", cursor: !isPro && r > 30 ? "not-allowed" : "pointer",
+    borderRadius: "2px",
+    cursor: !isPro && r > 30 ? "not-allowed" : "pointer",
     background: range === r ? "rgba(240,180,41,0.08)" : "transparent",
     color: range === r ? "var(--accent)" : !isPro && r > 30 ? "var(--border2)" : "var(--muted)",
     transition: "all 0.15s",
@@ -652,6 +675,12 @@ export default function App() {
     return `${symbol}${v.toFixed(2)}`
   }
 
+  const tierBadgeClass = profile?.tier === "pro"
+    ? "tier-badge tier-pro"
+    : profile?.tier === "data"
+    ? "tier-badge tier-data"
+    : "tier-badge tier-free"
+
   return (
     <>
       <style>{styles}</style>
@@ -665,6 +694,7 @@ export default function App() {
           <div className="topbar-right">
             {user ? (
               <>
+                <span className={tierBadgeClass}>{profile?.tier ?? "free"}</span>
                 <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
                   {user.email}
                 </span>
