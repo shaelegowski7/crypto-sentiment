@@ -542,6 +542,20 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+  if (!user) { setProfile(null); return }
+  supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single()
+    .then(({ data, error }) => {
+      console.log("profile data:", data)
+      console.log("profile error:", error)
+      setProfile(data)
+    })
+  }, [user])
+
+  useEffect(() => {
     if (!user) { setProfile(null); return }
     supabase
       .from("profiles")
