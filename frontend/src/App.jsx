@@ -4,15 +4,15 @@ import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from "recharts"
- 
+
 const TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
 const API = "https://crypto-sentiment-production.up.railway.app"
- 
+
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
- 
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
- 
+
   :root {
     --bg: #080c10;
     --surface: #0d1117;
@@ -29,9 +29,9 @@ const styles = `
     --mono: 'IBM Plex Mono', monospace;
     --sans: 'IBM Plex Sans', sans-serif;
   }
- 
+
   body { background: var(--bg); }
- 
+
   .dashboard {
     font-family: var(--sans);
     background: var(--bg);
@@ -41,7 +41,7 @@ const styles = `
     margin: 0 auto;
     padding: 0;
   }
- 
+
   .topbar {
     display: flex;
     align-items: center;
@@ -53,13 +53,13 @@ const styles = `
     top: 0;
     z-index: 100;
   }
- 
+
   .topbar-left {
     display: flex;
     align-items: center;
     gap: 16px;
   }
- 
+
   .logo {
     font-family: var(--mono);
     font-size: 13px;
@@ -68,20 +68,20 @@ const styles = `
     color: var(--accent);
     text-transform: uppercase;
   }
- 
+
   .logo-divider {
     width: 1px;
     height: 20px;
     background: var(--border2);
   }
- 
+
   .tagline {
     font-size: 11px;
     color: var(--muted);
     letter-spacing: 0.05em;
     font-family: var(--mono);
   }
- 
+
   .live-indicator {
     display: flex;
     align-items: center;
@@ -91,7 +91,7 @@ const styles = `
     color: var(--positive);
     letter-spacing: 0.08em;
   }
- 
+
   .live-dot {
     width: 6px;
     height: 6px;
@@ -99,12 +99,12 @@ const styles = `
     background: var(--positive);
     animation: pulse 2s infinite;
   }
- 
+
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
   }
- 
+
   .ticker-bar {
     display: flex;
     gap: 2px;
@@ -114,9 +114,9 @@ const styles = `
     overflow-x: auto;
     scrollbar-width: none;
   }
- 
+
   .ticker-bar::-webkit-scrollbar { display: none; }
- 
+
   .ticker-btn {
     font-family: var(--mono);
     font-size: 11px;
@@ -131,39 +131,39 @@ const styles = `
     transition: all 0.15s;
     white-space: nowrap;
   }
- 
+
   .ticker-btn:hover {
     color: var(--text);
     border-color: var(--border2);
     background: var(--surface2);
   }
- 
+
   .ticker-btn.active {
     color: var(--accent);
     border-color: var(--accent);
     background: rgba(240, 180, 41, 0.06);
   }
- 
+
   .main {
     padding: 20px 24px;
     display: flex;
     flex-direction: column;
     gap: 16px;
   }
- 
+
   .stat-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 12px;
   }
- 
+
   .stat-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 16px;
   }
- 
+
   .stat-label {
     font-family: var(--mono);
     font-size: 10px;
@@ -172,7 +172,7 @@ const styles = `
     text-transform: uppercase;
     margin-bottom: 8px;
   }
- 
+
   .stat-value {
     font-family: var(--mono);
     font-size: 22px;
@@ -180,26 +180,26 @@ const styles = `
     color: var(--text);
     line-height: 1;
   }
- 
+
   .stat-sub {
     font-family: var(--mono);
     font-size: 10px;
     color: var(--muted);
     margin-top: 4px;
   }
- 
+
   .positive-text { color: var(--positive); }
   .negative-text { color: var(--negative); }
   .neutral-text { color: var(--neutral); }
   .accent-text { color: var(--accent); }
- 
+
   .panel {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 4px;
     overflow: hidden;
   }
- 
+
   .panel-header {
     display: flex;
     align-items: center;
@@ -208,7 +208,7 @@ const styles = `
     border-bottom: 1px solid var(--border);
     background: var(--surface2);
   }
- 
+
   .panel-title {
     font-family: var(--mono);
     font-size: 10px;
@@ -217,15 +217,15 @@ const styles = `
     color: var(--muted);
     text-transform: uppercase;
   }
- 
+
   .panel-body {
     padding: 16px;
   }
- 
+
   .correlation-panel {
     border-left: 3px solid var(--accent);
   }
- 
+
   .correlation-value {
     font-family: var(--mono);
     font-size: 32px;
@@ -233,31 +233,31 @@ const styles = `
     line-height: 1;
     margin-bottom: 8px;
   }
- 
+
   .correlation-detail {
     font-size: 13px;
     color: var(--muted);
     line-height: 1.6;
   }
- 
+
   .correlation-detail strong {
     color: var(--text);
     font-weight: 500;
   }
- 
+
   .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
- 
+
   .headlines-list {
     display: flex;
     flex-direction: column;
     gap: 1px;
     background: var(--border);
   }
- 
+
   .headline-item {
     background: var(--surface);
     padding: 12px 16px;
@@ -266,11 +266,11 @@ const styles = `
     align-items: flex-start;
     transition: background 0.1s;
   }
- 
+
   .headline-item:hover {
     background: var(--surface2);
   }
- 
+
   .sentiment-pill {
     font-family: var(--mono);
     font-size: 9px;
@@ -282,18 +282,18 @@ const styles = `
     margin-top: 2px;
     flex-shrink: 0;
   }
- 
+
   .pill-positive { background: rgba(63, 185, 80, 0.12); color: var(--positive); border: 1px solid rgba(63, 185, 80, 0.3); }
   .pill-negative { background: rgba(248, 81, 73, 0.12); color: var(--negative); border: 1px solid rgba(248, 81, 73, 0.3); }
   .pill-neutral  { background: rgba(139, 148, 158, 0.12); color: var(--neutral); border: 1px solid rgba(139, 148, 158, 0.3); }
- 
+
   .headline-title {
     font-size: 12px;
     line-height: 1.5;
     color: var(--text);
     flex: 1;
   }
- 
+
   .headline-score {
     font-family: var(--mono);
     font-size: 10px;
@@ -302,7 +302,7 @@ const styles = `
     margin-top: 2px;
     flex-shrink: 0;
   }
- 
+
   .loading {
     display: flex;
     align-items: center;
@@ -313,7 +313,7 @@ const styles = `
     color: var(--muted);
     letter-spacing: 0.1em;
   }
- 
+
   .loading::after {
     content: '';
     display: inline-block;
@@ -325,9 +325,9 @@ const styles = `
     animation: spin 0.8s linear infinite;
     margin-left: 10px;
   }
- 
+
   @keyframes spin { to { transform: rotate(360deg); } }
- 
+
   .custom-tooltip {
     background: var(--surface2);
     border: 1px solid var(--border2);
@@ -336,24 +336,24 @@ const styles = `
     font-size: 11px;
     border-radius: 2px;
   }
- 
+
   .tooltip-label {
     color: var(--muted);
     margin-bottom: 6px;
     font-size: 10px;
     letter-spacing: 0.06em;
   }
- 
+
   .tooltip-row {
     display: flex;
     justify-content: space-between;
     gap: 16px;
     margin-bottom: 2px;
   }
- 
+
   .tooltip-key { color: var(--muted); }
   .tooltip-val { color: var(--text); font-weight: 500; }
- 
+
   @media (max-width: 768px) {
     .topbar { padding: 10px 16px; }
     .ticker-bar { padding: 10px 16px; }
@@ -364,7 +364,7 @@ const styles = `
     .logo-divider { display: none; }
   }
 `
- 
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null
   return (
@@ -381,7 +381,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     </div>
   )
 }
- 
+
 export default function App() {
   const [ticker, setTicker] = useState("BTC")
   const [allData, setAllData] = useState([])
@@ -390,43 +390,43 @@ export default function App() {
   const [correlation, setCorrelation] = useState(null)
   const [stats, setStats] = useState(null)
   const [range, setRange] = useState(30)
- 
+
   useEffect(() => {
     fetchDashboard()
   }, [ticker])
- 
+
   useEffect(() => {
     axios.get(`${API}/stats`).then(r => setStats(r.data)).catch(() => {})
   }, [])
- 
+
   const fetchDashboard = async () => {
     setLoading(true)
     try {
       const res = await axios.get(`${API}/dashboard/${ticker}`)
       const { sentiment, prices } = res.data
- 
+
       const priceMap = {}
       prices.forEach(p => {
         const date = p.date.split("T")[0]
         priceMap[date] = p.close_price
       })
- 
+
       const sentimentByDate = {}
       sentiment.forEach(s => {
         const date = s.date.split("T")[0]
         if (!sentimentByDate[date]) sentimentByDate[date] = []
         sentimentByDate[date].push(s.score)
       })
- 
+
       const merged = Object.keys(sentimentByDate).map(date => ({
         date,
         sentiment: parseFloat((sentimentByDate[date].reduce((a, b) => a + b, 0) / sentimentByDate[date].length).toFixed(3)),
         price: priceMap[date] || null,
       })).sort((a, b) => new Date(a.date) - new Date(b.date))
- 
+
       setAllData(merged)
       setHeadlines(sentiment.slice(0, 10))
- 
+
       const corrRes = await axios.get(`${API}/correlation/${ticker}`)
       setCorrelation(corrRes.data)
     } catch (err) {
@@ -434,17 +434,17 @@ export default function App() {
     }
     setLoading(false)
   }
- 
+
   const filteredData = range === 999 ? allData : allData.slice(-range)
- 
+
   const avgSentiment = filteredData.length
     ? (filteredData.reduce((a, b) => a + b.sentiment, 0) / filteredData.length).toFixed(3)
     : null
- 
+
   const sentimentSignal = avgSentiment
     ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
     : null
- 
+
   return (
     <>
       <style>{styles}</style>
@@ -460,7 +460,7 @@ export default function App() {
             LIVE
           </div>
         </header>
- 
+
         <nav className="ticker-bar">
           {TICKERS.map(t => (
             <button
@@ -472,7 +472,7 @@ export default function App() {
             </button>
           ))}
         </nav>
- 
+
         <main className="main">
           <div className="stat-row">
             <div className="stat-card">
@@ -500,7 +500,7 @@ export default function App() {
               <div className="stat-sub">{TICKERS.length} tickers tracked</div>
             </div>
           </div>
- 
+
           <div className="panel">
             <div className="panel-header">
               <span className="panel-title">{ticker} / SENTIMENT vs PRICE (GBP)</span>
@@ -584,7 +584,7 @@ export default function App() {
               )}
             </div>
           </div>
- 
+
           <div className="grid-2">
             <div className="panel correlation-panel">
               <div className="panel-header">
@@ -599,11 +599,33 @@ export default function App() {
                     <div className="correlation-detail">
                       <strong>{correlation.interpretation}</strong>
                       <br /><br />
-                      Signal type: <strong>{correlation.correlation < 0 ? "Contrarian" : "Momentum"}</strong>
+                      Signal type: <strong>{correlation.signal_type}</strong>
                       <br />
-                      Lag: <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
-                      <br />
-                      Raw correlation: <strong style={{ fontFamily: "IBM Plex Mono" }}>{correlation.correlation}</strong>
+                      Best lag: <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
+                      <br /><br />
+                      {correlation.all_lags && (
+                        <div style={{ marginTop: "8px" }}>
+                          {Object.entries(correlation.all_lags).map(([lag, corr]) => (
+                            <div key={lag} style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              padding: "3px 0",
+                              borderBottom: "1px solid var(--border)",
+                              fontFamily: "var(--mono)",
+                              fontSize: "10px"
+                            }}>
+                              <span style={{ color: "var(--muted)" }}>{lag}d lag</span>
+                              <span style={{
+                                color: Math.abs(corr) > 0.3
+                                  ? corr < 0 ? "var(--negative)" : "var(--positive)"
+                                  : "var(--muted)"
+                              }}>
+                                {corr > 0 ? "+" : ""}{corr}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -611,7 +633,7 @@ export default function App() {
                 )}
               </div>
             </div>
- 
+
             <div className="panel">
               <div className="panel-header">
                 <span className="panel-title">LATEST HEADLINES</span>
