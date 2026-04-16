@@ -19,6 +19,8 @@ import numpy as np
 import resend 
 import os  
 import requests
+import stripe
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -494,3 +496,33 @@ def backfill(ticker: str, days: int = 30, offset: int = 0, db: Session = Depends
 
     db.commit()
     return {"message": f"Backfilled {saved} headlines for {ticker}"}
+
+@app.post("/create-checkout-session")
+def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{"price": price_id, "quantity": 1}],
+            mode="subscription",
+            success_url="https://crypto-sentiment-five.vercel.app/success",
+            cancel_url="https://crypto-sentiment-five.vercel.app/cancel",
+        )
+        return {"url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/prices/stripe")
+def get_stripe_prices():
+    prices = stripe.Price.list(active=True, expand=["data.product"])
+    return {"prices": [
+        {
+            "id": p.id,
+            "nickname": p.nickname,
+            "unit_amount": p.unit_amount,
+            "currency": p.currency,
+            "interval": p.recurring.interval if p.recurring else None,
+            "product_name": p.product.name if p.product else None,
+        }
+        for p in prices.data
+    ]}
