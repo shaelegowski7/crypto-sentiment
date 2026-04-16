@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks
 from sqlalchemy.orm import Session
 from fastapi import Request
 from . import models, schemas
@@ -513,22 +513,24 @@ def waitlist_count(db: Session = Depends(get_db)):
     count = db.query(models.WaitlistEmail).count()
     return {"count": count}
 
-@app.post("/backfill/{ticker}")
-def backfill(ticker: str, days: int = 30, offset: int = 0, db: Session = Depends(get_db)):
-    query = {
-        "BTC": "bitcoin crypto",
-        "ETH": "ethereum crypto",
-        "SOL": "solana crypto",
-        "BNB": "binance BNB crypto",
-        "XRP": "ripple XRP crypto",
-        "ADA": "cardano crypto",
-        "AVAX": "avalanche crypto",
-        "LINK": "chainlink crypto",
-        "DOGE": "dogecoin crypto"
-    }.get(ticker.upper())
+TICKER_QUERIES = {
+    "BTC": "bitcoin crypto",
+    "ETH": "ethereum crypto",
+    "SOL": "solana crypto",
+    "BNB": "binance BNB crypto",
+    "XRP": "ripple XRP crypto",
+    "ADA": "cardano crypto",
+    "AVAX": "avalanche crypto",
+    "LINK": "chainlink crypto",
+    "DOGE": "dogecoin crypto"
+}
 
+def run_backfill(ticker: str, days: int, offset: int):
+    db = SessionLocal()
+    query = TICKER_QUERIES.get(ticker.upper())
     if not query:
-        raise HTTPException(status_code=404, detail="Unknown ticker")
+        print(f"Backfill: unknown ticker {ticker}")
+        return
 
     saved = 0
     start_date = datetime.utcnow() - timedelta(days=offset + days)
@@ -549,8 +551,7 @@ def backfill(ticker: str, days: int = 30, offset: int = 0, db: Session = Depends
 
         try:
             response = requests.get("https://gnews.io/api/v4/search", params=params)
-            print(f"GNews response for {ticker} day {i}: {response.status_code}")
-            print(f"Response: {response.json()}")
+            print(f"Backfill {ticker} day {i}: {response.status_code}")
             articles = response.json().get("articles", [])
 
             for article in articles:
@@ -573,11 +574,21 @@ def backfill(ticker: str, days: int = 30, offset: int = 0, db: Session = Depends
                 db.add(headline)
                 saved += 1
 
+            db.commit()
+
         except Exception as e:
             print(f"Backfill error for {ticker} day {i}: {e}")
 
-    db.commit()
-    return {"message": f"Backfilled {saved} headlines for {ticker}"}
+    db.close()
+    print(f"Backfill complete for {ticker}: {saved} headlines saved")
+
+
+@app.post("/backfill/{ticker}")
+def backfill(ticker: str, background_tasks: BackgroundTasks, days: int = 30, offset: int = 0):
+    if ticker.upper() not in TICKER_QUERIES:
+        raise HTTPException(status_code=404, detail="Unknown ticker")
+    background_tasks.add_task(run_backfill, ticker, days, offset)
+    return {"message": f"Backfill started for {ticker} ({days} days, offset {offset}) — check Railway logs for progress"}
 
 @app.post("/create-checkout-session")
 def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
