@@ -505,6 +505,38 @@
 
     .price-btn-filled:hover { opacity: 0.85; }
 
+    .price-waitlist {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .price-waitlist-input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 2px;
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      box-sizing: border-box;
+    }
+
+    .price-waitlist-input::placeholder { color: var(--muted); }
+    .price-waitlist-input:focus { border-color: var(--accent); }
+
+    .price-waitlist-note {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--positive);
+      letter-spacing: 0.05em;
+      display: none;
+      text-align: center;
+    }
+
     /* BOTTOM CTA */
     .bottom-cta {
       position: relative;
@@ -768,8 +800,14 @@
             <li class="included">Email alerts on spikes</li>
             <li class="included">Raw data export</li>
           </ul>
-          <button onclick="startCheckout('price_1TMdhiRuGYgaTM3ycfIizjLQ')"
-            class="price-btn price-btn-filled">Get Pro Monthly</button>
+          <div class="price-waitlist" id="waitlist-monthly">
+            <input type="email" class="price-waitlist-input" id="email-monthly"
+              placeholder="your@email.com" />
+            <button class="price-btn price-btn-filled"
+              onclick="joinWaitlist('monthly')">Join Waitlist</button>
+            <div class="price-waitlist-note" id="note-monthly">You're on the
+              list!</div>
+          </div>
         </div>
 
         <!-- PRO ANNUAL -->
@@ -788,14 +826,18 @@
             <li class="included">REST API access</li>
             <li class="included">Email alerts on spikes</li>
           </ul>
-          <button onclick="startCheckout('price_1TMdlmRuGYgaTM3ysDve7yNI')"
-            class="price-btn price-btn-outline">Get Pro Annual</button>
+          <div class="price-waitlist" id="waitlist-annual">
+            <input type="email" class="price-waitlist-input" id="email-annual"
+              placeholder="your@email.com" />
+            <button class="price-btn price-btn-outline"
+              onclick="joinWaitlist('annual')">Join Waitlist</button>
+            <div class="price-waitlist-note" id="note-annual">You're on the
+              list!</div>
+          </div>
         </div>
 
       </div>
     </section>
-
-    <!-- BOTTOM CTA -->
     <section class="bottom-cta">
       <div class="hero-tag" style="justify-content:center;">Now Live</div>
       <h2
@@ -826,8 +868,6 @@
 
     <script>
     const API = "https://crypto-sentiment-production.up.railway.app"
-
-    // Live headline count
     async function loadStats() {
       try {
         const res = await fetch(`${API}/stats`)
@@ -841,18 +881,27 @@
       }
     }
 
-    // Stripe checkout
-    async function startCheckout(priceId) {
+    async function joinWaitlist(plan) {
+      const email = document.getElementById(`email-${plan}`).value
+      if (!email || !email.includes('@')) {
+        document.getElementById(`email-${plan}`).focus()
+        return
+      }
       try {
-        const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, {
-          method: 'POST'
+        const res = await fetch(`${API}/waitlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
         })
-        const data = await res.json()
-        if (data.url) {
-          window.location.href = data.url
-        }
+        await res.json()
+        document.getElementById(`email-${plan}`).value = ''
+        document.getElementById(`email-${plan}`).style.display = 'none'
+        const btn = document.querySelector(`#waitlist-${plan} button`)
+        btn.style.display = 'none'
+        document.getElementById(`note-${plan}`).style.display = 'block'
+        setTimeout(() => { window.location.href = 'https://app.sentimentfx.org?auth=signup' }, 1200)
       } catch (e) {
-        console.error('Checkout error:', e)
+        console.error('Waitlist error:', e)
       }
     }
 
