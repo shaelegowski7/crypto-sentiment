@@ -343,10 +343,12 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
 
 
 @app.get("/export/sentiment/{ticker}")
-async def export_sentiment(ticker: str, db: Session = Depends(get_db), user=Depends(require_pro)):
-    headlines = db.query(models.Headline).filter(
-        models.Headline.ticker == ticker.upper()
-    ).order_by(models.Headline.published_at).all()
+async def export_sentiment(ticker: str, days: int = 0, db: Session = Depends(get_db), user=Depends(require_pro)):
+    query = db.query(models.Headline).filter(models.Headline.ticker == ticker.upper())
+    if days > 0:
+        since = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(models.Headline.published_at >= since)
+    headlines = query.order_by(models.Headline.published_at).all()
 
     if not headlines:
         raise HTTPException(status_code=404, detail="No data found")
@@ -366,7 +368,7 @@ async def export_sentiment(ticker: str, db: Session = Depends(get_db), user=Depe
         ])
 
     output.seek(0)
-    filename = f"sentimentfx_{ticker.lower()}_sentiment.csv"
+    filename = f"sentimentfx_{ticker.lower()}_sentiment{'_' + str(days) + 'd' if days else '_all'}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -375,10 +377,12 @@ async def export_sentiment(ticker: str, db: Session = Depends(get_db), user=Depe
 
 
 @app.get("/export/prices/{ticker}")
-async def export_prices(ticker: str, db: Session = Depends(get_db), user=Depends(require_pro)):
-    prices = db.query(models.Price).filter(
-        models.Price.ticker == ticker.upper()
-    ).order_by(models.Price.date).all()
+async def export_prices(ticker: str, days: int = 0, db: Session = Depends(get_db), user=Depends(require_pro)):
+    query = db.query(models.Price).filter(models.Price.ticker == ticker.upper())
+    if days > 0:
+        since = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(models.Price.date >= since)
+    prices = query.order_by(models.Price.date).all()
 
     if not prices:
         raise HTTPException(status_code=404, detail="No data found")
@@ -395,7 +399,7 @@ async def export_prices(ticker: str, db: Session = Depends(get_db), user=Depends
         ])
 
     output.seek(0)
-    filename = f"sentimentfx_{ticker.lower()}_prices.csv"
+    filename = f"sentimentfx_{ticker.lower()}_prices{'_' + str(days) + 'd' if days else '_all'}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",

@@ -20,20 +20,21 @@ const redirectToCheckout = async (priceId) => {
   window.location.href = data.url
 }
 
-const exportData = async (type, ticker, session) => {
+const exportData = async (type, ticker, session, days) => {
   try {
     const token = session?.access_token
-    const res = await fetch(`${API}/export/${type}/${ticker}`, {
+    const url = `${API}/export/${type}/${ticker}${days ? `?days=${days}` : ""}`
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error("Export failed")
     const blob = await res.blob()
-    const url = window.URL.createObjectURL(blob)
+    const objectUrl = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
-    a.href = url
-    a.download = `sentimentfx_${ticker.toLowerCase()}_${type}.csv`
+    a.href = objectUrl
+    a.download = `sentimentfx_${ticker.toLowerCase()}_${type}${days ? `_${days}d` : "_all"}.csv`
     a.click()
-    window.URL.revokeObjectURL(url)
+    window.URL.revokeObjectURL(objectUrl)
   } catch (e) {
     console.error("Export error:", e)
   }
@@ -873,33 +874,27 @@ export default function App() {
           </div>
 
           {isPro && (
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => exportData("sentiment", ticker, session)}
-                style={{
-                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                  padding: "6px 14px", border: "1px solid var(--border2)", borderRadius: "2px",
-                  cursor: "pointer", background: "transparent", color: "var(--muted)",
-                  transition: "all 0.15s",
-                }}
-                onMouseOver={e => { e.target.style.color = "var(--text)"; e.target.style.borderColor = "var(--text)" }}
-                onMouseOut={e => { e.target.style.color = "var(--muted)"; e.target.style.borderColor = "var(--border2)" }}
-              >
-                ↓ Export Sentiment
-              </button>
-              <button
-                onClick={() => exportData("prices", ticker, session)}
-                style={{
-                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                  padding: "6px 14px", border: "1px solid var(--border2)", borderRadius: "2px",
-                  cursor: "pointer", background: "transparent", color: "var(--muted)",
-                  transition: "all 0.15s",
-                }}
-                onMouseOver={e => { e.target.style.color = "var(--text)"; e.target.style.borderColor = "var(--text)" }}
-                onMouseOut={e => { e.target.style.color = "var(--muted)"; e.target.style.borderColor = "var(--border2)" }}
-              >
-                ↓ Export Prices
-              </button>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }}>EXPORT</span>
+              {[7, 30, 90, 0].map(d => (
+                <button
+                  key={d}
+                  onClick={() => {
+                    exportData("sentiment", ticker, session, d)
+                    exportData("prices", ticker, session, d)
+                  }}
+                  style={{
+                    fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                    padding: "6px 12px", border: "1px solid var(--border2)", borderRadius: "2px",
+                    cursor: "pointer", background: "transparent", color: "var(--muted)",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseOver={e => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent)" }}
+                  onMouseOut={e => { e.currentTarget.style.color = "var(--muted)"; e.currentTarget.style.borderColor = "var(--border2)" }}
+                >
+                  {d === 0 ? "ALL" : `${d}D`}
+                </button>
+              ))}
             </div>
           )}
 
