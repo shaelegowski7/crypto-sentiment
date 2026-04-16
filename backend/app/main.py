@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
+from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
 from .scraper import fetch_headlines
@@ -526,3 +527,28 @@ def get_stripe_prices():
         }
         for p in prices.data
     ]}
+
+@app.post("/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        customer_email = session.get("customer_details", {}).get("email")
+
+        if customer_email:
+            from supabase import create_client
+            supabase_client = create_client(
+                os.getenv("SUPABASE_URL"),
+                os.getenv("SUPABASE_SERVICE_KEY")
+            )
+            supabase_client.table("profiles").update({"tier": "pro"}).eq("email", customer_email).execute()
+
+    return {"status": "ok"}
