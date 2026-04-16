@@ -12,6 +12,14 @@ const FREE_TICKERS = ["BTC"]
 const API = "https://crypto-sentiment-production.up.railway.app"
 const HEADLINES_PER_PAGE = 10
 
+const redirectToCheckout = async (priceId) => {
+  const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, {
+    method: "POST",
+  })
+  const data = await res.json()
+  window.location.href = data.url
+}
+
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
 
@@ -527,6 +535,10 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
 
+  const urlParams = new URLSearchParams(window.location.search)
+  const checkoutSuccess = urlParams.get("success")
+  const checkoutCancelled = urlParams.get("cancelled")
+
   const isPro = profile?.tier === "pro" || profile?.tier === "data"
   const isData = profile?.tier === "data"
   const isLoggedIn = !!user
@@ -761,9 +773,30 @@ export default function App() {
               <span className="upgrade-text">
                 <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all 9 tickers, full history, API access and alerts.
               </span>
-              <button className="upgrade-btn" onClick={() => window.open("https://sentimentfx.org/#pricing", "_blank")}>
-                Upgrade to Pro
-              </button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TMdhiRuGYgaTM3ycfIizjLQ")}>
+                  £11.99 / mo
+                </button>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TMdlmRuGYgaTM3ysDve7yNI")}>
+                  £99 / yr
+                </button>
+              </div>
+            </div>
+          )}
+
+          {checkoutSuccess && (
+            <div className="upgrade-banner" style={{ borderColor: "rgba(63,185,80,0.3)", background: "rgba(63,185,80,0.04)" }}>
+              <span className="upgrade-text">
+                <strong style={{ color: "var(--positive)" }}>Payment successful!</strong> Your Pro account is now active. Welcome aboard.
+              </span>
+            </div>
+          )}
+
+          {checkoutCancelled && (
+            <div className="upgrade-banner" style={{ borderColor: "rgba(248,81,73,0.3)", background: "rgba(248,81,73,0.04)" }}>
+              <span className="upgrade-text">
+                <strong style={{ color: "var(--negative)" }}>Checkout cancelled.</strong> No charges were made.
+              </span>
             </div>
           )}
 

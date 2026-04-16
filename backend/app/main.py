@@ -504,8 +504,8 @@ def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
-            success_url="https://crypto-sentiment-five.vercel.app/success",
-            cancel_url="https://crypto-sentiment-five.vercel.app/cancel",
+            success_url="https://app.sentimentfx.org?success=true",
+            cancel_url="https://app.sentimentfx.org?cancelled=true",
         )
         return {"url": session.url}
     except Exception as e:
