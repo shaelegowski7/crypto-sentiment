@@ -36,3 +36,23 @@ def fetch_prices(ticker: str, period: str = "2y") -> list:
         })
 
     return prices
+
+
+def fetch_latest_price(ticker: str) -> dict | None:
+    yf_ticker = TICKER_MAP.get(ticker)
+    if not yf_ticker:
+        print(f"Unknown ticker: {ticker}")
+        return None
+
+    data = yf.download(yf_ticker, period="2d", interval="1h", progress=False)
+    if data.empty:
+        print(f"No intraday price data found for {ticker}")
+        return None
+
+    latest = data.iloc[-1]
+    return {
+        "ticker": ticker,
+        "close_price": round(float(latest["Close"].iloc[0]), 2),
+        "volume": round(float(latest["Volume"].iloc[0]), 2),
+        "date": data.index[-1].to_pydatetime()
+    }

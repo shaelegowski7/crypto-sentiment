@@ -5,13 +5,13 @@ from . import models, schemas
 from .database import engine, get_db
 from .scraper import fetch_headlines
 from .sentiment import analyse_sentiment
-from .prices import fetch_prices
+from .prices import fetch_prices, fetch_latest_price
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from .scraper import fetch_headlines
 from .sentiment import analyse_sentiment
-from .prices import fetch_prices
+from .prices import fetch_prices, fetch_latest_price
 from . import models
 from .database import SessionLocal
 from scipy.stats import pearsonr
@@ -93,21 +93,20 @@ def scrape_all():
                 )
                 db.add(headline)
 
-            prices = fetch_prices(ticker)
-            for p in prices:
+            prices = fetch_latest_price(ticker)
+            if prices:
                 exists = db.query(models.Price).filter(
-                    models.Price.ticker == p["ticker"],
-                    models.Price.date == p["date"]
+                    models.Price.ticker == prices["ticker"],
+                    models.Price.date == prices["date"]
                 ).first()
-                if exists:
-                    continue
-                price = models.Price(
-                    ticker=p["ticker"],
-                    close_price=p["close_price"],
-                    volume=p["volume"],
-                    date=p["date"]
-                )
-                db.add(price)
+                if not exists:
+                    price = models.Price(
+                        ticker=prices["ticker"],
+                        close_price=prices["close_price"],
+                        volume=prices["volume"],
+                        date=prices["date"]
+                    )
+                    db.add(price)
 
         db.commit()
         print("Scheduled scrape complete")
