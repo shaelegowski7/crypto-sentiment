@@ -30,7 +30,7 @@ def fetch_headlines(ticker: str) -> list:
     params = {
         "q": query,
         "lang": "en",
-        "max": 10,
+        "max": 25,
         "apikey": GNEWS_API_KEY
     }
 
