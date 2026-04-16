@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from fastapi import Request
 from . import models, schemas
@@ -16,11 +16,14 @@ from . import models
 from .database import SessionLocal
 from scipy.stats import pearsonr
 from datetime import datetime, timedelta
+from fastapi.responses import StreamingResponse
 import numpy as np
 import resend 
 import os  
 import requests
 import stripe
+import csv
+import io
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 models.Base.metadata.create_all(bind=engine)
@@ -35,6 +38,37 @@ app.add_middleware(
 )
 
 TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
+
+
+async def require_pro(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    
+    token = authorization.split(" ")[1]
+
+    try:
+        from supabase import create_client
+        supabase_client = create_client(
+            os.getenv("SUPABASE_URL"),
+            os.getenv("SUPABASE_SERVICE_KEY")
+        )
+        user_resp = supabase_client.auth.get_user(token)
+        user = user_resp.user
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        profile = supabase_client.table("profiles").select("tier").eq("id", user.id).single().execute()
+        tier = profile.data.get("tier")
+
+        if tier not in ("pro", "data"):
+            raise HTTPException(status_code=403, detail="Pro subscription required")
+
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
+
 
 def scrape_all():
     db = SessionLocal()
@@ -206,7 +240,6 @@ def get_stats(db: Session = Depends(get_db)):
 
 @app.delete("/cleanup/duplicates")
 def cleanup_duplicates(db: Session = Depends(get_db)):
-    # Get all headlines ordered by id
     all_headlines = db.query(models.Headline).order_by(models.Headline.id).all()
     
     seen_urls = set()
@@ -256,7 +289,6 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
     if len(headlines) < 10 or len(prices) < 10:
         return {"message": "Not enough data yet"}
 
-    # Average sentiment by date
     sentiment_by_date = {}
     for h in headlines:
         date = str(h.published_at.date())
@@ -269,7 +301,6 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         for date, scores in sentiment_by_date.items()
     }
 
-    # Calculate daily price RETURNS instead of raw price
     price_by_date = {}
     sorted_prices = sorted(prices, key=lambda p: p.date)
     for i in range(1, len(sorted_prices)):
@@ -279,7 +310,6 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         if prev_price > 0:
             price_by_date[date] = (curr_price - prev_price) / prev_price * 100
 
-    # Find common dates
     common_dates = sorted(set(avg_sentiment.keys()) & set(price_by_date.keys()))
 
     if len(common_dates) < 10:
@@ -311,6 +341,68 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         "signal_type": direction
     }
 
+
+@app.get("/export/sentiment/{ticker}")
+async def export_sentiment(ticker: str, db: Session = Depends(get_db), user=Depends(require_pro)):
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper()
+    ).order_by(models.Headline.published_at).all()
+
+    if not headlines:
+        raise HTTPException(status_code=404, detail="No data found")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["date", "ticker", "title", "source", "sentiment_score", "sentiment_label", "url"])
+    for h in headlines:
+        writer.writerow([
+            h.published_at.isoformat(),
+            h.ticker,
+            h.title,
+            h.source,
+            h.sentiment_score,
+            h.sentiment_label,
+            h.url
+        ])
+
+    output.seek(0)
+    filename = f"sentimentfx_{ticker.lower()}_sentiment.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/export/prices/{ticker}")
+async def export_prices(ticker: str, db: Session = Depends(get_db), user=Depends(require_pro)):
+    prices = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper()
+    ).order_by(models.Price.date).all()
+
+    if not prices:
+        raise HTTPException(status_code=404, detail="No data found")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["date", "ticker", "close_price_gbp", "volume"])
+    for p in prices:
+        writer.writerow([
+            p.date.isoformat(),
+            p.ticker,
+            p.close_price,
+            p.volume
+        ])
+
+    output.seek(0)
+    filename = f"sentimentfx_{ticker.lower()}_prices.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @app.post("/waitlist")
 def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
     existing = db.query(models.WaitlistEmail).filter(
@@ -341,8 +433,6 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
     <tr>
       <td align="center">
         <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-
-          <!-- Header -->
           <tr>
             <td style="border-bottom:1px solid #21262d;padding-bottom:20px;margin-bottom:32px;">
               <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">
@@ -350,8 +440,6 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
               </span>
             </td>
           </tr>
-
-          <!-- Body -->
           <tr>
             <td style="padding:40px 0 32px;">
               <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">
@@ -364,8 +452,6 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
                 We'll reach out when early access opens — you'll get founder pricing
                 and first access to the full signal suite.
               </p>
-
-              <!-- Ticker chips -->
               <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
                 <tr>
                   <td style="padding-right:6px;">
@@ -382,8 +468,6 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
                   </td>
                 </tr>
               </table>
-
-              <!-- CTA button -->
               <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
                 <tr>
                   <td style="background:#f0b429;border-radius:2px;">
@@ -394,14 +478,11 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
                   </td>
                 </tr>
               </table>
-
               <p style="font-size:12px;color:#7d8590;margin:0;line-height:1.6;">
                 No spam. We'll only email you when something worth knowing happens.
               </p>
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
             <td style="border-top:1px solid #21262d;padding-top:20px;">
               <p style="font-size:10px;color:#7d8590;margin:0;letter-spacing:0.05em;line-height:1.7;">
@@ -410,7 +491,6 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
               </p>
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
@@ -448,7 +528,6 @@ def backfill(ticker: str, days: int = 30, offset: int = 0, db: Session = Depends
         raise HTTPException(status_code=404, detail="Unknown ticker")
 
     saved = 0
-    
     start_date = datetime.utcnow() - timedelta(days=offset + days)
 
     for i in range(days):
@@ -470,7 +549,6 @@ def backfill(ticker: str, days: int = 30, offset: int = 0, db: Session = Depends
             print(f"GNews response for {ticker} day {i}: {response.status_code}")
             print(f"Response: {response.json()}")
             articles = response.json().get("articles", [])
-
 
             for article in articles:
                 exists = db.query(models.Headline).filter(

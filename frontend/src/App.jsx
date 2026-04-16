@@ -20,6 +20,25 @@ const redirectToCheckout = async (priceId) => {
   window.location.href = data.url
 }
 
+const exportData = async (type, ticker, session) => {
+  try {
+    const token = session?.access_token
+    const res = await fetch(`${API}/export/${type}/${ticker}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Export failed")
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `sentimentfx_${ticker.toLowerCase()}_${type}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error("Export error:", e)
+  }
+}
+
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
 
@@ -532,6 +551,7 @@ export default function App() {
   const [gbpToUsd, setGbpToUsd] = useState(null)
   const [headlinePage, setHeadlinePage] = useState(1)
   const [user, setUser] = useState(null)
+  const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
   const [authMode, setAuthMode] = useState("login")
@@ -562,9 +582,11 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      setSession(session ?? null)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setSession(session ?? null)
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -849,6 +871,37 @@ export default function App() {
               <div className="stat-sub">{TICKERS.length} tickers tracked</div>
             </div>
           </div>
+
+          {isPro && (
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => exportData("sentiment", ticker, session)}
+                style={{
+                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                  padding: "6px 14px", border: "1px solid var(--border2)", borderRadius: "2px",
+                  cursor: "pointer", background: "transparent", color: "var(--muted)",
+                  transition: "all 0.15s",
+                }}
+                onMouseOver={e => { e.target.style.color = "var(--text)"; e.target.style.borderColor = "var(--text)" }}
+                onMouseOut={e => { e.target.style.color = "var(--muted)"; e.target.style.borderColor = "var(--border2)" }}
+              >
+                ↓ Export Sentiment
+              </button>
+              <button
+                onClick={() => exportData("prices", ticker, session)}
+                style={{
+                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                  padding: "6px 14px", border: "1px solid var(--border2)", borderRadius: "2px",
+                  cursor: "pointer", background: "transparent", color: "var(--muted)",
+                  transition: "all 0.15s",
+                }}
+                onMouseOver={e => { e.target.style.color = "var(--text)"; e.target.style.borderColor = "var(--text)" }}
+                onMouseOut={e => { e.target.style.color = "var(--muted)"; e.target.style.borderColor = "var(--border2)" }}
+              >
+                ↓ Export Prices
+              </button>
+            </div>
+          )}
 
           <div className="panel">
             <div className="panel-header">
