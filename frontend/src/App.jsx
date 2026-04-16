@@ -778,7 +778,7 @@ export default function App() {
                   £11.99 / mo
                 </button>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TMdlmRuGYgaTM3ysDve7yNI")}>
-                  £99 / yr
+                  £99.99 / yr
                 </button>
               </div>
             </div>
