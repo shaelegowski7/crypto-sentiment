@@ -541,7 +541,7 @@ async def stripe_webhook(request: Request):
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        customer_email = session.get("customer_details", {}).get("email")
+        customer_email = session["customer_details"]["email"]
 
         if customer_email:
             from supabase import create_client
