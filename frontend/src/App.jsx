@@ -544,6 +544,12 @@ export default function App() {
   const isLoggedIn = !!user
 
   useEffect(() => {
+    if (checkoutSuccess || checkoutCancelled) {
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+  }, [])
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
     })
