@@ -534,6 +534,7 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState("login")
 
   const urlParams = new URLSearchParams(window.location.search)
   const checkoutSuccess = urlParams.get("success")
@@ -544,7 +545,16 @@ export default function App() {
   const isLoggedIn = !!user
 
   useEffect(() => {
-    if (checkoutSuccess || checkoutCancelled) {
+    // Handle auth query params from landing page CTAs
+    const params = new URLSearchParams(window.location.search)
+    const authParam = params.get("auth")
+    if (authParam === "signup" || authParam === "login") {
+      setAuthMode(authParam)
+      setShowAuth(true)
+      // Clean up the URL without reloading
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+    if (params.get("success") || params.get("cancelled")) {
       window.history.replaceState({}, "", window.location.pathname)
     }
   }, [])
@@ -623,7 +633,7 @@ export default function App() {
 
   const handleTickerClick = (t) => {
     const isLocked = !FREE_TICKERS.includes(t) && !isPro
-    if (isLocked) { setShowAuth(true); return }
+    if (isLocked) { setAuthMode("signup"); setShowAuth(true); return }
     setTicker(t)
   }
 
@@ -729,7 +739,7 @@ export default function App() {
               </>
             ) : (
               <button
-                onClick={() => setShowAuth(true)}
+                onClick={() => { setAuthMode("login"); setShowAuth(true) }}
                 style={{
                   fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
                   padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
@@ -768,7 +778,7 @@ export default function App() {
               <span className="upgrade-text">
                 <strong>Free tier:</strong> BTC only · 30 day history · Sign in to unlock all 9 tickers, full history, API access and alerts.
               </span>
-              <button className="upgrade-btn" onClick={() => setShowAuth(true)}>
+              <button className="upgrade-btn" onClick={() => { setAuthMode("signup"); setShowAuth(true) }}>
                 Sign In / Sign Up
               </button>
             </div>
@@ -852,7 +862,7 @@ export default function App() {
                   <button
                     key={r}
                     onClick={() => {
-                      if (!isPro && r > 30) { setShowAuth(true); return }
+                      if (!isPro && r > 30) { setAuthMode("signup"); setShowAuth(true); return }
                       setRange(r)
                     }}
                     style={rangeCtrlStyle(r)}
@@ -988,7 +998,7 @@ export default function App() {
         </main>
       </div>
 
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} initialMode={authMode} />}
     </>
   )
 }

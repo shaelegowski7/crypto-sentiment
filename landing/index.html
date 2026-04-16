@@ -586,7 +586,7 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#pricing">Pricing</a></li>
-        <li><a href="https://app.sentimentfx.org/signup" target="_blank"
+        <li><a href="https://app.sentimentfx.org?auth=signup" target="_blank"
             class="nav-cta">Create Account</a></li>
       </ul>
     </nav>
@@ -616,10 +616,10 @@
       </div>
 
       <div class="hero-actions">
-        <a href="https://app.sentimentfx.org/signup" class="btn-primary">Create
-          Account</a>
-        <a href="https://app.sentimentfx.org/login" class="btn-secondary">Log
-          In</a>
+        <a href="https://app.sentimentfx.org?auth=signup"
+          class="btn-primary">Create Account</a>
+        <a href="https://app.sentimentfx.org?auth=login"
+          class="btn-secondary">Log In</a>
       </div>
     </section>
 
@@ -634,7 +634,7 @@
         <div class="stat-desc">Update frequency</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">4,278</div>
+        <div class="stat-num" id="stat-headlines">4,278</div>
         <div class="stat-desc">Headlines scored</div>
       </div>
       <div class="stat-item">
@@ -750,7 +750,7 @@
             <li>API access</li>
             <li>Email alerts</li>
           </ul>
-          <a href="https://app.sentimentfx.org/signup"
+          <a href="https://app.sentimentfx.org?auth=signup"
             class="price-btn price-btn-outline">Create Account</a>
         </div>
 
@@ -768,8 +768,8 @@
             <li class="included">Email alerts on spikes</li>
             <li class="included">Raw data export</li>
           </ul>
-          <a href="https://app.sentimentfx.org/signup"
-            class="price-btn price-btn-filled">Create Account</a>
+          <button onclick="startCheckout('price_1TMdhiRuGYgaTM3ycfIizjLQ')"
+            class="price-btn price-btn-filled">Get Pro Monthly</button>
         </div>
 
         <!-- PRO ANNUAL -->
@@ -788,8 +788,8 @@
             <li class="included">REST API access</li>
             <li class="included">Email alerts on spikes</li>
           </ul>
-          <a href="https://app.sentimentfx.org/signup"
-            class="price-btn price-btn-outline">Create Account</a>
+          <button onclick="startCheckout('price_1TMdlmRuGYgaTM3ysDve7yNI')"
+            class="price-btn price-btn-outline">Get Pro Annual</button>
         </div>
 
       </div>
@@ -808,10 +808,10 @@
         No credit card required.
       </p>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
-        <a href="https://app.sentimentfx.org/signup" class="btn-primary">Create
-          Account</a>
-        <a href="https://app.sentimentfx.org/login" class="btn-secondary">Log
-          In</a>
+        <a href="https://app.sentimentfx.org?auth=signup"
+          class="btn-primary">Create Account</a>
+        <a href="https://app.sentimentfx.org?auth=login"
+          class="btn-secondary">Log In</a>
       </div>
     </section>
 
@@ -824,5 +824,39 @@
         class="footer-link">Live Dashboard →</a>
     </footer>
 
+    <script>
+    const API = "https://crypto-sentiment-production.up.railway.app"
+
+    // Live headline count
+    async function loadStats() {
+      try {
+        const res = await fetch(`${API}/stats`)
+        const data = await res.json()
+        const el = document.getElementById('stat-headlines')
+        if (el && data.total_headlines) {
+          el.textContent = data.total_headlines.toLocaleString()
+        }
+      } catch (e) {
+        // silently fail — static fallback stays in place
+      }
+    }
+
+    // Stripe checkout
+    async function startCheckout(priceId) {
+      try {
+        const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, {
+          method: 'POST'
+        })
+        const data = await res.json()
+        if (data.url) {
+          window.location.href = data.url
+        }
+      } catch (e) {
+        console.error('Checkout error:', e)
+      }
+    }
+
+    loadStats()
+    </script>
   </body>
 </html>

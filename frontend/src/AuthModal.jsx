@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { supabase } from "./supabaseClient"
 
-export default function AuthModal({ onClose }) {
-  const [mode, setMode] = useState("login") // login | signup
+export default function AuthModal({ onClose, initialMode = "login" }) {
+  const [mode, setMode] = useState(initialMode)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
