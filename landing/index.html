@@ -38,7 +38,6 @@
       overflow-x: hidden;
     }
 
-    /* Grid background */
     body::before {
       content: '';
       position: fixed;
@@ -54,9 +53,7 @@
     /* NAV */
     nav {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       z-index: 100;
       display: flex;
       align-items: center;
@@ -164,7 +161,6 @@
       line-height: 1.7;
     }
 
-    /* Ticker strip */
     .ticker-strip {
       display: flex;
       gap: 8px;
@@ -186,65 +182,53 @@
     .ticker-chip.bull { border-color: rgba(63,185,80,0.4); color: var(--positive); background: rgba(63,185,80,0.06); }
     .ticker-chip.bear { border-color: rgba(248,81,73,0.4); color: var(--negative); background: rgba(248,81,73,0.06); }
 
-    /* Waitlist form */
-    .waitlist-form {
+    /* HERO BUTTONS */
+    .hero-actions {
       display: flex;
-      gap: 8px;
-      max-width: 480px;
-      width: 100%;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
-    .waitlist-input {
-      flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border2);
-      border-radius: 2px;
-      padding: 12px 16px;
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--text);
-      outline: none;
-      transition: border-color 0.15s;
-    }
-
-    .waitlist-input::placeholder { color: var(--muted); }
-    .waitlist-input:focus { border-color: var(--accent); }
-
-    .waitlist-btn {
+    .btn-primary {
       background: var(--accent);
       border: none;
       border-radius: 2px;
-      padding: 12px 24px;
+      padding: 14px 32px;
       font-family: var(--mono);
       font-size: 11px;
       font-weight: 600;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.12em;
       color: #080c10;
       cursor: pointer;
       text-transform: uppercase;
+      text-decoration: none;
       transition: opacity 0.15s;
       white-space: nowrap;
+      display: inline-block;
     }
 
-    .waitlist-btn:hover { opacity: 0.85; }
-    .waitlist-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary:hover { opacity: 0.85; }
 
-    .form-note {
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 2px;
+      padding: 14px 32px;
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
       color: var(--muted);
-      margin-top: 12px;
-      letter-spacing: 0.05em;
+      cursor: pointer;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.15s;
+      white-space: nowrap;
+      display: inline-block;
     }
 
-    .success-msg {
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--positive);
-      margin-top: 12px;
-      letter-spacing: 0.05em;
-      display: none;
-    }
+    .btn-secondary:hover { border-color: var(--text); color: var(--text); }
 
     /* STATS BAR */
     .stats-bar {
@@ -374,11 +358,7 @@
       margin-top: 60px;
     }
 
-    .step {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+    .step { display: flex; flex-direction: column; gap: 12px; }
 
     .step-num {
       font-family: var(--mono);
@@ -388,17 +368,9 @@
       color: var(--accent);
     }
 
-    .step-title {
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--text);
-    }
+    .step-title { font-size: 15px; font-weight: 500; color: var(--text); }
 
-    .step-desc {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.65;
-    }
+    .step-desc { font-size: 13px; color: var(--muted); line-height: 1.65; }
 
     /* PRICING */
     .pricing {
@@ -442,6 +414,10 @@
       margin-bottom: 16px;
     }
 
+    .price-badge.green {
+      background: var(--positive);
+    }
+
     .price-tier {
       font-family: var(--mono);
       font-size: 11px;
@@ -467,6 +443,14 @@
       margin-bottom: 24px;
     }
 
+    .price-saving {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--positive);
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+    }
+
     .price-features {
       list-style: none;
       display: flex;
@@ -484,10 +468,7 @@
     }
 
     .price-features li::before {
-      content: '—';
-      color: var(--accent);
-      font-family: var(--mono);
-      flex-shrink: 0;
+      content: none;
     }
 
     .price-features li.included { color: var(--text); }
@@ -503,6 +484,9 @@
       border-radius: 2px;
       cursor: pointer;
       transition: all 0.15s;
+      text-decoration: none;
+      display: block;
+      text-align: center;
     }
 
     .price-btn-outline {
@@ -573,24 +557,24 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .hero-tag { animation: fadeUp 0.6s ease both; }
-    .hero-title { animation: fadeUp 0.6s ease 0.1s both; }
-    .hero-sub { animation: fadeUp 0.6s ease 0.2s both; }
+    .hero-tag     { animation: fadeUp 0.6s ease both; }
+    .hero-title   { animation: fadeUp 0.6s ease 0.1s both; }
+    .hero-sub     { animation: fadeUp 0.6s ease 0.2s both; }
     .ticker-strip { animation: fadeUp 0.6s ease 0.3s both; }
-    .waitlist-form { animation: fadeUp 0.6s ease 0.4s both; }
+    .hero-actions { animation: fadeUp 0.6s ease 0.4s both; }
 
     /* MOBILE */
     @media (max-width: 768px) {
       nav { padding: 14px 20px; }
       .nav-links { display: none; }
       .hero { padding: 100px 20px 60px; }
-      .waitlist-form { flex-direction: column; }
       .stats-bar { flex-wrap: wrap; }
       .stat-item { min-width: 50%; border-bottom: 1px solid var(--border); }
       .features, .pricing { padding: 60px 20px; }
       .how { padding: 60px 20px; }
       .bottom-cta { padding: 60px 20px; }
       footer { flex-direction: column; gap: 12px; text-align: center; padding: 24px 20px; }
+      .hero-actions { flex-direction: column; align-items: center; }
     }
   </style>
   </head>
@@ -602,8 +586,8 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#pricing">Pricing</a></li>
-        <li><a href="https://app.sentimentfx.org"
-            target="_blank" class="nav-cta">Live Demo</a></li>
+        <li><a href="https://app.sentimentfx.org/signup" target="_blank"
+            class="nav-cta">Create Account</a></li>
       </ul>
     </nav>
 
@@ -631,23 +615,11 @@
         <span class="ticker-chip bear">DOGE −0.18</span>
       </div>
 
-      <div
-        style="display:flex;flex-direction:column;align-items:center;width:100%;">
-        <div class="waitlist-form" id="waitlist-form">
-          <input
-            type="email"
-            class="waitlist-input"
-            id="email-input"
-            placeholder="your@email.com"
-            autocomplete="email" />
-          <button class="waitlist-btn" id="waitlist-btn"
-            onclick="submitWaitlist()">
-            Join Waitlist
-          </button>
-        </div>
-        <p class="form-note">No spam. Early access when we launch.</p>
-        <p class="success-msg" id="success-msg">You're on the list.
-          We'll be in touch.</p>
+      <div class="hero-actions">
+        <a href="https://app.sentimentfx.org/signup" class="btn-primary">Create
+          Account</a>
+        <a href="https://app.sentimentfx.org/login" class="btn-secondary">Log
+          In</a>
       </div>
     </section>
 
@@ -662,12 +634,12 @@
         <div class="stat-desc">Update frequency</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">70%</div>
-        <div class="stat-desc">Avg correlation</div>
+        <div class="stat-num">4,278</div>
+        <div class="stat-desc">Headlines scored</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">GBP</div>
-        <div class="stat-desc">Price denomination</div>
+        <div class="stat-num">FinBERT</div>
+        <div class="stat-desc">Sentiment model</div>
       </div>
     </div>
 
@@ -695,7 +667,7 @@
           <div class="feature-title">Hourly scraping pipeline</div>
           <div class="feature-desc">News scraped every hour across 9
             major crypto assets. Prices pulled from live market
-            feeds in GBP.</div>
+            feeds.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">04 — API Access</div>
@@ -708,8 +680,8 @@
           <div class="feature-icon">05 — Historical Data</div>
           <div class="feature-title">Growing dataset</div>
           <div class="feature-desc">Sentiment history building daily.
-            The longer we run, the more valuable the signal. Early
-            access means more data.</div>
+            The longer we run, the more valuable the signal. Get in
+            early for the fullest dataset.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">06 — Dashboard</div>
@@ -764,6 +736,8 @@
       <div class="section-label">Pricing</div>
       <h2 class="section-title">Simple, transparent plans</h2>
       <div class="pricing-grid">
+
+        <!-- FREE -->
         <div class="price-card">
           <div class="price-tier">Free</div>
           <div class="price-amount">£0</div>
@@ -776,14 +750,15 @@
             <li>API access</li>
             <li>Email alerts</li>
           </ul>
-          <button class="price-btn price-btn-outline"
-            onclick="document.getElementById('email-input').focus()">Join
-            Waitlist</button>
+          <a href="https://app.sentimentfx.org/signup"
+            class="price-btn price-btn-outline">Create Account</a>
         </div>
+
+        <!-- PRO MONTHLY -->
         <div class="price-card featured">
           <div class="price-badge">Most Popular</div>
           <div class="price-tier">Pro</div>
-          <div class="price-amount">£12</div>
+          <div class="price-amount">£11.99</div>
           <div class="price-period">per month</div>
           <ul class="price-features">
             <li class="included">All 9 tickers</li>
@@ -791,58 +766,53 @@
             <li class="included">Advanced correlation engine</li>
             <li class="included">REST API access</li>
             <li class="included">Email alerts on spikes</li>
-            <li>Raw data export</li>
+            <li class="included">Raw data export</li>
           </ul>
-          <button class="price-btn price-btn-filled"
-            onclick="document.getElementById('email-input').focus()">Join
-            Waitlist</button>
+          <a href="https://app.sentimentfx.org/signup"
+            class="price-btn price-btn-filled">Create Account</a>
         </div>
+
+        <!-- PRO ANNUAL -->
         <div class="price-card">
-          <div class="price-tier">Data</div>
-          <div class="price-amount">£49</div>
-          <div class="price-period">per month</div>
+          <div class="price-badge green">Best Value</div>
+          <div class="price-tier">Pro Annual</div>
+          <div class="price-amount">£99.99</div>
+          <div class="price-period">per year</div>
+          <div class="price-saving">Save £43.89 vs monthly</div>
           <ul class="price-features">
             <li class="included">Everything in Pro</li>
-            <li class="included">Raw CSV data export</li>
-            <li class="included">Historical dataset access</li>
-            <li class="included">Bulk API rate limits</li>
-            <li class="included">Priority support</li>
-            <li class="included">Early access to new tickers</li>
+            <li class="included">Raw data export</li>
+            <li class="included">All 9 tickers</li>
+            <li class="included">Full price history</li>
+            <li class="included">Advanced correlation engine</li>
+            <li class="included">REST API access</li>
+            <li class="included">Email alerts on spikes</li>
           </ul>
-          <button class="price-btn price-btn-outline"
-            onclick="document.getElementById('email-input').focus()">Join
-            Waitlist</button>
+          <a href="https://app.sentimentfx.org/signup"
+            class="price-btn price-btn-outline">Create Account</a>
         </div>
+
       </div>
     </section>
 
     <!-- BOTTOM CTA -->
     <section class="bottom-cta">
-      <div class="hero-tag" style="justify-content:center;">Early
-        Access</div>
+      <div class="hero-tag" style="justify-content:center;">Now Live</div>
       <h2
         style="font-family:var(--mono);font-size:clamp(24px,4vw,40px);font-weight:600;margin-bottom:16px;letter-spacing:-0.01em;">
-        Be first to get the signal
+        Start reading the market
       </h2>
       <p
         style="font-size:14px;color:var(--muted);margin-bottom:36px;max-width:440px;margin-left:auto;margin-right:auto;">
-        We're building in public. Join the waitlist for early access,
-        founder pricing, and updates as we ship.
+        Sign up free and get your first sentiment signals in minutes.
+        No credit card required.
       </p>
-      <div style="display:flex;justify-content:center;">
-        <div class="waitlist-form">
-          <input type="email" class="waitlist-input"
-            id="email-input-2" placeholder="your@email.com" />
-          <button class="waitlist-btn"
-            onclick="submitWaitlist2()">Join Waitlist</button>
-        </div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="https://app.sentimentfx.org/signup" class="btn-primary">Create
+          Account</a>
+        <a href="https://app.sentimentfx.org/login" class="btn-secondary">Log
+          In</a>
       </div>
-      <p class="form-note" style="margin-top:12px;">
-        Or <a href="https://app.sentimentfx.org"
-          target="_blank"
-          style="color:var(--accent);text-decoration:none;">view the
-          live dashboard</a> right now — no sign up needed.
-      </p>
     </section>
 
     <footer>
@@ -853,61 +823,6 @@
       <a href="https://app.sentimentfx.org" target="_blank"
         class="footer-link">Live Dashboard →</a>
     </footer>
-
-    <script>
-    const API = "https://crypto-sentiment-production.up.railway.app"
-
-    async function submitWaitlist() {
-      const email = document.getElementById('email-input').value
-      if (!email || !email.includes('@')) {
-        document.getElementById('email-input').focus()
-        return
-      }
-      const btn = document.getElementById('waitlist-btn')
-      btn.disabled = true
-      btn.textContent = 'Joining...'
-      try {
-        const res = await fetch(`${API}/waitlist`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        })
-        const data = await res.json()
-        btn.textContent = 'Joined!'
-        document.getElementById('success-msg').style.display = 'block'
-        document.getElementById('success-msg').textContent = data.message
-        document.getElementById('email-input').value = ''
-      } catch (err) {
-        btn.disabled = false
-        btn.textContent = 'Join Waitlist'
-      }
-    }
-
-    async function submitWaitlist2() {
-      const email = document.getElementById('email-input-2').value
-      if (!email || !email.includes('@')) return
-      try {
-        const res = await fetch(`${API}/waitlist`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        })
-        const data = await res.json()
-        document.getElementById('email-input-2').value = ''
-        document.getElementById('email-input-2').placeholder = data.message
-      } catch (err) {
-        console.error(err)
-      }
-    }
-
-    document.getElementById('email-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') submitWaitlist()
-    })
-
-    document.getElementById('email-input-2').addEventListener('keydown', e => {
-      if (e.key === 'Enter') submitWaitlist2()
-    })
-  </script>
 
   </body>
 </html>
