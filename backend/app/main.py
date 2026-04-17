@@ -25,7 +25,6 @@ import stripe
 import csv
 import io
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-print(f"ADMIN_SECRET loaded: {bool(os.getenv('ADMIN_SECRET'))}")
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -71,9 +70,9 @@ async def require_pro(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
 
 
-async def require_admin(authorization: str = Header(None)):
-    secret = os.getenv("ADMIN_SECRET")
-    if not secret or authorization != f"Bearer {secret}":
+async def require_admin(secret: str = None):
+    admin_secret = os.getenv("ADMIN_SECRET")
+    if not admin_secret or secret != admin_secret:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
