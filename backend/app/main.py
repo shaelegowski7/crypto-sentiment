@@ -70,7 +70,13 @@ async def require_pro(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
 
 
-def scrape_all():
+async def require_admin(authorization: str = Header(None)):
+    secret = os.getenv("ADMIN_SECRET")
+    if not secret or authorization != f"Bearer {secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+
     db = SessionLocal()
     try:
         for ticker in TICKERS:
@@ -238,7 +244,7 @@ def get_stats(db: Session = Depends(get_db)):
     }
 
 @app.delete("/cleanup/duplicates")
-def cleanup_duplicates(db: Session = Depends(get_db)):
+def cleanup_duplicates(db: Session = Depends(get_db), admin=Depends(require_admin)):
     all_headlines = db.query(models.Headline).order_by(models.Headline.id).all()
     
     seen_urls = set()
@@ -255,7 +261,7 @@ def cleanup_duplicates(db: Session = Depends(get_db)):
     return {"message": f"Deleted {deleted} duplicate headlines"}
 
 @app.delete("/cleanup/duplicate-prices")
-def cleanup_duplicate_prices(db: Session = Depends(get_db)):
+def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(require_admin)):
     all_prices = db.query(models.Price).order_by(models.Price.id).all()
     
     seen = set()
@@ -584,7 +590,7 @@ def run_backfill(ticker: str, days: int, offset: int):
 
 
 @app.post("/backfill/{ticker}")
-def backfill(ticker: str, background_tasks: BackgroundTasks, days: int = 30, offset: int = 0):
+def backfill(ticker: str, background_tasks: BackgroundTasks, days: int = 30, offset: int = 0, admin=Depends(require_admin)):
     if ticker.upper() not in TICKER_QUERIES:
         raise HTTPException(status_code=404, detail="Unknown ticker")
     background_tasks.add_task(run_backfill, ticker, days, offset)
