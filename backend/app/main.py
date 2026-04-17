@@ -25,6 +25,7 @@ import stripe
 import csv
 import io
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+print(f"ADMIN_SECRET loaded: {bool(os.getenv('ADMIN_SECRET'))}")
 
 models.Base.metadata.create_all(bind=engine)
 
