@@ -76,7 +76,7 @@ async def require_admin(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-
+def scrape_all():
     db = SessionLocal()
     try:
         for ticker in TICKERS:
