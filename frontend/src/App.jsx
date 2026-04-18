@@ -566,13 +566,11 @@ export default function App() {
   const isLoggedIn = !!user
 
   useEffect(() => {
-    // Handle auth query params from landing page CTAs
     const params = new URLSearchParams(window.location.search)
     const authParam = params.get("auth")
     if (authParam === "signup" || authParam === "login") {
       setAuthMode(authParam)
       setShowAuth(true)
-      // Clean up the URL without reloading
       window.history.replaceState({}, "", window.location.pathname)
     }
     if (params.get("success") || params.get("cancelled")) {
@@ -637,9 +635,22 @@ export default function App() {
         sentimentByDate[date].push(s.score)
       })
 
-      const merged = Object.keys(sentimentByDate).map(date => ({
+      // FIX: merge from both datasets so price-only days still appear on the chart
+      const allDates = new Set([
+        ...Object.keys(sentimentByDate),
+        ...Object.keys(priceMap),
+      ])
+
+      const merged = Array.from(allDates).map(date => ({
         date,
-        sentiment: parseFloat((sentimentByDate[date].reduce((a, b) => a + b, 0) / sentimentByDate[date].length).toFixed(3)),
+        sentiment: sentimentByDate[date]
+          ? parseFloat(
+              (
+                sentimentByDate[date].reduce((a, b) => a + b, 0) /
+                sentimentByDate[date].length
+              ).toFixed(3)
+            )
+          : null,
         price: priceMap[date] || null,
       })).sort((a, b) => new Date(a.date) - new Date(b.date))
 
@@ -955,7 +966,7 @@ export default function App() {
                     <Tooltip content={<CustomTooltip symbol={symbol} />} />
                     <Legend wrapperStyle={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", paddingTop: "12px" }} />
                     <Bar yAxisId="sentiment" dataKey="sentiment" name="Sentiment" fill="#f0b429" opacity={0.6} radius={[1, 1, 0, 0]} />
-                    <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke="#58a6ff" dot={false} strokeWidth={1.5} />
+                    <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke="#58a6ff" dot={false} strokeWidth={1.5} connectNulls={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
