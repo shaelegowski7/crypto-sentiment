@@ -18,8 +18,8 @@ from scipy.stats import pearsonr
 from datetime import datetime, timedelta
 from fastapi.responses import StreamingResponse
 import numpy as np
-import resend 
-import os  
+import resend
+import os
 import requests
 import stripe
 import csv
@@ -37,13 +37,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
+TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "LTC", "TRX", "XLM", "PEPE"]
 
 
 async def require_pro(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing authorization token")
-    
+
     token = authorization.split(" ")[1]
 
     try:
@@ -174,10 +174,10 @@ def save_prices(ticker: str, db: Session = Depends(get_db)):
             models.Price.ticker == p["ticker"],
             models.Price.date == p["date"]
         ).first()
-        
+
         if exists:
             continue
-            
+
         price = models.Price(
             ticker=p["ticker"],
             close_price=p["close_price"],
@@ -246,27 +246,27 @@ def get_stats(db: Session = Depends(get_db)):
 @app.delete("/cleanup/duplicates")
 def cleanup_duplicates(db: Session = Depends(get_db), admin=Depends(require_admin)):
     all_headlines = db.query(models.Headline).order_by(models.Headline.id).all()
-    
+
     seen_urls = set()
     deleted = 0
-    
+
     for headline in all_headlines:
         if headline.url in seen_urls:
             db.delete(headline)
             deleted += 1
         else:
             seen_urls.add(headline.url)
-    
+
     db.commit()
     return {"message": f"Deleted {deleted} duplicate headlines"}
 
 @app.delete("/cleanup/duplicate-prices")
 def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(require_admin)):
     all_prices = db.query(models.Price).order_by(models.Price.id).all()
-    
+
     seen = set()
     deleted = 0
-    
+
     for price in all_prices:
         key = (price.ticker, str(price.date))
         if key in seen:
@@ -274,7 +274,7 @@ def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(requir
             deleted += 1
         else:
             seen.add(key)
-    
+
     db.commit()
     return {"message": f"Deleted {deleted} duplicate prices"}
 
@@ -520,15 +520,15 @@ def waitlist_count(db: Session = Depends(get_db)):
     return {"count": count}
 
 TICKER_QUERIES = {
-    "BTC": "bitcoin crypto",
-    "ETH": "ethereum crypto",
-    "SOL": "solana crypto",
-    "BNB": "binance BNB crypto",
-    "XRP": "ripple XRP crypto",
-    "ADA": "cardano crypto",
-    "AVAX": "avalanche crypto",
-    "LINK": "chainlink crypto",
-    "DOGE": "dogecoin crypto"
+    "BTC":  "bitcoin crypto",
+    "ETH":  "ethereum crypto",
+    "SOL":  "solana crypto",
+    "XRP":  "ripple XRP crypto",
+    "DOGE": "dogecoin crypto",
+    "LTC":  "litecoin LTC crypto",
+    "TRX":  "tron TRX crypto",
+    "XLM":  "stellar XLM crypto",
+    "PEPE": "pepe coin PEPE crypto",
 }
 
 def run_backfill(ticker: str, days: int, offset: int):

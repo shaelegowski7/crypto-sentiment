@@ -2,15 +2,15 @@ import yfinance as yf
 from datetime import datetime
 
 TICKER_MAP = {
-    "BTC": "BTC-GBP",
-    "ETH": "ETH-GBP",
-    "SOL": "SOL-GBP",
-    "XRP": "XRP-GBP",
-    "BNB": "BNB-GBP",
-    "ADA": "ADA-GBP",
-    "AVAX": "AVAX-GBP",
-    "LINK": "LINK-GBP",
-    "DOGE": "DOGE-GBP"
+    "BTC":  "BTC-GBP",
+    "ETH":  "ETH-GBP",
+    "SOL":  "SOL-GBP",
+    "XRP":  "XRP-GBP",
+    "DOGE": "DOGE-GBP",
+    "LTC":  "LTC-GBP",
+    "TRX":  "TRX-GBP",
+    "XLM":  "XLM-GBP",
+    "PEPE": "PEPE-GBP",
 }
 
 def fetch_prices(ticker: str, period: str = "2y") -> list:
