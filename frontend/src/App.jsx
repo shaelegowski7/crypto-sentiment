@@ -7,7 +7,7 @@ import {
   Tooltip, Legend, ResponsiveContainer
 } from "recharts"
 
-const TICKERS = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX", "LINK", "DOGE"]
+const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "LTC", "TRX", "XLM", "PEPE"]
 const FREE_TICKERS = ["BTC"]
 const API = "https://crypto-sentiment-production.up.railway.app"
 const HEADLINES_PER_PAGE = 10
@@ -636,7 +636,6 @@ export default function App() {
         sentimentByDate[date].push(s.score)
       })
 
-      // FIX: merge from both datasets so price-only days still appear on the chart
       const allDates = new Set([
         ...Object.keys(sentimentByDate),
         ...Object.keys(priceMap),
