@@ -14,3 +14,4 @@ numpy
 resend
 stripe
 supabase
+feedparser
