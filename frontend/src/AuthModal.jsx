@@ -1,6 +1,22 @@
 import { useState } from "react"
 import { supabase } from "./supabaseClient"
 
+function friendlyError(message) {
+  if (!message) return "Something went wrong. Please try again."
+  const m = message.toLowerCase()
+  if (m.includes("password") && (m.includes("characters") || m.includes("uppercase") || m.includes("abcdefg")))
+    return "Password must be at least 8 characters and include an uppercase letter, a number, and a symbol."
+  if (m.includes("invalid login") || m.includes("invalid credentials") || m.includes("email not confirmed"))
+    return "Incorrect email or password."
+  if (m.includes("user already registered") || m.includes("already been registered"))
+    return "An account with this email already exists. Try signing in."
+  if (m.includes("rate limit"))
+    return "Too many attempts. Please wait a moment and try again."
+  if (m.includes("unable to validate email"))
+    return "Please enter a valid email address."
+  return message
+}
+
 export default function AuthModal({ onClose, initialMode = "login" }) {
   const [mode, setMode] = useState(initialMode)
   const [email, setEmail] = useState("")
@@ -21,7 +37,7 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
       }
       onClose()
     } catch (err) {
-      setError(err.message)
+      setError(friendlyError(err.message))
     }
     setLoading(false)
   }
