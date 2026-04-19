@@ -765,11 +765,11 @@
         <span class="ticker-chip bear">ETH −0.54</span>
         <span class="ticker-chip bull">SOL +0.61</span>
         <span class="ticker-chip bear">XRP −0.39</span>
-        <span class="ticker-chip bull">LINK +0.82</span>
-        <span class="ticker-chip bear">AVAX −0.29</span>
-        <span class="ticker-chip">BNB 0.00</span>
-        <span class="ticker-chip bull">ADA +0.45</span>
         <span class="ticker-chip bear">DOGE −0.18</span>
+        <span class="ticker-chip bull">LTC +0.43</span>
+        <span class="ticker-chip bull">TRX +0.31</span>
+        <span class="ticker-chip">XLM 0.00</span>
+        <span class="ticker-chip bear">PEPE −0.22</span>
       </div>
 
       <div class="hero-actions">
@@ -1048,24 +1048,25 @@
       }
 
       // ── Live ticker tape ───────────────────────────────────────────────────
-      const TICKERS = ['BTC','ETH','SOL','XRP','BNB','ADA','AVAX','LINK','DOGE'];
+      const TICKERS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LTC', 'TRX', 'XLM', 'PEPE'];
 
       const FALLBACK = {
-        BTC:  { price: 68420,  change:  1.24,  sentiment:  0.62 },
-        ETH:  { price: 3512,   change: -0.87,  sentiment: -0.41 },
-        SOL:  { price: 148.3,  change:  2.11,  sentiment:  0.58 },
-        XRP:  { price: 0.5841, change: -0.33,  sentiment: -0.22 },
-        BNB:  { price: 412.7,  change:  0.05,  sentiment:  0.04 },
-        ADA:  { price: 0.4521, change:  1.67,  sentiment:  0.39 },
-        AVAX: { price: 36.2,   change: -1.04,  sentiment: -0.18 },
-        LINK: { price: 14.87,  change:  3.22,  sentiment:  0.77 },
-        DOGE: { price: 0.1234, change: -0.56,  sentiment: -0.14 },
+        BTC:  { price: 68420,    change:  1.24,  sentiment:  0.62 },
+        ETH:  { price: 3512,     change: -0.87,  sentiment: -0.41 },
+        SOL:  { price: 148.3,    change:  2.11,  sentiment:  0.58 },
+        XRP:  { price: 0.5841,   change: -0.33,  sentiment: -0.22 },
+        DOGE: { price: 0.1234,   change: -0.56,  sentiment: -0.14 },
+        LTC:  { price: 62.4,     change:  0.91,  sentiment:  0.43 },
+        TRX:  { price: 0.0921,   change:  0.44,  sentiment:  0.31 },
+        XLM:  { price: 0.0841,   change: -0.12,  sentiment:  0.00 },
+        PEPE: { price: 0.000012, change: -1.23,  sentiment: -0.22 },
       };
 
       function fmtPrice(p) {
         if (p >= 1000) return '£' + p.toLocaleString('en-GB', { maximumFractionDigits: 0 });
         if (p >= 1)    return '£' + p.toFixed(2);
-        return '£' + p.toFixed(4);
+        if (p >= 0.01) return '£' + p.toFixed(4);
+        return '£' + p.toFixed(8);
       }
 
       function buildTickerHTML(results) {
@@ -1082,7 +1083,7 @@
             <span class="lti-sent ${sentClass}">${arrow} ${sentSign}${sentiment.toFixed(2)}</span>
           </div>`;
         }).join('');
-        return items + items; // duplicate for seamless loop
+        return items + items;
       }
 
       async function loadLiveTicker() {
@@ -1107,9 +1108,7 @@
                 };
               }
             }
-          } catch (_) {
-            // fall through to fallback
-          }
+          } catch (_) {}
           return { sym, ...FALLBACK[sym] };
         }));
 
