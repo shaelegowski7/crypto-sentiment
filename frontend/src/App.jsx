@@ -522,106 +522,7 @@ const styles = `
     .upgrade-banner { flex-direction: column; align-items: flex-start; }
   }
 
-  @keyframes gaugePulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.35; transform: scale(1.6); }
-  }
-  .gauge-pulse {
-    animation: gaugePulse 2s ease-in-out infinite;
-    transform-box: fill-box;
-    transform-origin: center;
-  }
 `
-
-const SentimentGauge = ({ value, signal }) => {
-  const cx = 100, cy = 108, r = 80, sw = 13, nl = 66
-
-  const pt = (s) => {
-    const a = (Math.PI / 2) * (1 - s)
-    return [cx + r * Math.cos(a), cy - r * Math.sin(a)]
-  }
-
-  const arc = (s1, s2) => {
-    const [x1, y1] = pt(s1), [x2, y2] = pt(s2)
-    return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 0 0 ${x2.toFixed(1)} ${y2.toFixed(1)}`
-  }
-
-  const rotDeg = ((value ?? 0) * 90).toFixed(1)
-  const color = value === null ? "var(--muted)"
-    : value > 0.1 ? "var(--positive)"
-    : value < -0.1 ? "var(--negative)"
-    : "var(--accent)"
-
-  const sigColor = signal === "BULLISH" ? "rgba(63,185,80,0.3)"
-    : signal === "BEARISH" ? "rgba(248,81,73,0.3)"
-    : signal === "NEUTRAL" ? "rgba(240,180,41,0.3)"
-    : "var(--border)"
-
-  const sigBg = signal === "BULLISH" ? "rgba(63,185,80,0.07)"
-    : signal === "BEARISH" ? "rgba(248,81,73,0.07)"
-    : signal === "NEUTRAL" ? "rgba(240,180,41,0.07)"
-    : "transparent"
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-      <svg viewBox="0 0 200 122" width="216" height="132" style={{ overflow: "visible" }}>
-        {/* Dim track zones */}
-        <path d={arc(-1, -0.1)} fill="none" stroke="var(--negative)" strokeWidth={sw} strokeLinecap="round" opacity="0.18" />
-        <path d={arc(-0.1, 0.1)} fill="none" stroke="var(--accent)" strokeWidth={sw} strokeLinecap="round" opacity="0.18" />
-        <path d={arc(0.1, 1)} fill="none" stroke="var(--positive)" strokeWidth={sw} strokeLinecap="round" opacity="0.18" />
-        {/* Active zone highlight */}
-        {value !== null && value > 0.1 && (
-          <path d={arc(0.1, Math.min(value, 1))} fill="none" stroke="var(--positive)" strokeWidth={sw} strokeLinecap="round" opacity="0.8" />
-        )}
-        {value !== null && value < -0.1 && (
-          <path d={arc(Math.max(value, -1), -0.1)} fill="none" stroke="var(--negative)" strokeWidth={sw} strokeLinecap="round" opacity="0.8" />
-        )}
-        {value !== null && value >= -0.1 && value <= 0.1 && (
-          <path d={arc(-0.1, 0.1)} fill="none" stroke="var(--accent)" strokeWidth={sw} strokeLinecap="round" opacity="0.8" />
-        )}
-        {/* Tick marks at -1, -0.5, 0, +0.5, +1 */}
-        {[-1, -0.5, 0, 0.5, 1].map(v => {
-          const a = (Math.PI / 2) * (1 - v)
-          const ox = Math.cos(a) * 5, oy = -Math.sin(a) * 5
-          const [bx, by] = pt(v)
-          return (
-            <line key={v}
-              x1={(bx - ox).toFixed(1)} y1={(by - oy).toFixed(1)}
-              x2={(bx + ox).toFixed(1)} y2={(by + oy).toFixed(1)}
-              stroke="var(--border2)" strokeWidth="1.5"
-            />
-          )
-        })}
-        {/* Animated needle */}
-        <g
-          transform={`rotate(${rotDeg}, ${cx}, ${cy})`}
-          style={{ transition: "transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)" }}
-        >
-          <line x1={cx} y1={cy} x2={cx} y2={cy - nl} stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-          <circle cx={cx} cy={cy - nl} r="3.5" fill={color} className="gauge-pulse" />
-        </g>
-        {/* Pivot */}
-        <circle cx={cx} cy={cy} r="6.5" fill={color} />
-        <circle cx={cx} cy={cy} r="3" fill="var(--surface2)" />
-        {/* Zone labels */}
-        <text x="11" y="122" fontSize="7.5" fontFamily="IBM Plex Mono" fill="var(--negative)" textAnchor="middle" opacity="0.7">BEAR</text>
-        <text x="100" y="20" fontSize="7" fontFamily="IBM Plex Mono" fill="var(--muted)" textAnchor="middle">0</text>
-        <text x="189" y="122" fontSize="7.5" fontFamily="IBM Plex Mono" fill="var(--positive)" textAnchor="middle" opacity="0.7">BULL</text>
-        {/* Value readout */}
-        <text x="100" y="115" fontSize="20" fontFamily="IBM Plex Mono" fill={color} textAnchor="middle" fontWeight="600" letterSpacing="-0.02em">
-          {value !== null ? `${value > 0 ? "+" : ""}${value}` : "—"}
-        </text>
-      </svg>
-      <div style={{
-        fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.12em", fontWeight: "600",
-        color, border: `1px solid ${sigColor}`, background: sigBg,
-        padding: "4px 18px", borderRadius: "2px",
-      }}>
-        {signal ?? "NO DATA"}
-      </div>
-    </div>
-  )
-}
 
 const CustomTooltip = ({ active, payload, label, symbol }) => {
   if (!active || !payload || !payload.length) return null
@@ -982,16 +883,6 @@ export default function App() {
               <div className="stat-value">{stats?.total_headlines?.toLocaleString() ?? "—"}</div>
               <div className="stat-sub">{TICKERS.length} tickers tracked</div>
             </div>
-          </div>
-
-          <div className="panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 16px 16px" }}>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.18em", color: "var(--muted)", marginBottom: "12px" }}>
-              MARKET MOOD · {ticker} · {filteredData.filter(d => d.sentiment !== null).length}D AVG · FINBERT
-            </div>
-            <SentimentGauge
-              value={avgSentiment !== null && !isNaN(parseFloat(avgSentiment)) ? parseFloat(avgSentiment) : null}
-              signal={sentimentSignal}
-            />
           </div>
 
           {isPro && (
