@@ -9,15 +9,15 @@ GNEWS_API_KEY = os.getenv("GNEWS_API_KEY")
 BASE_URL = "https://gnews.io/api/v4/search"
 
 TICKERS = {
-    "BTC":  "bitcoin price BTC market",
-    "ETH":  "ethereum price ETH market",
-    "SOL":  "solana price SOL market",
-    "XRP":  "ripple XRP price market",
-    "DOGE": "dogecoin DOGE price market",
-    "LTC":  "litecoin LTC price market",
-    "TRX":  "tron TRX price market",
-    "XLM":  "stellar XLM price market",
-    "PEPE": "pepe coin PEPE crypto market",
+    "BTC":  "bitcoin BTC",
+    "ETH":  "ethereum ETH",
+    "SOL":  "solana SOL",
+    "XRP":  "ripple XRP #",
+    "DOGE": "dogecoin DOGE",
+    "LTC":  "litecoin LTC",
+    "TRX":  "tron TRX",
+    "XLM":  "stellar XLM",
+    "PEPE": "pepe coin PEPE",
 }
 
 def fetch_headlines(ticker: str) -> list:
