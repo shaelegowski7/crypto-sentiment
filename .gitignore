@@ -64,3 +64,4 @@ desktop.ini
 *.log
 logs/
 CLAUDE.md
+backfill_sentiment.py
