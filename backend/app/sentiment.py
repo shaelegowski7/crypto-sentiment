@@ -1,34 +1,24 @@
 from transformers import pipeline
 import torch
 
-# Use GPU if available, otherwise CPU
 device = 0 if torch.cuda.is_available() else -1
 
-# Load FinBERT - a sentiment model trained specifically on financial text
 sentiment_pipeline = pipeline(
     "text-classification",
     model="ProsusAI/finbert",
-    device=device
+    device=device,
+    top_k=None  # return all three class probs
 )
-
-LABEL_MAP = {
-    "positive": 1.0,
-    "negative": -1.0,
-    "neutral": 0.0
-}
 
 def analyse_sentiment(text: str) -> dict:
     if not text:
         return {"label": "neutral", "score": 0.0}
 
-    # FinBERT has a 512 token limit so truncate long headlines
-    result = sentiment_pipeline(text, truncation=True, max_length=512)[0]
+    results = sentiment_pipeline(text, truncation=True, max_length=512)[0]
+    probs = {r["label"].lower(): r["score"] for r in results}
 
-    label = result["label"].lower()
-    confidence = result["score"]
-
-    # Convert to a -1 to +1 scale using confidence as weight
-    score = LABEL_MAP.get(label, 0.0) * confidence
+    score = probs["positive"] - probs["negative"]  # -1 to +1
+    label = max(probs, key=probs.get)  # whichever class won
 
     return {
         "label": label,
