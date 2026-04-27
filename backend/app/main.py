@@ -9,7 +9,7 @@ from .prices import fetch_prices, fetch_latest_price
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
-from .scraper import fetch_headlines
+from .scraper import fetch_headlines, fetch_rss_headlines
 from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price
 from . import models
@@ -80,7 +80,8 @@ def scrape_all():
     db = SessionLocal()
     try:
         for ticker in TICKERS:
-            headlines = fetch_headlines(ticker)
+            headlines = fetch_headlines(ticker) + fetch_rss_headlines(ticker)
+
             for h in headlines:
                 exists = db.query(models.Headline).filter(
                     models.Headline.url == h["url"]
@@ -133,7 +134,7 @@ def root():
 
 @app.post("/scrape/{ticker}")
 def scrape(ticker: str, db: Session = Depends(get_db)):
-    headlines = fetch_headlines(ticker.upper())
+    headlines = fetch_headlines(ticker.upper()) + fetch_rss_headlines(ticker.upper())
 
     if not headlines:
         raise HTTPException(status_code=404, detail="No headlines found")
