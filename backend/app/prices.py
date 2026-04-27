@@ -28,7 +28,7 @@ def fetch_prices(ticker: str, period: str = "2y") -> list:
         print(f"Unknown ticker: {ticker}")
         return []
 
-    data = yf.download(yf_ticker, period=period, interval="1d", progress=False)
+    data = yf.download("GBPUSD=X", period="2d", interval="1h", progress=False)
     if data.empty:
         print(f"No price data found for {ticker}")
         return []
