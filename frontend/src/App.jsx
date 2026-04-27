@@ -684,13 +684,15 @@ export default function App() {
     price: d.price != null ? parseFloat((d.price * rate).toFixed(2)) : null,
   }))
 
-  const avgSentiment = filteredData.length
-    ? (filteredData.reduce((a, b) => a + b.sentiment, 0) / filteredData.length).toFixed(3)
-    : null
+  const sentimentOnly = filteredData.filter(d => d.sentiment !== null && d.sentiment !== undefined)
+
+  const avgSentiment = sentimentOnly.length
+  ? (sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3)
+  : null
 
   const sentimentSignal = avgSentiment
-    ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
-    : null
+  ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
+  : null
 
   const latestPrice = displayData.length ? displayData[displayData.length - 1]?.price : null
   const priceDisplay = latestPrice != null
