@@ -7,7 +7,7 @@ import {
   Tooltip, Legend, ResponsiveContainer
 } from "recharts"
 
-const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "LTC", "TRX", "XLM", "PEPE"]
+const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "PEPE"]
 const FREE_TICKERS = ["BTC"]
 const API = "https://crypto-sentiment-production.up.railway.app"
 const HEADLINES_PER_PAGE = 10
@@ -823,7 +823,7 @@ export default function App() {
           {isLoggedIn && !isPro && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all 9 tickers, full history, API access and alerts.
+                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all 6 tickers, full history, API access and alerts.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TMdhiRuGYgaTM3ycfIizjLQ")}>

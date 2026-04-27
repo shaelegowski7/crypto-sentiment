@@ -37,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "LTC", "TRX", "XLM", "PEPE"]
+TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "PEPE"]
 
 
 async def require_pro(authorization: str = Header(None)):
@@ -525,9 +525,6 @@ TICKER_QUERIES = {
     "SOL":  "solana crypto",
     "XRP":  "ripple XRP crypto",
     "DOGE": "dogecoin crypto",
-    "LTC":  "litecoin LTC crypto",
-    "TRX":  "tron TRX crypto",
-    "XLM":  "stellar XLM crypto",
     "PEPE": "pepe coin PEPE crypto",
 }
 
