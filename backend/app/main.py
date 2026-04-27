@@ -37,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "PEPE"]
+TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
 
 
 async def require_pro(authorization: str = Header(None)):
@@ -525,7 +525,6 @@ TICKER_QUERIES = {
     "SOL":  "solana crypto",
     "XRP":  "ripple XRP crypto",
     "DOGE": "dogecoin crypto",
-    "PEPE": "pepe coin PEPE crypto",
 }
 
 def run_backfill(ticker: str, days: int, offset: int):
