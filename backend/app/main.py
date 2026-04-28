@@ -3,19 +3,15 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines
-from .sentiment import analyse_sentiment
-from .prices import fetch_prices, fetch_latest_price
-from datetime import datetime
-from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.background import BackgroundScheduler
 from .scraper import fetch_headlines, fetch_rss_headlines
 from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price
+from datetime import datetime, timedelta
+from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.background import BackgroundScheduler
 from . import models
 from .database import SessionLocal
 from scipy.stats import pearsonr
-from datetime import datetime, timedelta
 from fastapi.responses import StreamingResponse
 import numpy as np
 import resend
@@ -24,6 +20,7 @@ import requests
 import stripe
 import csv
 import io
+
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 models.Base.metadata.create_all(bind=engine)
@@ -76,6 +73,91 @@ async def require_admin(secret: str = None):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def check_alerts(db):
+    alerts = db.query(models.Alert).filter(models.Alert.active == True).all()
+
+    for alert in alerts:
+        recent = db.query(models.Headline).filter(
+            models.Headline.ticker == alert.ticker,
+            models.Headline.published_at >= datetime.utcnow() - timedelta(hours=24)
+        ).all()
+
+        if not recent:
+            continue
+
+        avg_score = sum(h.sentiment_score for h in recent) / len(recent)
+
+        triggered = (
+            alert.direction == "above" and avg_score >= alert.threshold
+        ) or (
+            alert.direction == "below" and avg_score <= alert.threshold
+        )
+
+        if triggered:
+            try:
+                resend.api_key = os.getenv("RESEND_API_KEY")
+                resend.Emails.send({
+                    "from": "SentimentFX <hello@sentimentfx.org>",
+                    "to": alert.email,
+                    "subject": f"SentimentFX Alert: {alert.ticker} sentiment {alert.direction} {alert.threshold}",
+                    "html": f"""
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#080c10;font-family:'Courier New',monospace;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#080c10;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+          <tr>
+            <td style="border-bottom:1px solid #21262d;padding-bottom:20px;">
+              <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">SentimentFX</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 0 32px;">
+              <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">— Alert Triggered</p>
+              <h1 style="font-size:28px;font-weight:600;color:#e6edf3;margin:0 0 16px;line-height:1.2;">{alert.ticker} Sentiment Alert</h1>
+              <p style="font-size:14px;color:#7d8590;margin:0 0 16px;line-height:1.7;">
+                Your alert condition has been met.
+              </p>
+              <p style="font-family:'Courier New',monospace;font-size:13px;color:#e6edf3;margin:0 0 32px;">
+                24h avg sentiment: <strong style="color:#f0b429;">{round(avg_score, 4)}</strong><br>
+                Condition: sentiment {alert.direction} {alert.threshold}
+              </p>
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                <tr>
+                  <td style="background:#f0b429;border-radius:2px;">
+                    <a href="https://app.sentimentfx.org" style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">
+                      View Dashboard →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="border-top:1px solid #21262d;padding-top:20px;">
+              <p style="font-size:10px;color:#7d8590;margin:0;letter-spacing:0.05em;line-height:1.7;">
+                SentimentFX · Crypto sentiment intelligence<br>
+                <a href="mailto:hello@sentimentfx.org" style="color:#f0b429;text-decoration:none;">hello@sentimentfx.org</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+                    """
+                })
+                alert.active = False
+                alert.fired_at = datetime.utcnow()
+                db.commit()
+            except Exception as e:
+                print(f"Alert email error: {e}")
+
+
 def scrape_all():
     db = SessionLocal()
     try:
@@ -116,6 +198,7 @@ def scrape_all():
                     db.add(price)
 
         db.commit()
+        check_alerts(db)
         print("Scheduled scrape complete")
     except Exception as e:
         print(f"Scheduler error: {e}")
@@ -126,6 +209,7 @@ def scrape_all():
 scheduler = BackgroundScheduler()
 scheduler.add_job(scrape_all, "interval", hours=1)
 scheduler.start()
+
 
 @app.get("/")
 def root():
@@ -235,6 +319,7 @@ def get_dashboard(ticker: str, db: Session = Depends(get_db)):
         ]
     }
 
+
 @app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
     tickers = [r[0] for r in db.query(models.Headline.ticker).distinct().all()]
@@ -243,6 +328,7 @@ def get_stats(db: Session = Depends(get_db)):
         "total_prices": db.query(models.Price).count(),
         "tickers": tickers
     }
+
 
 @app.delete("/cleanup/duplicates")
 def cleanup_duplicates(db: Session = Depends(get_db), admin=Depends(require_admin)):
@@ -260,6 +346,7 @@ def cleanup_duplicates(db: Session = Depends(get_db), admin=Depends(require_admi
 
     db.commit()
     return {"message": f"Deleted {deleted} duplicate headlines"}
+
 
 @app.delete("/cleanup/duplicate-prices")
 def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(require_admin)):
@@ -279,11 +366,9 @@ def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(requir
     db.commit()
     return {"message": f"Deleted {deleted} duplicate prices"}
 
+
 @app.get("/correlation/{ticker}")
 def get_correlation(ticker: str, db: Session = Depends(get_db)):
-    from scipy.stats import pearsonr
-    import numpy as np
-
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
     ).order_by(models.Headline.published_at).all()
@@ -520,6 +605,7 @@ def waitlist_count(db: Session = Depends(get_db)):
     count = db.query(models.WaitlistEmail).count()
     return {"count": count}
 
+
 TICKER_QUERIES = {
     "BTC":  "bitcoin crypto",
     "ETH":  "ethereum crypto",
@@ -527,6 +613,7 @@ TICKER_QUERIES = {
     "XRP":  "ripple XRP crypto",
     "DOGE": "dogecoin crypto",
 }
+
 
 def run_backfill(ticker: str, days: int, offset: int):
     db = SessionLocal()
@@ -593,6 +680,51 @@ def backfill(ticker: str, background_tasks: BackgroundTasks, days: int = 30, off
     background_tasks.add_task(run_backfill, ticker, days, offset)
     return {"message": f"Backfill started for {ticker} ({days} days, offset {offset}) — check Railway logs for progress"}
 
+
+@app.post("/alerts")
+async def create_alert(request: Request, db: Session = Depends(get_db), user=Depends(require_pro)):
+    body = await request.json()
+    ticker = body.get("ticker", "").upper()
+    threshold = float(body.get("threshold", 0.3))
+    direction = body.get("direction", "above")
+
+    if ticker not in TICKERS:
+        raise HTTPException(status_code=400, detail="Unknown ticker")
+    if direction not in ("above", "below"):
+        raise HTTPException(status_code=400, detail="Direction must be 'above' or 'below'")
+
+    alert = models.Alert(
+        user_id=user.id,
+        email=user.email,
+        ticker=ticker,
+        threshold=threshold,
+        direction=direction,
+        active=True
+    )
+    db.add(alert)
+    db.commit()
+    return {"message": f"Alert created for {ticker}"}
+
+
+@app.get("/alerts")
+def get_alerts(db: Session = Depends(get_db), user=Depends(require_pro)):
+    alerts = db.query(models.Alert).filter(models.Alert.user_id == user.id).all()
+    return alerts
+
+
+@app.delete("/alerts/{alert_id}")
+def delete_alert(alert_id: int, db: Session = Depends(get_db), user=Depends(require_pro)):
+    alert = db.query(models.Alert).filter(
+        models.Alert.id == alert_id,
+        models.Alert.user_id == user.id
+    ).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    db.delete(alert)
+    db.commit()
+    return {"message": "Alert deleted"}
+
+
 @app.post("/create-checkout-session")
 def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
     try:
@@ -622,6 +754,7 @@ def get_stripe_prices():
         }
         for p in prices.data
     ]}
+
 
 @app.post("/webhook")
 async def stripe_webhook(request: Request):

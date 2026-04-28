@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
 from .database import Base
 from datetime import datetime
 
@@ -32,3 +32,16 @@ class WaitlistEmail(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Alert(Base):
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)        # Supabase user ID
+    email = Column(String)                      # where to send the alert
+    ticker = Column(String, index=True)         # e.g. "BTC"
+    threshold = Column(Float)                   # e.g. 0.3 or -0.3
+    direction = Column(String)                  # "above" or "below"
+    active = Column(Boolean, default=True)      # deactivates after firing
+    created_at = Column(DateTime, default=datetime.utcnow)
+    fired_at = Column(DateTime, nullable=True)  # when it last fired
