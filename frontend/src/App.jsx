@@ -9,7 +9,7 @@ import {
 
 const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
 const FREE_TICKERS = ["BTC"]
-const API = "https://crypto-sentiment-production.up.railway.app"
+const API = "https://api.sentimentfx.org"
 const HEADLINES_PER_PAGE = 10
 
 const redirectToCheckout = async (priceId) => {

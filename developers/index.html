@@ -284,7 +284,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                 <div class="section" id="section-docs">
                     <h1>API Reference</h1>
                     <p class="page-subtitle">BASE URL:
-                        HTTPS://CRYPTO-SENTIMENT-PRODUCTION.UP.RAILWAY.APP</p>
+                        HTTPS://API.SENTIMENTFX.ORG</p>
 
                     <div id="auth" class="scroll-section">
                         <h2>Authentication</h2>
@@ -298,19 +298,19 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                             header.</div>
                         <div class="code-label">Example Request</div>
                         <pre><span class="c-comment"># Curl</span>
-curl https://crypto-sentiment-production.up.railway.app/v1/sentiment/BTC \
+curl https://api.sentimentfx.org/v1/sentiment/BTC \
   -H <span class="c-str">"X-API-Key: sfx_your_api_key_here"</span>
 
 <span class="c-comment"># Python</span>
 import requests
 res = requests.get(
-    <span class="c-str">"https://crypto-sentiment-production.up.railway.app/v1/sentiment/BTC"</span>,
+    <span class="c-str">"https://api.sentimentfx.org/v1/sentiment/BTC"</span>,
     headers={<span class="c-str">"X-API-Key"</span>: <span class="c-str">"sfx_your_api_key_here"</span>}
 )
 
 <span class="c-comment"># JavaScript</span>
 const res = await fetch(
-    <span class="c-str">"https://crypto-sentiment-production.up.railway.app/v1/sentiment/BTC"</span>,
+    <span class="c-str">"https://api.sentimentfx.org/v1/sentiment/BTC"</span>,
     { headers: { <span class="c-str">"X-API-Key"</span>: <span class="c-str">"sfx_your_api_key_here"</span> } }
 )</pre>
                     </div>
@@ -700,7 +700,7 @@ const res = await fetch(
         </div>
 
         <script>
-const API = 'https://crypto-sentiment-production.up.railway.app'
+const API = 'https://api.sentimentfx.org'
 let currentKey = null
 
 // NAV
