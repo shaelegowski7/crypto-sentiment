@@ -18,8 +18,6 @@
   --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;}
-
-/* TOPBAR */
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
 .logo{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;text-decoration:none;}
 .logo span{color:var(--muted);font-weight:400;}
@@ -27,43 +25,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .topbar-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);text-decoration:none;transition:color 0.15s;}
 .topbar-links a:hover,.topbar-links a.active{color:var(--text);}
 .topbar-cta{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.1em;padding:6px 14px;background:var(--accent);border:none;border-radius:2px;color:#080c10;cursor:pointer;text-transform:uppercase;text-decoration:none;}
-
-/* SIDEBAR LAYOUT */
 .layout{display:flex;flex:1;}
 .sidebar{width:220px;min-height:calc(100vh - 49px);border-right:1px solid var(--border);background:var(--surface);padding:24px 0;position:sticky;top:49px;height:calc(100vh - 49px);overflow-y:auto;flex-shrink:0;}
 .sidebar-section{margin-bottom:24px;}
 .sidebar-label{font-family:var(--mono);font-size:9px;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;padding:0 20px;margin-bottom:8px;}
-.sidebar-link{display:block;font-family:var(--mono);font-size:11px;letter-spacing:0.05em;color:var(--muted);text-decoration:none;padding:6px 20px;transition:all 0.1s;border-left:2px solid transparent;}
+.sidebar-link{display:block;font-family:var(--mono);font-size:11px;letter-spacing:0.05em;color:var(--muted);text-decoration:none;padding:6px 20px;transition:all 0.15s;border-left:2px solid transparent;}
 .sidebar-link:hover{color:var(--text);background:var(--surface2);}
 .sidebar-link.active{color:var(--accent);border-left-color:var(--accent);background:rgba(240,180,41,0.04);}
-
-/* CONTENT */
 .content{flex:1;padding:40px 48px;max-width:900px;}
-
-/* SECTIONS */
 .section{display:none;}
 .section.active{display:block;}
-
-/* TYPOGRAPHY */
 h1{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--text);margin-bottom:8px;}
 h2{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);margin-bottom:16px;margin-top:40px;padding-top:40px;border-top:1px solid var(--border);}
 h2:first-of-type{margin-top:0;padding-top:0;border-top:none;}
-h3{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;margin-top:24px;}
 p{font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
 .page-subtitle{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.08em;margin-bottom:32px;}
-
-/* CARDS */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px 24px;margin-bottom:16px;}
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
 .card-title{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;}
-
-/* API KEY DISPLAY */
 .key-display{background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:12px 16px;font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:0.05em;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
 .key-masked{color:var(--muted);}
 .copy-btn{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;padding:4px 10px;background:transparent;border:1px solid var(--border2);border-radius:2px;color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.15s;}
 .copy-btn:hover{color:var(--accent);border-color:var(--accent);}
-
-/* GENERATE FORM */
 .form-row{display:flex;gap:8px;margin-bottom:16px;}
 .form-input{flex:1;font-family:var(--mono);font-size:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;color:var(--text);outline:none;transition:border-color 0.15s;}
 .form-input:focus{border-color:var(--accent);}
@@ -71,16 +54,13 @@ p{font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
 .btn-primary{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.1em;padding:10px 20px;background:var(--accent);border:none;border-radius:2px;color:#080c10;cursor:pointer;text-transform:uppercase;white-space:nowrap;transition:opacity 0.15s;}
 .btn-primary:hover{opacity:0.85;}
 .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
-
-/* STATS ROW */
 .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;}
 .stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:16px;}
 .stat-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
 .stat-value{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);}
 .stat-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px;}
-
-/* ENDPOINT DOCS */
-.endpoint{background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:12px;overflow:hidden;}
+.endpoint{background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:12px;overflow:hidden;transition:border-color 0.2s;}
+.endpoint.in-view{border-color:var(--accent2);}
 .endpoint-header{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);}
 .method{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.08em;padding:3px 8px;border-radius:2px;background:rgba(63,185,80,0.1);color:var(--positive);border:1px solid rgba(63,185,80,0.3);}
 .endpoint-path{font-family:var(--mono);font-size:12px;color:var(--text);}
@@ -91,14 +71,32 @@ p{font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
 .param-table td{font-family:var(--mono);font-size:11px;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text);}
 .param-table td:first-child{color:var(--accent2);}
 .param-table td:last-child{color:var(--muted);}
-
-/* CODE BLOCKS */
 pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;padding:14px 16px;font-family:var(--mono);font-size:11px;color:var(--text);overflow-x:auto;margin-bottom:12px;line-height:1.6;}
 .code-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
 .c-key{color:var(--accent2);}
 .c-str{color:var(--positive);}
 .c-num{color:var(--accent);}
 .c-comment{color:var(--muted);}
+
+/* TESTER */
+.tester{background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:14px 16px;margin-top:12px;}
+.tester-title{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;}
+.tester-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.tester-label{font-family:var(--mono);font-size:10px;color:var(--muted);min-width:60px;}
+.tester-input{font-family:var(--mono);font-size:11px;padding:5px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:2px;color:var(--text);outline:none;width:120px;}
+.tester-input:focus{border-color:var(--accent);}
+.tester-select{font-family:var(--mono);font-size:11px;padding:5px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:2px;color:var(--text);cursor:pointer;}
+.tester-btn{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.08em;padding:6px 14px;background:var(--accent);border:none;border-radius:2px;color:#080c10;cursor:pointer;text-transform:uppercase;transition:opacity 0.15s;}
+.tester-btn:hover{opacity:0.85;}
+.tester-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.tester-result{margin-top:10px;display:none;}
+.tester-result.show{display:block;}
+.tester-result pre{margin:0;max-height:260px;overflow-y:auto;font-size:10px;}
+.tester-meta{font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:6px;display:flex;gap:16px;}
+.tester-status-ok{color:var(--positive);}
+.tester-status-err{color:var(--negative);}
+.tester-apikey-note{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;}
+.tester-apikey-note a{color:var(--accent);cursor:pointer;}
 
 /* PRICING */
 .pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
@@ -111,23 +109,15 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
 .pricing-features{list-style:none;}
 .pricing-features li{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border);}
 .pricing-features li::before{content:'→ ';color:var(--accent);}
-
-/* BADGE */
 .badge{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0.08em;padding:2px 8px;border-radius:2px;}
 .badge-free{background:rgba(139,148,158,0.12);color:var(--muted);border:1px solid rgba(139,148,158,0.3);}
 .badge-pro{background:rgba(240,180,41,0.12);color:var(--accent);border:1px solid rgba(240,180,41,0.3);}
-
-/* NOTICE */
 .notice{background:rgba(88,166,255,0.05);border:1px solid rgba(88,166,255,0.2);border-radius:2px;padding:12px 16px;font-family:var(--mono);font-size:11px;color:var(--accent2);line-height:1.6;margin-bottom:20px;}
 .notice-warn{background:rgba(240,180,41,0.05);border-color:rgba(240,180,41,0.2);color:var(--accent);}
-
-/* SUCCESS / ERROR */
 .msg{font-family:var(--mono);font-size:11px;padding:10px 14px;border-radius:2px;margin-top:8px;display:none;}
 .msg.success{background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);color:var(--positive);}
 .msg.error{background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);color:var(--negative);}
 .msg.show{display:block;}
-
-/* MOBILE */
 @media(max-width:768px){
   .sidebar{display:none;}
   .content{padding:24px 20px;}
@@ -142,10 +132,11 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
         <header class="topbar">
             <a class="logo" href="#">SentimentFX <span>/ Developers</span></a>
             <nav class="topbar-links">
-                <a href="#" onclick="nav('dashboard')" class="active"
-                    id="nav-dashboard">Dashboard</a>
-                <a href="#" onclick="nav('docs')" id="nav-docs">Docs</a>
-                <a href="#" onclick="nav('pricing')"
+                <a href="#" onclick="nav('dashboard');return false;"
+                    class="active" id="nav-dashboard">Dashboard</a>
+                <a href="#" onclick="nav('docs');return false;"
+                    id="nav-docs">Docs</a>
+                <a href="#" onclick="nav('pricing');return false;"
                     id="nav-pricing">Pricing</a>
                 <a href="https://app.sentimentfx.org" class="topbar-cta">Live
                     Dashboard →</a>
@@ -157,22 +148,29 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                 <div class="sidebar-section">
                     <div class="sidebar-label">Overview</div>
                     <a class="sidebar-link active" href="#"
-                        onclick="nav('dashboard')"
+                        onclick="nav('dashboard');return false;"
                         id="side-dashboard">Dashboard</a>
-                    <a class="sidebar-link" href="#" onclick="nav('pricing')"
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('pricing');return false;"
                         id="side-pricing">Pricing</a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-label">API Reference</div>
                     <a class="sidebar-link" href="#"
-                        onclick="nav('docs'); scrollTo('auth')"
-                        id="side-docs">Authentication</a>
+                        onclick="nav('docs');scrollToId('auth');return false;"
+                        id="side-docs" data-section="auth">Authentication</a>
                     <a class="sidebar-link" href="#"
-                        onclick="nav('docs'); scrollTo('sentiment')">Sentiment</a>
+                        onclick="nav('docs');scrollToId('sentiment');return false;"
+                        data-section="sentiment">Sentiment</a>
                     <a class="sidebar-link" href="#"
-                        onclick="nav('docs'); scrollTo('prices')">Prices</a>
+                        onclick="nav('docs');scrollToId('summary');return false;"
+                        data-section="summary">Summary</a>
                     <a class="sidebar-link" href="#"
-                        onclick="nav('docs'); scrollTo('correlation')">Correlation</a>
+                        onclick="nav('docs');scrollToId('prices');return false;"
+                        data-section="prices">Prices</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('docs');scrollToId('correlation');return false;"
+                        data-section="correlation">Correlation</a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-label">Resources</div>
@@ -185,7 +183,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
 
             <main class="content">
 
-                <!-- DASHBOARD SECTION -->
+                <!-- DASHBOARD -->
                 <div class="section active" id="section-dashboard">
                     <h1>API Dashboard</h1>
                     <p class="page-subtitle">MANAGE YOUR API KEY AND MONITOR
@@ -209,10 +207,9 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                             </div>
                             <div class="msg" id="gen-msg"></div>
                             <p style="font-size:12px;margin:0;">By generating a
-                                key you agree to our <a href="#"
-                                    style="color:var(--accent);">terms of
-                                    use</a>. After 100 free calls, usage is
-                                billed at £0.01/call via Stripe.</p>
+                                key you agree to our terms of use. After 100
+                                free calls, usage is billed at £0.01/call via
+                                Stripe.</p>
                         </div>
                     </div>
 
@@ -236,7 +233,6 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                                 <div class="stat-sub">Key is valid</div>
                             </div>
                         </div>
-
                         <div class="card">
                             <div class="card-header">
                                 <span class="card-title">Your API Key</span>
@@ -254,10 +250,9 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                                     style="color:var(--accent2);">X-API-Key</code>
                                 header in all requests. Keep it secret.</p>
                         </div>
-
                         <div class="notice notice-warn">After 100 free calls,
                             usage is billed at £0.01 per call via Stripe. <a
-                                href="#" onclick="nav('pricing')"
+                                href="#" onclick="nav('pricing');return false;"
                                 style="color:var(--accent);">View pricing
                                 →</a></div>
                     </div>
@@ -280,22 +275,22 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     </div>
 
                     <p style="margin-top:16px;font-size:12px;">Already have a
-                        key? <a href="#" onclick="showLookup()"
+                        key? <a href="#" onclick="showLookup();return false;"
                             style="color:var(--accent);">Look it up by email
                             →</a></p>
                 </div>
 
-                <!-- DOCS SECTION -->
+                <!-- DOCS -->
                 <div class="section" id="section-docs">
                     <h1>API Reference</h1>
                     <p class="page-subtitle">BASE URL:
                         HTTPS://CRYPTO-SENTIMENT-PRODUCTION.UP.RAILWAY.APP</p>
 
-                    <div id="auth">
+                    <div id="auth" class="scroll-section">
                         <h2>Authentication</h2>
                         <p>All API endpoints require an API key passed as a
                             request header. Generate your key on the <a href="#"
-                                onclick="nav('dashboard')"
+                                onclick="nav('dashboard');return false;"
                                 style="color:var(--accent);">dashboard</a>.</p>
                         <div class="notice">Include your API key in every
                             request using the <code
@@ -320,7 +315,7 @@ const res = await fetch(
 )</pre>
                     </div>
 
-                    <div id="sentiment">
+                    <div id="sentiment" class="scroll-section">
                         <h2>Sentiment</h2>
                         <div class="endpoint">
                             <div class="endpoint-header">
@@ -329,20 +324,24 @@ const res = await fetch(
                                         style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns the 50 most
-                                    recent sentiment-scored headlines for the
-                                    specified ticker, ordered by date
-                                    descending.</p>
+                                <p class="endpoint-desc">Returns
+                                    sentiment-scored headlines for the specified
+                                    ticker. Default 25 headlines = 1 call. Every
+                                    additional 25 = 1 more call.</p>
                                 <table class="param-table">
-                                    <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                                    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>BTC,
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
                                                 ETH, SOL, XRP, or DOGE</td></tr>
+                                        <tr><td>limit</td><td>integer</td><td>25</td><td>Number
+                                                of headlines to return</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
                                 <pre>{
   <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
+  <span class="c-key">"limit"</span>: <span class="c-num">25</span>,
+  <span class="c-key">"calls_used"</span>: <span class="c-num">1</span>,
   <span class="c-key">"data"</span>: [
     {
       <span class="c-key">"date"</span>: <span class="c-str">"2026-04-27T12:00:00"</span>,
@@ -353,11 +352,120 @@ const res = await fetch(
     }
   ]
 }</pre>
+                                <div class="tester" id="tester-sentiment">
+                                    <div class="tester-title">▶ Try it</div>
+                                    <div class="tester-apikey-note"
+                                        id="tester-sentiment-note">Requires an
+                                        API key. <a
+                                            onclick="nav('dashboard');return false;">Get
+                                            one here →</a></div>
+                                    <div class="tester-row">
+                                        <span class="tester-label">Ticker</span>
+                                        <select class="tester-select"
+                                            id="t-sentiment-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        </select>
+                                        <span class="tester-label"
+                                            style="margin-left:8px;">Limit</span>
+                                        <input class="tester-input"
+                                            type="number" id="t-sentiment-limit"
+                                            value="25" min="1" max="500"
+                                            style="width:80px;">
+                                        <button class="tester-btn"
+                                            onclick="runTester('sentiment')">Send</button>
+                                    </div>
+                                    <div class="tester-result"
+                                        id="tester-sentiment-result">
+                                        <div class="tester-meta">
+                                            <span
+                                                id="tester-sentiment-status"></span>
+                                            <span
+                                                id="tester-sentiment-time"></span>
+                                            <span
+                                                id="tester-sentiment-calls"></span>
+                                        </div>
+                                        <pre id="tester-sentiment-output"></pre>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div id="prices">
+                    <div id="summary" class="scroll-section">
+                        <h2>Summary</h2>
+                        <div class="endpoint">
+                            <div class="endpoint-header">
+                                <span class="method">GET</span>
+                                <span class="endpoint-path">/v1/summary/<span
+                                        style="color:var(--accent);">{ticker}</span></span>
+                            </div>
+                            <div class="endpoint-body">
+                                <p class="endpoint-desc">Returns daily averaged
+                                    sentiment scores. Default 30 days = 30
+                                    calls.</p>
+                                <table class="param-table">
+                                    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
+                                                ETH, SOL, XRP, or DOGE</td></tr>
+                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number
+                                                of days of history</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="code-label">Response</div>
+                                <pre>{
+  <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
+  <span class="c-key">"days"</span>: <span class="c-num">30</span>,
+  <span class="c-key">"calls_used"</span>: <span class="c-num">30</span>,
+  <span class="c-key">"data"</span>: [
+    {
+      <span class="c-key">"date"</span>: <span class="c-str">"2026-04-27"</span>,
+      <span class="c-key">"avg_sentiment"</span>: <span class="c-num">0.2341</span>,
+      <span class="c-key">"article_count"</span>: <span class="c-num">12</span>,
+      <span class="c-key">"label"</span>: <span class="c-str">"positive"</span>
+    }
+  ]
+}</pre>
+                                <div class="tester" id="tester-summary">
+                                    <div class="tester-title">▶ Try it</div>
+                                    <div class="tester-apikey-note"
+                                        id="tester-summary-note">Requires an API
+                                        key. <a
+                                            onclick="nav('dashboard');return false;">Get
+                                            one here →</a></div>
+                                    <div class="tester-row">
+                                        <span class="tester-label">Ticker</span>
+                                        <select class="tester-select"
+                                            id="t-summary-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        </select>
+                                        <span class="tester-label"
+                                            style="margin-left:8px;">Days</span>
+                                        <input class="tester-input"
+                                            type="number" id="t-summary-days"
+                                            value="7" min="1" max="880"
+                                            style="width:80px;">
+                                        <button class="tester-btn"
+                                            onclick="runTester('summary')">Send</button>
+                                    </div>
+                                    <div class="tester-result"
+                                        id="tester-summary-result">
+                                        <div class="tester-meta">
+                                            <span
+                                                id="tester-summary-status"></span>
+                                            <span
+                                                id="tester-summary-time"></span>
+                                            <span
+                                                id="tester-summary-calls"></span>
+                                        </div>
+                                        <pre id="tester-summary-output"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="prices" class="scroll-section">
                         <h2>Prices</h2>
                         <div class="endpoint">
                             <div class="endpoint-header">
@@ -366,19 +474,23 @@ const res = await fetch(
                                         style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns the last 90
-                                    days of daily closing prices in GBP for the
-                                    specified ticker.</p>
+                                <p class="endpoint-desc">Returns daily closing
+                                    prices in GBP. Default 30 days = 30
+                                    calls.</p>
                                 <table class="param-table">
-                                    <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                                    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>BTC,
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
                                                 ETH, SOL, XRP, or DOGE</td></tr>
+                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number
+                                                of days of history</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
                                 <pre>{
   <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
+  <span class="c-key">"days"</span>: <span class="c-num">30</span>,
+  <span class="c-key">"calls_used"</span>: <span class="c-num">30</span>,
   <span class="c-key">"data"</span>: [
     {
       <span class="c-key">"date"</span>: <span class="c-str">"2026-04-27T00:00:00"</span>,
@@ -387,11 +499,46 @@ const res = await fetch(
     }
   ]
 }</pre>
+                                <div class="tester" id="tester-prices">
+                                    <div class="tester-title">▶ Try it</div>
+                                    <div class="tester-apikey-note"
+                                        id="tester-prices-note">Requires an API
+                                        key. <a
+                                            onclick="nav('dashboard');return false;">Get
+                                            one here →</a></div>
+                                    <div class="tester-row">
+                                        <span class="tester-label">Ticker</span>
+                                        <select class="tester-select"
+                                            id="t-prices-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        </select>
+                                        <span class="tester-label"
+                                            style="margin-left:8px;">Days</span>
+                                        <input class="tester-input"
+                                            type="number" id="t-prices-days"
+                                            value="7" min="1" max="880"
+                                            style="width:80px;">
+                                        <button class="tester-btn"
+                                            onclick="runTester('prices')">Send</button>
+                                    </div>
+                                    <div class="tester-result"
+                                        id="tester-prices-result">
+                                        <div class="tester-meta">
+                                            <span
+                                                id="tester-prices-status"></span>
+                                            <span
+                                                id="tester-prices-time"></span>
+                                            <span
+                                                id="tester-prices-calls"></span>
+                                        </div>
+                                        <pre id="tester-prices-output"></pre>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div id="correlation">
+                    <div id="correlation" class="scroll-section">
                         <h2>Correlation</h2>
                         <div class="endpoint">
                             <div class="endpoint-header">
@@ -404,18 +551,18 @@ const res = await fetch(
                                 <p class="endpoint-desc">Returns Pearson
                                     correlation between sentiment and price
                                     returns across lag periods of 0–7 days.
-                                    Useful for identifying predictive signal
-                                    timing.</p>
+                                    Always 1 call.</p>
                                 <table class="param-table">
-                                    <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                                    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>BTC,
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
                                                 ETH, SOL, XRP, or DOGE</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
                                 <pre>{
   <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
+  <span class="c-key">"calls_used"</span>: <span class="c-num">1</span>,
   <span class="c-key">"best_lag_days"</span>: <span class="c-num">2</span>,
   <span class="c-key">"correlation"</span>: <span class="c-num">0.412</span>,
   <span class="c-key">"all_lags"</span>: {
@@ -425,6 +572,37 @@ const res = await fetch(
     <span class="c-key">"3"</span>: <span class="c-num">0.198</span>
   }
 }</pre>
+                                <div class="tester" id="tester-correlation">
+                                    <div class="tester-title">▶ Try it</div>
+                                    <div class="tester-apikey-note"
+                                        id="tester-correlation-note">Requires an
+                                        API key. <a
+                                            onclick="nav('dashboard');return false;">Get
+                                            one here →</a></div>
+                                    <div class="tester-row">
+                                        <span class="tester-label">Ticker</span>
+                                        <select class="tester-select"
+                                            id="t-correlation-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        </select>
+                                        <button class="tester-btn"
+                                            style="margin-left:8px;"
+                                            onclick="runTester('correlation')">Send</button>
+                                    </div>
+                                    <div class="tester-result"
+                                        id="tester-correlation-result">
+                                        <div class="tester-meta">
+                                            <span
+                                                id="tester-correlation-status"></span>
+                                            <span
+                                                id="tester-correlation-time"></span>
+                                            <span
+                                                id="tester-correlation-calls"></span>
+                                        </div>
+                                        <pre
+                                            id="tester-correlation-output"></pre>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -443,11 +621,10 @@ const res = await fetch(
                     </table>
                 </div>
 
-                <!-- PRICING SECTION -->
+                <!-- PRICING -->
                 <div class="section" id="section-pricing">
                     <h1>Pricing</h1>
                     <p class="page-subtitle">SIMPLE, TRANSPARENT API PRICING</p>
-
                     <div class="pricing-grid">
                         <div class="pricing-card">
                             <div class="pricing-tier">Free</div>
@@ -459,7 +636,7 @@ const res = await fetch(
                             <ul class="pricing-features">
                                 <li>100 free API calls</li>
                                 <li>All 5 tickers</li>
-                                <li>Sentiment, prices & correlation</li>
+                                <li>All endpoints</li>
                                 <li>No expiry on free calls</li>
                             </ul>
                         </div>
@@ -480,34 +657,41 @@ const res = await fetch(
                             </ul>
                         </div>
                     </div>
-
                     <div class="notice">
                         1,000 calls/month = £10 · 10,000 calls/month = £100 · No
                         setup fees or hidden charges.
                     </div>
-
-                    <h2>What counts as a call?</h2>
-                    <p>Each request to a <code
-                            style="color:var(--accent2);">/v1/</code> endpoint
-                        counts as one call regardless of how much data is
-                        returned. Requests that return a 4xx or 5xx error do not
-                        count toward your usage.</p>
-
+                    <h2>How calls are counted</h2>
+                    <table class="param-table">
+                        <thead><tr><th>Endpoint</th><th>Calls
+                                    Used</th></tr></thead>
+                        <tbody>
+                            <tr><td>/v1/sentiment/{ticker}</td><td>ceil(limit /
+                                    25) — default 1 call for 25
+                                    headlines</td></tr>
+                            <tr><td>/v1/summary/{ticker}</td><td>1 call per day
+                                    returned — default 30 calls</td></tr>
+                            <tr><td>/v1/prices/{ticker}</td><td>1 call per day
+                                    returned — default 30 calls</td></tr>
+                            <tr><td>/v1/correlation/{ticker}</td><td>Always 1
+                                    call</td></tr>
+                        </tbody>
+                    </table>
                     <h2>Supported Tickers</h2>
                     <table class="param-table">
                         <thead><tr><th>Ticker</th><th>Asset</th><th>Available
                                     Endpoints</th></tr></thead>
                         <tbody>
                             <tr><td>BTC</td><td>Bitcoin</td><td>sentiment,
-                                    prices, correlation</td></tr>
+                                    summary, prices, correlation</td></tr>
                             <tr><td>ETH</td><td>Ethereum</td><td>sentiment,
-                                    prices, correlation</td></tr>
+                                    summary, prices, correlation</td></tr>
                             <tr><td>SOL</td><td>Solana</td><td>sentiment,
+                                    summary, prices, correlation</td></tr>
+                            <tr><td>XRP</td><td>XRP</td><td>sentiment, summary,
                                     prices, correlation</td></tr>
-                            <tr><td>XRP</td><td>XRP</td><td>sentiment, prices,
-                                    correlation</td></tr>
                             <tr><td>DOGE</td><td>Dogecoin</td><td>sentiment,
-                                    prices, correlation</td></tr>
+                                    summary, prices, correlation</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -519,6 +703,7 @@ const res = await fetch(
 const API = 'https://crypto-sentiment-production.up.railway.app'
 let currentKey = null
 
+// NAV
 function nav(section) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
   document.getElementById('section-' + section).classList.add('active')
@@ -528,22 +713,47 @@ function nav(section) {
   document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('active'))
   const sideEl = document.getElementById('side-' + section)
   if (sideEl) sideEl.classList.add('active')
-  return false
+  if (section === 'docs') initScrollSpy()
 }
 
-function scrollTo(id) {
+function scrollToId(id) {
   setTimeout(() => {
     const el = document.getElementById(id)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, 50)
 }
 
+// SCROLL SPY
+function initScrollSpy() {
+  const sections = document.querySelectorAll('.scroll-section')
+  const sideLinks = document.querySelectorAll('.sidebar-link[data-section]')
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id
+        sideLinks.forEach(l => {
+          l.classList.toggle('active', l.dataset.section === id)
+        })
+        // highlight endpoint border
+        document.querySelectorAll('.endpoint').forEach(e => e.classList.remove('in-view'))
+        const ep = entry.target.querySelector('.endpoint')
+        if (ep) ep.classList.add('in-view')
+      }
+    })
+  }, { threshold: 0.2, rootMargin: '-60px 0px -60% 0px' })
+
+  sections.forEach(s => observer.observe(s))
+}
+
+// MESSAGES
 function showMsg(id, text, type) {
   const el = document.getElementById(id)
   el.textContent = text
   el.className = 'msg ' + type + ' show'
 }
 
+// KEY STATE
 function showKey(key, callsUsed) {
   document.getElementById('no-key-state').style.display = 'none'
   document.getElementById('lookup-state').style.display = 'none'
@@ -555,61 +765,54 @@ function showKey(key, callsUsed) {
   const free = Math.max(0, 100 - (callsUsed ?? 0))
   document.getElementById('calls-free').textContent = free
   document.getElementById('calls-free').style.color = free > 0 ? 'var(--positive)' : 'var(--negative)'
+  updateTesterNotes(key)
+}
+
+function updateTesterNotes(key) {
+  ['sentiment','summary','prices','correlation'].forEach(ep => {
+    const note = document.getElementById('tester-' + ep + '-note')
+    if (note) note.style.display = 'none'
+  })
 }
 
 async function generateKey() {
   const email = document.getElementById('email-input').value.trim()
   if (!email) return showMsg('gen-msg', 'Please enter your email.', 'error')
   const btn = event.target
-  btn.disabled = true
-  btn.textContent = '...'
+  btn.disabled = true; btn.textContent = '...'
   try {
-    const res = await fetch(`${API}/api/keys/generate`, {
+    const res = await fetch(API + '/api/keys/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email })
     })
     const data = await res.json()
-    if (data.key) {
-      showKey(data.key, 0)
-    } else {
-      showMsg('gen-msg', data.detail || 'Something went wrong.', 'error')
-    }
-  } catch (e) {
-    showMsg('gen-msg', 'Failed to connect to API.', 'error')
-  }
-  btn.disabled = false
-  btn.textContent = 'Get API Key'
+    if (data.key) { showKey(data.key, 0) }
+    else showMsg('gen-msg', data.detail || 'Something went wrong.', 'error')
+  } catch (e) { showMsg('gen-msg', 'Failed to connect to API.', 'error') }
+  btn.disabled = false; btn.textContent = 'Get API Key'
 }
 
 async function lookupKey() {
   const email = document.getElementById('lookup-email').value.trim()
   if (!email) return showMsg('lookup-msg', 'Please enter your email.', 'error')
   const btn = event.target
-  btn.disabled = true
-  btn.textContent = '...'
+  btn.disabled = true; btn.textContent = '...'
   try {
-    const res = await fetch(`${API}/api/keys/generate`, {
+    const res = await fetch(API + '/api/keys/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email })
     })
     const data = await res.json()
-    if (data.key) {
-      showKey(data.key, null)
-    } else {
-      showMsg('lookup-msg', 'No key found for this email.', 'error')
-    }
-  } catch (e) {
-    showMsg('lookup-msg', 'Failed to connect to API.', 'error')
-  }
-  btn.disabled = false
-  btn.textContent = 'Look Up'
+    if (data.key) { showKey(data.key, null) }
+    else showMsg('lookup-msg', 'No key found for this email.', 'error')
+  } catch (e) { showMsg('lookup-msg', 'Failed to connect to API.', 'error') }
+  btn.disabled = false; btn.textContent = 'Look Up'
 }
 
 function showLookup() {
   document.getElementById('lookup-state').style.display = 'block'
-  return false
 }
 
 function copyKey() {
@@ -619,6 +822,58 @@ function copyKey() {
     btn.textContent = 'Copied!'
     setTimeout(() => btn.textContent = 'Copy', 1500)
   })
+}
+
+// TESTER
+async function runTester(endpoint) {
+  if (!currentKey) {
+    alert('Generate an API key on the Dashboard first.')
+    return
+  }
+
+  const resultEl = document.getElementById('tester-' + endpoint + '-result')
+  const outputEl = document.getElementById('tester-' + endpoint + '-output')
+  const statusEl = document.getElementById('tester-' + endpoint + '-status')
+  const timeEl = document.getElementById('tester-' + endpoint + '-time')
+  const callsEl = document.getElementById('tester-' + endpoint + '-calls')
+  const btn = event.target
+  btn.disabled = true; btn.textContent = '...'
+
+  const ticker = document.getElementById('t-' + endpoint + '-ticker').value
+  let url = API + '/v1/' + endpoint + '/' + ticker
+
+  if (endpoint === 'sentiment') {
+    const limit = document.getElementById('t-sentiment-limit').value
+    url += '?limit=' + limit
+  } else if (endpoint === 'summary') {
+    const days = document.getElementById('t-summary-days').value
+    url += '?days=' + days
+  } else if (endpoint === 'prices') {
+    const days = document.getElementById('t-prices-days').value
+    url += '?days=' + days
+  }
+
+  const start = Date.now()
+  try {
+    const res = await fetch(url, { headers: { 'X-API-Key': currentKey } })
+    const elapsed = Date.now() - start
+    const data = await res.json()
+
+    statusEl.textContent = res.ok ? '200 OK' : res.status + ' Error'
+    statusEl.className = res.ok ? 'tester-status-ok' : 'tester-status-err'
+    timeEl.textContent = elapsed + 'ms'
+    if (data.calls_used) callsEl.textContent = data.calls_used + ' call' + (data.calls_used > 1 ? 's' : '') + ' used'
+
+    outputEl.textContent = JSON.stringify(data, null, 2)
+    resultEl.classList.add('show')
+  } catch (e) {
+    statusEl.textContent = 'Network error'
+    statusEl.className = 'tester-status-err'
+    outputEl.textContent = e.message
+    resultEl.classList.add('show')
+  }
+
+  btn.disabled = false; btn.textContent = 'Send'
 }
 </script>
     </body>
