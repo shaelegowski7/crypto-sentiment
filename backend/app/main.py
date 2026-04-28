@@ -20,6 +20,7 @@ import requests
 import stripe
 import csv
 import io
+import secrets
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -780,3 +781,179 @@ async def stripe_webhook(request: Request):
             supabase_client.table("profiles").update({"tier": "pro"}).eq("email", customer_email).execute()
 
     return {"status": "ok"}
+
+@app.post("/api/keys/generate")
+async def generate_api_key(request: Request, db: Session = Depends(get_db)):
+    body = await request.json()
+    email = body.get("email")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+    if existing:
+        return {"key": existing.key, "message": "Existing key returned"}
+
+    try:
+        customer = stripe.Customer.create(email=email)
+        subscription = stripe.Subscription.create(
+            customer=customer.id,
+            items=[{"price": "price_1TO3DG2NzVdYK0wrxIRggage"}],
+        )
+        stripe_customer_id = customer.id
+        stripe_subscription_id = subscription.id
+    except Exception as e:
+        print(f"Stripe error: {e}")
+        stripe_customer_id = None
+        stripe_subscription_id = None
+
+    key = "sfx_" + secrets.token_hex(24)
+    api_key = models.APIKey(
+        key=key,
+        email=email,
+        stripe_customer_id=stripe_customer_id,
+        stripe_subscription_id=stripe_subscription_id,
+    )
+    db.add(api_key)
+    db.commit()
+    return {"key": key, "message": "API key generated"}
+
+
+def get_api_key(x_api_key: str = Header(None), db: Session = Depends(get_db)):
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+    key = db.query(models.APIKey).filter(
+        models.APIKey.key == x_api_key,
+        models.APIKey.active == True
+    ).first()
+    if not key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return key
+
+
+def track_usage(api_key: models.APIKey, db: Session):
+    api_key.calls_used += 1
+
+    if api_key.calls_used > api_key.free_calls and api_key.stripe_customer_id:
+        try:
+            stripe.billing.MeterEvent.create(
+                event_name="api_call",
+                payload={
+                    "stripe_customer_id": api_key.stripe_customer_id,
+                    "value": "1",
+                }
+            )
+        except Exception as e:
+            print(f"Stripe meter error: {e}")
+
+    db.commit()
+
+
+@app.get("/v1/sentiment/{ticker}")
+def api_sentiment(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    track_usage(api_key, db)
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper()
+    ).order_by(models.Headline.published_at.desc()).limit(50).all()
+
+    if not headlines:
+        raise HTTPException(status_code=404, detail="No data found")
+
+    return {
+        "ticker": ticker.upper(),
+        "data": [
+            {
+                "date": h.published_at,
+                "title": h.title,
+                "source": h.source,
+                "sentiment_score": h.sentiment_score,
+                "sentiment_label": h.sentiment_label,
+            } for h in headlines
+        ]
+    }
+
+
+@app.get("/v1/prices/{ticker}")
+def api_prices(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    track_usage(api_key, db)
+    prices = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper()
+    ).order_by(models.Price.date.desc()).limit(90).all()
+
+    if not prices:
+        raise HTTPException(status_code=404, detail="No data found")
+
+    return {
+        "ticker": ticker.upper(),
+        "data": [
+            {
+                "date": p.date,
+                "close_price_gbp": p.close_price,
+                "volume": p.volume,
+            } for p in prices
+        ]
+    }
+
+
+@app.get("/v1/correlation/{ticker}")
+def api_correlation(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    track_usage(api_key, db)
+
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper()
+    ).order_by(models.Headline.published_at).all()
+
+    prices = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper()
+    ).order_by(models.Price.date).all()
+
+    if len(headlines) < 10 or len(prices) < 10:
+        raise HTTPException(status_code=404, detail="Not enough data")
+
+    sentiment_by_date = {}
+    for h in headlines:
+        date = str(h.published_at.date())
+        if date not in sentiment_by_date:
+            sentiment_by_date[date] = []
+        sentiment_by_date[date].append(h.sentiment_score)
+
+    avg_sentiment = {
+        date: sum(scores) / len(scores)
+        for date, scores in sentiment_by_date.items()
+    }
+
+    price_by_date = {}
+    sorted_prices = sorted(prices, key=lambda p: p.date)
+    for i in range(1, len(sorted_prices)):
+        date = str(sorted_prices[i].date.date())
+        prev_price = sorted_prices[i-1].close_price
+        curr_price = sorted_prices[i].close_price
+        if prev_price > 0:
+            price_by_date[date] = (curr_price - prev_price) / prev_price * 100
+
+    common_dates = sorted(set(avg_sentiment.keys()) & set(price_by_date.keys()))
+
+    if len(common_dates) < 10:
+        raise HTTPException(status_code=404, detail="Not enough overlapping data")
+
+    best_corr = 0
+    best_lag = 0
+    all_lags = {}
+
+    for lag in range(0, 8):
+        s = [avg_sentiment[d] for d in common_dates[lag:]]
+        p = [price_by_date[d] for d in common_dates[:len(common_dates) - lag]]
+        if len(s) < 10:
+            continue
+        corr, _ = pearsonr(s, p)
+        all_lags[lag] = round(corr, 3)
+        if abs(corr) > abs(best_corr):
+            best_corr = corr
+            best_lag = lag
+
+    return {
+        "ticker": ticker.upper(),
+        "best_lag_days": best_lag,
+        "correlation": round(best_corr, 3),
+        "all_lags": all_lags,
+    }
