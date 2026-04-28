@@ -831,8 +831,8 @@ def get_api_key(x_api_key: str = Header(None), db: Session = Depends(get_db)):
     return key
 
 
-def track_usage(api_key: models.APIKey, db: Session):
-    api_key.calls_used += 1
+def track_usage(api_key: models.APIKey, db: Session, count: int = 1):
+    api_key.calls_used += count
 
     if api_key.calls_used > api_key.free_calls and api_key.stripe_customer_id:
         try:
@@ -840,7 +840,7 @@ def track_usage(api_key: models.APIKey, db: Session):
                 event_name="api_call",
                 payload={
                     "stripe_customer_id": api_key.stripe_customer_id,
-                    "value": "1",
+                    "value": str(count),
                 }
             )
         except Exception as e:
@@ -850,17 +850,23 @@ def track_usage(api_key: models.APIKey, db: Session):
 
 
 @app.get("/v1/sentiment/{ticker}")
-def api_sentiment(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db)
+def api_sentiment(ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    import math
+    calls = math.ceil(limit / 25)
+    for _ in range(calls):
+        track_usage(api_key, db)
+
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
-    ).order_by(models.Headline.published_at.desc()).limit(50).all()
+    ).order_by(models.Headline.published_at.desc()).limit(limit).all()
 
     if not headlines:
         raise HTTPException(status_code=404, detail="No data found")
 
     return {
         "ticker": ticker.upper(),
+        "limit": limit,
+        "calls_used": calls,
         "data": [
             {
                 "date": h.published_at,
@@ -873,18 +879,65 @@ def api_sentiment(ticker: str, db: Session = Depends(get_db), api_key=Depends(ge
     }
 
 
+@app.get("/v1/summary/{ticker}")
+def api_summary(ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    for _ in range(days):
+        track_usage(api_key, db)
+
+    since = datetime.utcnow() - timedelta(days=days)
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since
+    ).order_by(models.Headline.published_at.desc()).all()
+
+    if not headlines:
+        raise HTTPException(status_code=404, detail="No data found")
+
+    by_date = {}
+    for h in headlines:
+        date = str(h.published_at.date())
+        if date not in by_date:
+            by_date[date] = []
+        by_date[date].append(h.sentiment_score)
+
+    summary = [
+        {
+            "date": date,
+            "avg_sentiment": round(sum(scores) / len(scores), 4),
+            "article_count": len(scores),
+            "label": "positive" if sum(scores)/len(scores) > 0.1 else "negative" if sum(scores)/len(scores) < -0.1 else "neutral"
+        }
+        for date, scores in by_date.items()
+    ]
+
+    summary.sort(key=lambda x: x["date"], reverse=True)
+
+    return {
+        "ticker": ticker.upper(),
+        "days": days,
+        "calls_used": days,
+        "data": summary
+    }
+
+
 @app.get("/v1/prices/{ticker}")
-def api_prices(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db)
+def api_prices(ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    for _ in range(days):
+        track_usage(api_key, db)
+
+    since = datetime.utcnow() - timedelta(days=days)
     prices = db.query(models.Price).filter(
-        models.Price.ticker == ticker.upper()
-    ).order_by(models.Price.date.desc()).limit(90).all()
+        models.Price.ticker == ticker.upper(),
+        models.Price.date >= since
+    ).order_by(models.Price.date.desc()).all()
 
     if not prices:
         raise HTTPException(status_code=404, detail="No data found")
 
     return {
         "ticker": ticker.upper(),
+        "days": days,
+        "calls_used": days,
         "data": [
             {
                 "date": p.date,
@@ -953,42 +1006,8 @@ def api_correlation(ticker: str, db: Session = Depends(get_db), api_key=Depends(
 
     return {
         "ticker": ticker.upper(),
+        "calls_used": 1,
         "best_lag_days": best_lag,
         "correlation": round(best_corr, 3),
         "all_lags": all_lags,
-    }
-
-@app.get("/v1/summary/{ticker}")
-def api_summary(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db)
-    
-    headlines = db.query(models.Headline).filter(
-        models.Headline.ticker == ticker.upper()
-    ).order_by(models.Headline.published_at.desc()).all()
-
-    if not headlines:
-        raise HTTPException(status_code=404, detail="No data found")
-
-    by_date = {}
-    for h in headlines:
-        date = str(h.published_at.date())
-        if date not in by_date:
-            by_date[date] = []
-        by_date[date].append(h.sentiment_score)
-
-    summary = [
-        {
-            "date": date,
-            "avg_sentiment": round(sum(scores) / len(scores), 4),
-            "article_count": len(scores),
-            "label": "positive" if sum(scores)/len(scores) > 0.1 else "negative" if sum(scores)/len(scores) < -0.1 else "neutral"
-        }
-        for date, scores in by_date.items()
-    ]
-
-    summary.sort(key=lambda x: x["date"], reverse=True)
-
-    return {
-        "ticker": ticker.upper(),
-        "data": summary
     }
