@@ -511,6 +511,52 @@ const styles = `
   .tooltip-key { color: var(--muted); }
   .tooltip-val { color: var(--text); font-weight: 500; }
 
+  .alert-select {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 2px;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .alert-input {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 2px;
+    color: var(--text);
+    width: 80px;
+  }
+
+  .alert-section-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .alert-item {
+    background: var(--surface);
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
   @media (max-width: 768px) {
     .topbar { padding: 10px 16px; }
     .ticker-bar { padding: 10px 16px; }
@@ -521,7 +567,6 @@ const styles = `
     .logo-divider { display: none; }
     .upgrade-banner { flex-direction: column; align-items: flex-start; }
   }
-
 `
 
 const CustomTooltip = ({ active, payload, label, symbol }) => {
@@ -557,6 +602,11 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
   const [authMode, setAuthMode] = useState("login")
+  const [alerts, setAlerts] = useState([])
+  const [alertTicker, setAlertTicker] = useState("BTC")
+  const [alertThreshold, setAlertThreshold] = useState(0.3)
+  const [alertDirection, setAlertDirection] = useState("above")
+  const [alertLoading, setAlertLoading] = useState(false)
 
   const urlParams = new URLSearchParams(window.location.search)
   const checkoutSuccess = urlParams.get("success")
@@ -615,6 +665,57 @@ export default function App() {
       .then(d => setGbpToUsd(d.rates.USD))
       .catch(() => setGbpToUsd(1.27))
   }, [])
+
+  useEffect(() => {
+    if (isPro && session) fetchAlerts()
+  }, [isPro, session])
+
+  const fetchAlerts = async () => {
+    if (!isPro || !session) return
+    try {
+      const res = await fetch(`${API}/alerts`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      })
+      const data = await res.json()
+      setAlerts(data)
+    } catch (e) {
+      console.error("Failed to fetch alerts:", e)
+    }
+  }
+
+  const createAlert = async () => {
+    setAlertLoading(true)
+    try {
+      await fetch(`${API}/alerts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ticker: alertTicker,
+          threshold: alertThreshold,
+          direction: alertDirection
+        })
+      })
+      await fetchAlerts()
+    } catch (e) {
+      console.error("Failed to create alert:", e)
+    }
+    setAlertLoading(false)
+  }
+
+  const deleteAlert = async (id) => {
+    try {
+      await fetch(`${API}/alerts/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      })
+      await fetchAlerts()
+    } catch (e) {
+      console.error("Failed to delete alert:", e)
+    }
+  }
 
   const fetchDashboard = async () => {
     setLoading(true)
@@ -687,12 +788,12 @@ export default function App() {
   const sentimentOnly = filteredData.filter(d => d.sentiment !== null && d.sentiment !== undefined)
 
   const avgSentiment = sentimentOnly.length
-  ? (sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3)
-  : null
+    ? (sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3)
+    : null
 
   const sentimentSignal = avgSentiment
-  ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
-  : null
+    ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
+    : null
 
   const latestPrice = displayData.length ? displayData[displayData.length - 1]?.price : null
   const priceDisplay = latestPrice != null
@@ -1056,6 +1157,109 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {isPro && (
+            <div className="panel">
+              <div className="panel-header">
+                <span className="panel-title">SENTIMENT ALERTS</span>
+                <span className="panel-title" style={{ color: "var(--muted)" }}>
+                  {alerts.filter(a => a.active).length} ACTIVE
+                </span>
+              </div>
+              <div className="panel-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+                <div>
+                  <div className="alert-section-label">New alert</div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                    <select
+                      className="alert-select"
+                      value={alertTicker}
+                      onChange={e => setAlertTicker(e.target.value)}
+                    >
+                      {TICKERS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+
+                    <select
+                      className="alert-select"
+                      value={alertDirection}
+                      onChange={e => setAlertDirection(e.target.value)}
+                    >
+                      <option value="above">Above</option>
+                      <option value="below">Below</option>
+                    </select>
+
+                    <input
+                      className="alert-input"
+                      type="number"
+                      min="-1"
+                      max="1"
+                      step="0.05"
+                      value={alertThreshold}
+                      onChange={e => setAlertThreshold(parseFloat(e.target.value))}
+                    />
+
+                    <button
+                      onClick={createAlert}
+                      disabled={alertLoading}
+                      style={{
+                        fontFamily: "var(--mono)", fontSize: "10px", fontWeight: 600,
+                        letterSpacing: "0.1em", padding: "6px 16px", background: "var(--accent)",
+                        border: "none", borderRadius: "2px", color: "#080c10",
+                        cursor: "pointer", textTransform: "uppercase"
+                      }}
+                    >
+                      {alertLoading ? "..." : "ADD ALERT"}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="alert-section-label">Active alerts</div>
+                  {alerts.length === 0 ? (
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
+                      No alerts yet. Add one above.
+                    </div>
+                  ) : (
+                    <div className="alerts-list">
+                      {alerts.map(a => (
+                        <div key={a.id} className="alert-item">
+                          <span style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--text)" }}>
+                            <span style={{ color: "var(--accent)" }}>{a.ticker}</span>
+                            {" "}sentiment {a.direction}{" "}
+                            <span style={{ color: a.direction === "above" ? "var(--positive)" : "var(--negative)" }}>
+                              {a.threshold}
+                            </span>
+                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <span style={{
+                              fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
+                              padding: "2px 8px", borderRadius: "2px",
+                              background: a.active ? "rgba(63,185,80,0.1)" : "rgba(139,148,158,0.1)",
+                              color: a.active ? "var(--positive)" : "var(--muted)",
+                              border: `1px solid ${a.active ? "rgba(63,185,80,0.3)" : "rgba(139,148,158,0.3)"}`
+                            }}>
+                              {a.active ? "ACTIVE" : "FIRED"}
+                            </span>
+                            <button
+                              onClick={() => deleteAlert(a.id)}
+                              style={{
+                                fontFamily: "var(--mono)", fontSize: "10px", padding: "3px 8px",
+                                background: "transparent", border: "1px solid var(--border2)",
+                                borderRadius: "2px", color: "var(--muted)", cursor: "pointer"
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
         </main>
       </div>
 
