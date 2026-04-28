@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>SentimentFX — Developer API</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+            rel="stylesheet">
+        <style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
+  --border:#21262d;--border2:#30363d;
+  --text:#e6edf3;--muted:#7d8590;
+  --accent:#f0b429;--accent2:#58a6ff;
+  --positive:#3fb950;--negative:#f85149;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+.logo{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;text-decoration:none;}
+.logo span{color:var(--muted);font-weight:400;}
+.topbar-links{display:flex;gap:20px;align-items:center;}
+.topbar-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);text-decoration:none;transition:color 0.15s;}
+.topbar-links a:hover,.topbar-links a.active{color:var(--text);}
+.topbar-cta{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.1em;padding:6px 14px;background:var(--accent);border:none;border-radius:2px;color:#080c10;cursor:pointer;text-transform:uppercase;text-decoration:none;}
+
+/* SIDEBAR LAYOUT */
+.layout{display:flex;flex:1;}
+.sidebar{width:220px;min-height:calc(100vh - 49px);border-right:1px solid var(--border);background:var(--surface);padding:24px 0;position:sticky;top:49px;height:calc(100vh - 49px);overflow-y:auto;flex-shrink:0;}
+.sidebar-section{margin-bottom:24px;}
+.sidebar-label{font-family:var(--mono);font-size:9px;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;padding:0 20px;margin-bottom:8px;}
+.sidebar-link{display:block;font-family:var(--mono);font-size:11px;letter-spacing:0.05em;color:var(--muted);text-decoration:none;padding:6px 20px;transition:all 0.1s;border-left:2px solid transparent;}
+.sidebar-link:hover{color:var(--text);background:var(--surface2);}
+.sidebar-link.active{color:var(--accent);border-left-color:var(--accent);background:rgba(240,180,41,0.04);}
+
+/* CONTENT */
+.content{flex:1;padding:40px 48px;max-width:900px;}
+
+/* SECTIONS */
+.section{display:none;}
+.section.active{display:block;}
+
+/* TYPOGRAPHY */
+h1{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--text);margin-bottom:8px;}
+h2{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);margin-bottom:16px;margin-top:40px;padding-top:40px;border-top:1px solid var(--border);}
+h2:first-of-type{margin-top:0;padding-top:0;border-top:none;}
+h3{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;margin-top:24px;}
+p{font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
+.page-subtitle{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.08em;margin-bottom:32px;}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px 24px;margin-bottom:16px;}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.card-title{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;}
+
+/* API KEY DISPLAY */
+.key-display{background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:12px 16px;font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:0.05em;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.key-masked{color:var(--muted);}
+.copy-btn{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;padding:4px 10px;background:transparent;border:1px solid var(--border2);border-radius:2px;color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.15s;}
+.copy-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+/* GENERATE FORM */
+.form-row{display:flex;gap:8px;margin-bottom:16px;}
+.form-input{flex:1;font-family:var(--mono);font-size:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;color:var(--text);outline:none;transition:border-color 0.15s;}
+.form-input:focus{border-color:var(--accent);}
+.form-input::placeholder{color:var(--muted);}
+.btn-primary{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.1em;padding:10px 20px;background:var(--accent);border:none;border-radius:2px;color:#080c10;cursor:pointer;text-transform:uppercase;white-space:nowrap;transition:opacity 0.15s;}
+.btn-primary:hover{opacity:0.85;}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+
+/* STATS ROW */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:16px;}
+.stat-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+.stat-value{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);}
+.stat-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px;}
+
+/* ENDPOINT DOCS */
+.endpoint{background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:12px;overflow:hidden;}
+.endpoint-header{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.method{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.08em;padding:3px 8px;border-radius:2px;background:rgba(63,185,80,0.1);color:var(--positive);border:1px solid rgba(63,185,80,0.3);}
+.endpoint-path{font-family:var(--mono);font-size:12px;color:var(--text);}
+.endpoint-body{padding:16px;}
+.endpoint-desc{font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6;}
+.param-table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+.param-table th{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);}
+.param-table td{font-family:var(--mono);font-size:11px;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text);}
+.param-table td:first-child{color:var(--accent2);}
+.param-table td:last-child{color:var(--muted);}
+
+/* CODE BLOCKS */
+pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;padding:14px 16px;font-family:var(--mono);font-size:11px;color:var(--text);overflow-x:auto;margin-bottom:12px;line-height:1.6;}
+.code-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+.c-key{color:var(--accent2);}
+.c-str{color:var(--positive);}
+.c-num{color:var(--accent);}
+.c-comment{color:var(--muted);}
+
+/* PRICING */
+.pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+.pricing-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:24px;}
+.pricing-card.featured{border-color:var(--accent);background:rgba(240,180,41,0.03);}
+.pricing-tier{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:12px;}
+.pricing-price{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.pricing-price span{font-size:13px;color:var(--muted);font-weight:400;}
+.pricing-desc{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;}
+.pricing-features{list-style:none;}
+.pricing-features li{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border);}
+.pricing-features li::before{content:'→ ';color:var(--accent);}
+
+/* BADGE */
+.badge{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0.08em;padding:2px 8px;border-radius:2px;}
+.badge-free{background:rgba(139,148,158,0.12);color:var(--muted);border:1px solid rgba(139,148,158,0.3);}
+.badge-pro{background:rgba(240,180,41,0.12);color:var(--accent);border:1px solid rgba(240,180,41,0.3);}
+
+/* NOTICE */
+.notice{background:rgba(88,166,255,0.05);border:1px solid rgba(88,166,255,0.2);border-radius:2px;padding:12px 16px;font-family:var(--mono);font-size:11px;color:var(--accent2);line-height:1.6;margin-bottom:20px;}
+.notice-warn{background:rgba(240,180,41,0.05);border-color:rgba(240,180,41,0.2);color:var(--accent);}
+
+/* SUCCESS / ERROR */
+.msg{font-family:var(--mono);font-size:11px;padding:10px 14px;border-radius:2px;margin-top:8px;display:none;}
+.msg.success{background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);color:var(--positive);}
+.msg.error{background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);color:var(--negative);}
+.msg.show{display:block;}
+
+/* MOBILE */
+@media(max-width:768px){
+  .sidebar{display:none;}
+  .content{padding:24px 20px;}
+  .pricing-grid{grid-template-columns:1fr;}
+  .stats-row{grid-template-columns:1fr 1fr;}
+  .form-row{flex-direction:column;}
+}
+</style>
+    </head>
+    <body>
+
+        <header class="topbar">
+            <a class="logo" href="#">SentimentFX <span>/ Developers</span></a>
+            <nav class="topbar-links">
+                <a href="#" onclick="nav('dashboard')" class="active"
+                    id="nav-dashboard">Dashboard</a>
+                <a href="#" onclick="nav('docs')" id="nav-docs">Docs</a>
+                <a href="#" onclick="nav('pricing')"
+                    id="nav-pricing">Pricing</a>
+                <a href="https://app.sentimentfx.org" class="topbar-cta">Live
+                    Dashboard →</a>
+            </nav>
+        </header>
+
+        <div class="layout">
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Overview</div>
+                    <a class="sidebar-link active" href="#"
+                        onclick="nav('dashboard')"
+                        id="side-dashboard">Dashboard</a>
+                    <a class="sidebar-link" href="#" onclick="nav('pricing')"
+                        id="side-pricing">Pricing</a>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-label">API Reference</div>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('docs'); scrollTo('auth')"
+                        id="side-docs">Authentication</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('docs'); scrollTo('sentiment')">Sentiment</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('docs'); scrollTo('prices')">Prices</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('docs'); scrollTo('correlation')">Correlation</a>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Resources</div>
+                    <a class="sidebar-link" href="https://app.sentimentfx.org"
+                        target="_blank">Live Dashboard</a>
+                    <a class="sidebar-link"
+                        href="mailto:hello@sentimentfx.org">Support</a>
+                </div>
+            </aside>
+
+            <main class="content">
+
+                <!-- DASHBOARD SECTION -->
+                <div class="section active" id="section-dashboard">
+                    <h1>API Dashboard</h1>
+                    <p class="page-subtitle">MANAGE YOUR API KEY AND MONITOR
+                        USAGE</p>
+
+                    <div id="no-key-state">
+                        <div class="notice">Enter your email to generate a free
+                            API key. Your first 100 calls are free — no card
+                            required.</div>
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">Generate API Key</span>
+                                <span class="badge badge-free">Free</span>
+                            </div>
+                            <div class="form-row">
+                                <input class="form-input" type="email"
+                                    id="email-input"
+                                    placeholder="your@email.com" />
+                                <button class="btn-primary"
+                                    onclick="generateKey()">Get API Key</button>
+                            </div>
+                            <div class="msg" id="gen-msg"></div>
+                            <p style="font-size:12px;margin:0;">By generating a
+                                key you agree to our <a href="#"
+                                    style="color:var(--accent);">terms of
+                                    use</a>. After 100 free calls, usage is
+                                billed at £0.01/call via Stripe.</p>
+                        </div>
+                    </div>
+
+                    <div id="key-state" style="display:none;">
+                        <div class="stats-row">
+                            <div class="stat-card">
+                                <div class="stat-label">Calls Used</div>
+                                <div class="stat-value" id="calls-used">—</div>
+                                <div class="stat-sub">Total lifetime</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Free Remaining</div>
+                                <div class="stat-value" id="calls-free"
+                                    style="color:var(--positive);">—</div>
+                                <div class="stat-sub">Of 100 free calls</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Status</div>
+                                <div class="stat-value"
+                                    style="font-size:14px;color:var(--positive);">ACTIVE</div>
+                                <div class="stat-sub">Key is valid</div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">Your API Key</span>
+                                <span class="badge badge-pro">Active</span>
+                            </div>
+                            <div class="key-display">
+                                <span id="key-value"
+                                    class="key-masked">••••••••••••••••••••••••••••••••</span>
+                                <button class="copy-btn"
+                                    onclick="copyKey()">Copy</button>
+                            </div>
+                            <p
+                                style="font-size:12px;color:var(--muted);margin:0;">Pass
+                                this key as the <code
+                                    style="color:var(--accent2);">X-API-Key</code>
+                                header in all requests. Keep it secret.</p>
+                        </div>
+
+                        <div class="notice notice-warn">After 100 free calls,
+                            usage is billed at £0.01 per call via Stripe. <a
+                                href="#" onclick="nav('pricing')"
+                                style="color:var(--accent);">View pricing
+                                →</a></div>
+                    </div>
+
+                    <div id="lookup-state"
+                        style="display:none;margin-top:24px;">
+                        <div class="card">
+                            <div class="card-header"><span
+                                    class="card-title">Look Up Existing
+                                    Key</span></div>
+                            <div class="form-row">
+                                <input class="form-input" type="email"
+                                    id="lookup-email"
+                                    placeholder="your@email.com" />
+                                <button class="btn-primary"
+                                    onclick="lookupKey()">Look Up</button>
+                            </div>
+                            <div class="msg" id="lookup-msg"></div>
+                        </div>
+                    </div>
+
+                    <p style="margin-top:16px;font-size:12px;">Already have a
+                        key? <a href="#" onclick="showLookup()"
+                            style="color:var(--accent);">Look it up by email
+                            →</a></p>
+                </div>
+
+                <!-- DOCS SECTION -->
+                <div class="section" id="section-docs">
+                    <h1>API Reference</h1>
+                    <p class="page-subtitle">BASE URL:
+                        HTTPS://CRYPTO-SENTIMENT-PRODUCTION.UP.RAILWAY.APP</p>
+
+                    <div id="auth">
+                        <h2>Authentication</h2>
+                        <p>All API endpoints require an API key passed as a
+                            request header. Generate your key on the <a href="#"
+                                onclick="nav('dashboard')"
+                                style="color:var(--accent);">dashboard</a>.</p>
+                        <div class="notice">Include your API key in every
+                            request using the <code
+                                style="color:var(--accent2);">X-API-Key</code>
+                            header.</div>
+                        <div class="code-label">Example Request</div>
+                        <pre><span class="c-comment"># Curl</span>
+curl https://crypto-sentiment-production.up.railway.app/v1/sentiment/BTC \
+  -H <span class="c-str">"X-API-Key: sfx_your_api_key_here"</span>
+
+<span class="c-comment"># Python</span>
+import requests
+res = requests.get(
+    <span class="c-str">"https://crypto-sentiment-production.up.railway.app/v1/sentiment/BTC"</span>,
+    headers={<span class="c-str">"X-API-Key"</span>: <span class="c-str">"sfx_your_api_key_here"</span>}
+)
+
+<span class="c-comment"># JavaScript</span>
+const res = await fetch(
+    <span class="c-str">"https://crypto-sentiment-production.up.railway.app/v1/sentiment/BTC"</span>,
+    { headers: { <span class="c-str">"X-API-Key"</span>: <span class="c-str">"sfx_your_api_key_here"</span> } }
+)</pre>
+                    </div>
+
+                    <div id="sentiment">
+                        <h2>Sentiment</h2>
+                        <div class="endpoint">
+                            <div class="endpoint-header">
+                                <span class="method">GET</span>
+                                <span class="endpoint-path">/v1/sentiment/<span
+                                        style="color:var(--accent);">{ticker}</span></span>
+                            </div>
+                            <div class="endpoint-body">
+                                <p class="endpoint-desc">Returns the 50 most
+                                    recent sentiment-scored headlines for the
+                                    specified ticker, ordered by date
+                                    descending.</p>
+                                <table class="param-table">
+                                    <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>ticker</td><td>string</td><td>BTC,
+                                                ETH, SOL, XRP, or DOGE</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="code-label">Response</div>
+                                <pre>{
+  <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
+  <span class="c-key">"data"</span>: [
+    {
+      <span class="c-key">"date"</span>: <span class="c-str">"2026-04-27T12:00:00"</span>,
+      <span class="c-key">"title"</span>: <span class="c-str">"Bitcoin hits new yearly high amid ETF inflows"</span>,
+      <span class="c-key">"source"</span>: <span class="c-str">"CoinDesk"</span>,
+      <span class="c-key">"sentiment_score"</span>: <span class="c-num">0.6821</span>,
+      <span class="c-key">"sentiment_label"</span>: <span class="c-str">"positive"</span>
+    }
+  ]
+}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="prices">
+                        <h2>Prices</h2>
+                        <div class="endpoint">
+                            <div class="endpoint-header">
+                                <span class="method">GET</span>
+                                <span class="endpoint-path">/v1/prices/<span
+                                        style="color:var(--accent);">{ticker}</span></span>
+                            </div>
+                            <div class="endpoint-body">
+                                <p class="endpoint-desc">Returns the last 90
+                                    days of daily closing prices in GBP for the
+                                    specified ticker.</p>
+                                <table class="param-table">
+                                    <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>ticker</td><td>string</td><td>BTC,
+                                                ETH, SOL, XRP, or DOGE</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="code-label">Response</div>
+                                <pre>{
+  <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
+  <span class="c-key">"data"</span>: [
+    {
+      <span class="c-key">"date"</span>: <span class="c-str">"2026-04-27T00:00:00"</span>,
+      <span class="c-key">"close_price_gbp"</span>: <span class="c-num">72841.50</span>,
+      <span class="c-key">"volume"</span>: <span class="c-num">18294830293.0</span>
+    }
+  ]
+}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="correlation">
+                        <h2>Correlation</h2>
+                        <div class="endpoint">
+                            <div class="endpoint-header">
+                                <span class="method">GET</span>
+                                <span
+                                    class="endpoint-path">/v1/correlation/<span
+                                        style="color:var(--accent);">{ticker}</span></span>
+                            </div>
+                            <div class="endpoint-body">
+                                <p class="endpoint-desc">Returns Pearson
+                                    correlation between sentiment and price
+                                    returns across lag periods of 0–7 days.
+                                    Useful for identifying predictive signal
+                                    timing.</p>
+                                <table class="param-table">
+                                    <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>ticker</td><td>string</td><td>BTC,
+                                                ETH, SOL, XRP, or DOGE</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="code-label">Response</div>
+                                <pre>{
+  <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
+  <span class="c-key">"best_lag_days"</span>: <span class="c-num">2</span>,
+  <span class="c-key">"correlation"</span>: <span class="c-num">0.412</span>,
+  <span class="c-key">"all_lags"</span>: {
+    <span class="c-key">"0"</span>: <span class="c-num">0.121</span>,
+    <span class="c-key">"1"</span>: <span class="c-num">0.287</span>,
+    <span class="c-key">"2"</span>: <span class="c-num">0.412</span>,
+    <span class="c-key">"3"</span>: <span class="c-num">0.198</span>
+  }
+}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>Error Codes</h2>
+                    <table class="param-table">
+                        <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+                        <tbody>
+                            <tr><td>401</td><td>Missing or invalid API
+                                    key</td></tr>
+                            <tr><td>404</td><td>No data found for
+                                    ticker</td></tr>
+                            <tr><td>429</td><td>Rate limit exceeded</td></tr>
+                            <tr><td>500</td><td>Server error</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- PRICING SECTION -->
+                <div class="section" id="section-pricing">
+                    <h1>Pricing</h1>
+                    <p class="page-subtitle">SIMPLE, TRANSPARENT API PRICING</p>
+
+                    <div class="pricing-grid">
+                        <div class="pricing-card">
+                            <div class="pricing-tier">Free</div>
+                            <div class="pricing-price">£0 <span>/
+                                    month</span></div>
+                            <p class="pricing-desc">Get started with no card
+                                required. Perfect for prototyping and
+                                exploration.</p>
+                            <ul class="pricing-features">
+                                <li>100 free API calls</li>
+                                <li>All 5 tickers</li>
+                                <li>Sentiment, prices & correlation</li>
+                                <li>No expiry on free calls</li>
+                            </ul>
+                        </div>
+                        <div class="pricing-card featured">
+                            <div class="pricing-tier"
+                                style="color:var(--accent);">Pay As You Go</div>
+                            <div class="pricing-price"
+                                style="color:var(--accent);">£0.01 <span>/
+                                    call</span></div>
+                            <p class="pricing-desc">After your 100 free calls,
+                                usage is billed per call at the end of each
+                                month via Stripe.</p>
+                            <ul class="pricing-features">
+                                <li>£0.01 per API call</li>
+                                <li>Billed monthly via Stripe</li>
+                                <li>No monthly minimum</li>
+                                <li>Cancel anytime</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="notice">
+                        1,000 calls/month = £10 · 10,000 calls/month = £100 · No
+                        setup fees or hidden charges.
+                    </div>
+
+                    <h2>What counts as a call?</h2>
+                    <p>Each request to a <code
+                            style="color:var(--accent2);">/v1/</code> endpoint
+                        counts as one call regardless of how much data is
+                        returned. Requests that return a 4xx or 5xx error do not
+                        count toward your usage.</p>
+
+                    <h2>Supported Tickers</h2>
+                    <table class="param-table">
+                        <thead><tr><th>Ticker</th><th>Asset</th><th>Available
+                                    Endpoints</th></tr></thead>
+                        <tbody>
+                            <tr><td>BTC</td><td>Bitcoin</td><td>sentiment,
+                                    prices, correlation</td></tr>
+                            <tr><td>ETH</td><td>Ethereum</td><td>sentiment,
+                                    prices, correlation</td></tr>
+                            <tr><td>SOL</td><td>Solana</td><td>sentiment,
+                                    prices, correlation</td></tr>
+                            <tr><td>XRP</td><td>XRP</td><td>sentiment, prices,
+                                    correlation</td></tr>
+                            <tr><td>DOGE</td><td>Dogecoin</td><td>sentiment,
+                                    prices, correlation</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </main>
+        </div>
+
+        <script>
+const API = 'https://crypto-sentiment-production.up.railway.app'
+let currentKey = null
+
+function nav(section) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
+  document.getElementById('section-' + section).classList.add('active')
+  document.querySelectorAll('.topbar-links a').forEach(a => a.classList.remove('active'))
+  const navEl = document.getElementById('nav-' + section)
+  if (navEl) navEl.classList.add('active')
+  document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('active'))
+  const sideEl = document.getElementById('side-' + section)
+  if (sideEl) sideEl.classList.add('active')
+  return false
+}
+
+function scrollTo(id) {
+  setTimeout(() => {
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, 50)
+}
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id)
+  el.textContent = text
+  el.className = 'msg ' + type + ' show'
+}
+
+function showKey(key, callsUsed) {
+  document.getElementById('no-key-state').style.display = 'none'
+  document.getElementById('lookup-state').style.display = 'none'
+  document.getElementById('key-state').style.display = 'block'
+  currentKey = key
+  document.getElementById('key-value').textContent = key
+  document.getElementById('key-value').classList.remove('key-masked')
+  document.getElementById('calls-used').textContent = callsUsed ?? 0
+  const free = Math.max(0, 100 - (callsUsed ?? 0))
+  document.getElementById('calls-free').textContent = free
+  document.getElementById('calls-free').style.color = free > 0 ? 'var(--positive)' : 'var(--negative)'
+}
+
+async function generateKey() {
+  const email = document.getElementById('email-input').value.trim()
+  if (!email) return showMsg('gen-msg', 'Please enter your email.', 'error')
+  const btn = event.target
+  btn.disabled = true
+  btn.textContent = '...'
+  try {
+    const res = await fetch(`${API}/api/keys/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    })
+    const data = await res.json()
+    if (data.key) {
+      showKey(data.key, 0)
+    } else {
+      showMsg('gen-msg', data.detail || 'Something went wrong.', 'error')
+    }
+  } catch (e) {
+    showMsg('gen-msg', 'Failed to connect to API.', 'error')
+  }
+  btn.disabled = false
+  btn.textContent = 'Get API Key'
+}
+
+async function lookupKey() {
+  const email = document.getElementById('lookup-email').value.trim()
+  if (!email) return showMsg('lookup-msg', 'Please enter your email.', 'error')
+  const btn = event.target
+  btn.disabled = true
+  btn.textContent = '...'
+  try {
+    const res = await fetch(`${API}/api/keys/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    })
+    const data = await res.json()
+    if (data.key) {
+      showKey(data.key, null)
+    } else {
+      showMsg('lookup-msg', 'No key found for this email.', 'error')
+    }
+  } catch (e) {
+    showMsg('lookup-msg', 'Failed to connect to API.', 'error')
+  }
+  btn.disabled = false
+  btn.textContent = 'Look Up'
+}
+
+function showLookup() {
+  document.getElementById('lookup-state').style.display = 'block'
+  return false
+}
+
+function copyKey() {
+  if (!currentKey) return
+  navigator.clipboard.writeText(currentKey).then(() => {
+    const btn = document.querySelector('.copy-btn')
+    btn.textContent = 'Copied!'
+    setTimeout(() => btn.textContent = 'Copy', 1500)
+  })
+}
+</script>
+    </body>
+</html>
