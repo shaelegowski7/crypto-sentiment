@@ -45,3 +45,16 @@ class Alert(Base):
     active = Column(Boolean, default=True)      # deactivates after firing
     created_at = Column(DateTime, default=datetime.utcnow)
     fired_at = Column(DateTime, nullable=True)  # when it last fired
+
+class APIKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)
+    email = Column(String, index=True)
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    calls_used = Column(Integer, default=0)
+    free_calls = Column(Integer, default=100)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
