@@ -857,6 +857,19 @@ export default function App() {
             <span className="tagline">CRYPTO SENTIMENT INTELLIGENCE</span>
           </div>
           <div className="topbar-right">
+            <a
+              href="https://developers.sentimentfx.org"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                color: "var(--muted)", textDecoration: "none", transition: "color 0.15s"
+              }}
+              onMouseOver={e => e.currentTarget.style.color = "var(--text)"}
+              onMouseOut={e => e.currentTarget.style.color = "var(--muted)"}
+            >
+              DEVELOPERS
+            </a>
             {user ? (
               <>
                 <span className={tierBadgeClass}>{profile?.tier ?? "free"}</span>
@@ -1167,27 +1180,16 @@ export default function App() {
                 </span>
               </div>
               <div className="panel-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
                 <div>
                   <div className="alert-section-label">New alert</div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                    <select
-                      className="alert-select"
-                      value={alertTicker}
-                      onChange={e => setAlertTicker(e.target.value)}
-                    >
+                    <select className="alert-select" value={alertTicker} onChange={e => setAlertTicker(e.target.value)}>
                       {TICKERS.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-
-                    <select
-                      className="alert-select"
-                      value={alertDirection}
-                      onChange={e => setAlertDirection(e.target.value)}
-                    >
+                    <select className="alert-select" value={alertDirection} onChange={e => setAlertDirection(e.target.value)}>
                       <option value="above">Above</option>
                       <option value="below">Below</option>
                     </select>
-
                     <input
                       className="alert-input"
                       type="number"
@@ -1197,7 +1199,6 @@ export default function App() {
                       value={alertThreshold}
                       onChange={e => setAlertThreshold(parseFloat(e.target.value))}
                     />
-
                     <button
                       onClick={createAlert}
                       disabled={alertLoading}
@@ -1212,7 +1213,6 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-
                 <div>
                   <div className="alert-section-label">Active alerts</div>
                   {alerts.length === 0 ? (
