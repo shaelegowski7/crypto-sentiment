@@ -853,8 +853,7 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1):
 def api_sentiment(ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
     calls = math.ceil(limit / 25)
-    for _ in range(calls):
-        track_usage(api_key, db)
+    track_usage(api_key, db, calls)
 
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
@@ -881,8 +880,7 @@ def api_sentiment(ticker: str, limit: int = 25, db: Session = Depends(get_db), a
 
 @app.get("/v1/summary/{ticker}")
 def api_summary(ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    for _ in range(days):
-        track_usage(api_key, db)
+    track_usage(api_key, db, days)
 
     since = datetime.utcnow() - timedelta(days=days)
     headlines = db.query(models.Headline).filter(
@@ -922,8 +920,7 @@ def api_summary(ticker: str, days: int = 30, db: Session = Depends(get_db), api_
 
 @app.get("/v1/prices/{ticker}")
 def api_prices(ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    for _ in range(days):
-        track_usage(api_key, db)
+    track_usage(api_key, db, days)
 
     since = datetime.utcnow() - timedelta(days=days)
     prices = db.query(models.Price).filter(
