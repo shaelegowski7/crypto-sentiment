@@ -957,3 +957,38 @@ def api_correlation(ticker: str, db: Session = Depends(get_db), api_key=Depends(
         "correlation": round(best_corr, 3),
         "all_lags": all_lags,
     }
+
+@app.get("/v1/summary/{ticker}")
+def api_summary(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    track_usage(api_key, db)
+    
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper()
+    ).order_by(models.Headline.published_at.desc()).all()
+
+    if not headlines:
+        raise HTTPException(status_code=404, detail="No data found")
+
+    by_date = {}
+    for h in headlines:
+        date = str(h.published_at.date())
+        if date not in by_date:
+            by_date[date] = []
+        by_date[date].append(h.sentiment_score)
+
+    summary = [
+        {
+            "date": date,
+            "avg_sentiment": round(sum(scores) / len(scores), 4),
+            "article_count": len(scores),
+            "label": "positive" if sum(scores)/len(scores) > 0.1 else "negative" if sum(scores)/len(scores) < -0.1 else "neutral"
+        }
+        for date, scores in by_date.items()
+    ]
+
+    summary.sort(key=lambda x: x["date"], reverse=True)
+
+    return {
+        "ticker": ticker.upper(),
+        "data": summary
+    }
