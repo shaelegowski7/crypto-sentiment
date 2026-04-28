@@ -12,7 +12,6 @@
       content="AI-powered crypto sentiment dashboard. Track news sentiment vs price for BTC, ETH, SOL, XRP and more." />
     <meta property="og:url" content="https://sentimentfx.org" />
     <meta property="og:type" content="website" />
-    <!-- PASTE CRYPTO.COM VERIFICATION CODE HERE -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap"
@@ -59,7 +58,6 @@
         z-index: 0;
       }
 
-      /* NAV */
       nav {
         position: fixed;
         top: 0; left: 0; right: 0;
@@ -115,7 +113,6 @@
 
       .nav-cta:hover { background: rgba(240,180,41,0.08) !important; }
 
-      /* HERO */
       .hero {
         position: relative;
         z-index: 1;
@@ -176,6 +173,7 @@
         margin-bottom: 56px;
         flex-wrap: wrap;
         justify-content: center;
+        min-height: 28px;
       }
 
       .ticker-chip {
@@ -191,7 +189,6 @@
       .ticker-chip.bull { border-color: rgba(63,185,80,0.4); color: var(--positive); background: rgba(63,185,80,0.06); }
       .ticker-chip.bear { border-color: rgba(248,81,73,0.4); color: var(--negative); background: rgba(248,81,73,0.06); }
 
-      /* HERO BUTTONS */
       .hero-actions {
         display: flex;
         gap: 12px;
@@ -239,7 +236,6 @@
 
       .btn-secondary:hover { border-color: var(--text); color: var(--text); }
 
-      /* LIVE TICKER TAPE */
       .live-ticker-wrapper {
         position: relative;
         z-index: 1;
@@ -362,7 +358,6 @@
       .lti-sent.bear { color: var(--negative); }
       .lti-sent.neut { color: var(--muted); }
 
-      /* STATS BAR */
       .stats-bar {
         position: relative;
         z-index: 1;
@@ -402,7 +397,6 @@
         text-transform: uppercase;
       }
 
-      /* FEATURES */
       .features {
         position: relative;
         z-index: 1;
@@ -468,7 +462,6 @@
         line-height: 1.65;
       }
 
-      /* HOW IT WORKS */
       .how {
         position: relative;
         z-index: 1;
@@ -478,10 +471,7 @@
         border-bottom: 1px solid var(--border);
       }
 
-      .how-inner {
-        max-width: 1100px;
-        margin: 0 auto;
-      }
+      .how-inner { max-width: 1100px; margin: 0 auto; }
 
       .steps {
         display: grid;
@@ -503,7 +493,6 @@
       .step-title { font-size: 15px; font-weight: 500; color: var(--text); }
       .step-desc  { font-size: 13px; color: var(--muted); line-height: 1.65; }
 
-      /* PRICING */
       .pricing {
         position: relative;
         z-index: 1;
@@ -631,35 +620,6 @@
 
       .price-btn-filled:hover { opacity: 0.85; }
 
-      .price-waitlist { display: flex; flex-direction: column; gap: 8px; }
-
-      .price-waitlist-input {
-        width: 100%;
-        background: var(--surface2);
-        border: 1px solid var(--border2);
-        border-radius: 2px;
-        padding: 10px 14px;
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--text);
-        outline: none;
-        transition: border-color 0.15s;
-        box-sizing: border-box;
-      }
-
-      .price-waitlist-input::placeholder { color: var(--muted); }
-      .price-waitlist-input:focus { border-color: var(--accent); }
-
-      .price-waitlist-note {
-        font-family: var(--mono);
-        font-size: 10px;
-        color: var(--positive);
-        letter-spacing: 0.05em;
-        display: none;
-        text-align: center;
-      }
-
-      /* BOTTOM CTA */
       .bottom-cta {
         position: relative;
         z-index: 1;
@@ -669,7 +629,6 @@
         background: var(--surface);
       }
 
-      /* FOOTER */
       footer {
         position: relative;
         z-index: 1;
@@ -705,7 +664,6 @@
 
       .footer-link:hover { text-decoration: underline; }
 
-      /* ANIMATIONS */
       @keyframes fadeUp {
         from { opacity: 0; transform: translateY(20px); }
         to   { opacity: 1; transform: translateY(0); }
@@ -717,7 +675,6 @@
       .ticker-strip { animation: fadeUp 0.6s ease 0.3s both; }
       .hero-actions { animation: fadeUp 0.6s ease 0.4s both; }
 
-      /* MOBILE */
       @media (max-width: 768px) {
         nav { padding: 14px 20px; }
         .nav-links { display: none; }
@@ -747,7 +704,6 @@
       </ul>
     </nav>
 
-    <!-- HERO -->
     <section class="hero">
       <div class="hero-tag">AI-Powered Crypto Intelligence</div>
       <h1 class="hero-title">
@@ -763,15 +719,7 @@
         style="font-family:var(--mono);font-size:9px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;">Daily
         avg sentiment</div>
       <div class="ticker-strip" id="heroTickerStrip">
-        <span class="ticker-chip bull">BTC +0.76</span>
-        <span class="ticker-chip bear">ETH −0.54</span>
-        <span class="ticker-chip bull">SOL +0.61</span>
-        <span class="ticker-chip bear">XRP −0.39</span>
-        <span class="ticker-chip bear">DOGE −0.18</span>
-        <span class="ticker-chip bull">LTC +0.43</span>
-        <span class="ticker-chip bull">TRX +0.31</span>
-        <span class="ticker-chip">XLM 0.00</span>
-        <span class="ticker-chip bear">PEPE −0.22</span>
+        <span class="ticker-chip" style="color:var(--muted);">Loading...</span>
       </div>
 
       <div class="hero-actions">
@@ -782,20 +730,16 @@
       </div>
     </section>
 
-    <!-- LIVE TICKER TAPE -->
     <div class="live-ticker-wrapper">
       <div class="live-ticker-label">
         <span class="live-dot"></span>Live
       </div>
-      <div class="live-ticker-track" id="liveTickerTrack">
-        <!-- populated by JS -->
-      </div>
+      <div class="live-ticker-track" id="liveTickerTrack"></div>
     </div>
 
-    <!-- STATS BAR -->
     <div class="stats-bar">
       <div class="stat-item">
-        <div class="stat-num">9</div>
+        <div class="stat-num">5</div>
         <div class="stat-desc">Tickers tracked</div>
       </div>
       <div class="stat-item">
@@ -803,7 +747,7 @@
         <div class="stat-desc">Update frequency</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num" id="stat-headlines">4,278</div>
+        <div class="stat-num" id="stat-headlines">—</div>
         <div class="stat-desc">Headlines scored</div>
       </div>
       <div class="stat-item">
@@ -812,7 +756,6 @@
       </div>
     </div>
 
-    <!-- FEATURES -->
     <section class="features" id="features">
       <div class="section-label">What you get</div>
       <h2 class="section-title">Built for traders and developers</h2>
@@ -834,7 +777,7 @@
         <div class="feature-card">
           <div class="feature-icon">03 — Real-time Data</div>
           <div class="feature-title">Hourly scraping pipeline</div>
-          <div class="feature-desc">News scraped every hour across 9
+          <div class="feature-desc">News scraped every hour across 5
             major crypto assets. Prices pulled from live market
             feeds.</div>
         </div>
@@ -862,7 +805,6 @@
       </div>
     </section>
 
-    <!-- HOW IT WORKS -->
     <section class="how" id="how">
       <div class="how-inner">
         <div class="section-label">Under the hood</div>
@@ -873,7 +815,7 @@
             <div class="step-title">News scraping</div>
             <div class="step-desc">Every hour, our pipeline scrapes
               the latest crypto headlines across BTC, ETH, SOL,
-              XRP and 5 more assets.</div>
+              XRP and DOGE.</div>
           </div>
           <div class="step">
             <div class="step-num">STEP 02</div>
@@ -900,22 +842,20 @@
       </div>
     </section>
 
-    <!-- PRICING -->
     <section class="pricing" id="pricing">
       <div class="section-label">Pricing</div>
       <h2 class="section-title">Simple, transparent plans</h2>
       <div class="pricing-grid">
 
-        <!-- FREE -->
         <div class="price-card">
           <div class="price-tier">Free</div>
           <div class="price-amount">£0</div>
           <div class="price-period">forever</div>
           <ul class="price-features">
             <li class="included">BTC sentiment dashboard</li>
-            <li class="included">7-day price history</li>
+            <li class="included">30-day history</li>
             <li class="included">Basic correlation signal</li>
-            <li>All 9 tickers</li>
+            <li>All 5 tickers</li>
             <li>API access</li>
             <li>Email alerts</li>
           </ul>
@@ -923,31 +863,23 @@
             class="price-btn price-btn-outline">Create Account</a>
         </div>
 
-        <!-- PRO MONTHLY -->
         <div class="price-card featured">
           <div class="price-badge">Most Popular</div>
           <div class="price-tier">Pro</div>
           <div class="price-amount">£11.99</div>
           <div class="price-period">per month</div>
           <ul class="price-features">
-            <li class="included">All 9 tickers</li>
+            <li class="included">All 5 tickers</li>
             <li class="included">Full price history</li>
             <li class="included">Advanced correlation engine</li>
             <li class="included">REST API access</li>
             <li class="included">Email alerts on spikes</li>
             <li class="included">Raw data export</li>
           </ul>
-          <div class="price-waitlist" id="waitlist-monthly">
-            <input type="email" class="price-waitlist-input" id="email-monthly"
-              placeholder="your@email.com" />
-            <button class="price-btn price-btn-filled"
-              onclick="joinWaitlist('monthly')">Join Waitlist</button>
-            <div class="price-waitlist-note" id="note-monthly">You're on the
-              list!</div>
-          </div>
+          <a href="https://app.sentimentfx.org?auth=signup"
+            class="price-btn price-btn-filled">Get Started</a>
         </div>
 
-        <!-- PRO ANNUAL -->
         <div class="price-card">
           <div class="price-badge green">Best Value</div>
           <div class="price-tier">Pro Annual</div>
@@ -956,27 +888,20 @@
           <div class="price-saving">Save £43.89 vs monthly</div>
           <ul class="price-features">
             <li class="included">Everything in Pro</li>
-            <li class="included">Raw data export</li>
-            <li class="included">All 9 tickers</li>
+            <li class="included">All 5 tickers</li>
             <li class="included">Full price history</li>
             <li class="included">Advanced correlation engine</li>
             <li class="included">REST API access</li>
             <li class="included">Email alerts on spikes</li>
+            <li class="included">Raw data export</li>
           </ul>
-          <div class="price-waitlist" id="waitlist-annual">
-            <input type="email" class="price-waitlist-input" id="email-annual"
-              placeholder="your@email.com" />
-            <button class="price-btn price-btn-outline"
-              onclick="joinWaitlist('annual')">Join Waitlist</button>
-            <div class="price-waitlist-note" id="note-annual">You're on the
-              list!</div>
-          </div>
+          <a href="https://app.sentimentfx.org?auth=signup"
+            class="price-btn price-btn-outline">Get Started</a>
         </div>
 
       </div>
     </section>
 
-    <!-- BOTTOM CTA -->
     <section class="bottom-cta">
       <div class="hero-tag" style="justify-content:center;">Now Live</div>
       <h2
@@ -1006,9 +931,17 @@
     </footer>
 
     <script>
-      const API = "https://crypto-sentiment-production.up.railway.app";
+      const API = "https://api.sentimentfx.org";
+      const TICKERS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'];
 
-      // ── Stats bar ──────────────────────────────────────────────────────────
+      const FALLBACK = {
+        BTC:  { price: 68420,  change:  1.24, sentiment:  0.62 },
+        ETH:  { price: 3512,   change: -0.87, sentiment: -0.41 },
+        SOL:  { price: 148.3,  change:  2.11, sentiment:  0.58 },
+        XRP:  { price: 0.5841, change: -0.33, sentiment: -0.22 },
+        DOGE: { price: 0.1234, change: -0.56, sentiment: -0.14 },
+      };
+
       async function loadStats() {
         try {
           const res = await fetch(`${API}/stats`);
@@ -1017,58 +950,41 @@
           if (el && data.total_headlines) {
             el.textContent = data.total_headlines.toLocaleString();
           }
-        } catch (e) {
-          // silently fail — static fallback stays in place
-        }
+        } catch (e) {}
       }
-
-      // ── Waitlist ───────────────────────────────────────────────────────────
-      async function joinWaitlist(plan) {
-        const email = document.getElementById(`email-${plan}`).value;
-        if (!email || !email.includes('@')) {
-          document.getElementById(`email-${plan}`).focus();
-          return;
-        }
-        try {
-          const res = await fetch(`${API}/waitlist`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-          });
-          await res.json();
-          document.getElementById(`email-${plan}`).value = '';
-          document.getElementById(`email-${plan}`).style.display = 'none';
-          const btn = document.querySelector(`#waitlist-${plan} button`);
-          btn.style.display = 'none';
-          document.getElementById(`note-${plan}`).style.display = 'block';
-          setTimeout(() => {
-            window.location.href = 'https://app.sentimentfx.org?auth=signup';
-          }, 1200);
-        } catch (e) {
-          console.error('Waitlist error:', e);
-        }
-      }
-
-      // ── Live ticker tape ───────────────────────────────────────────────────
-      const TICKERS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LTC', 'TRX', 'XLM', 'PEPE'];
-
-      const FALLBACK = {
-        BTC:  { price: 68420,    change:  1.24,  sentiment:  0.62 },
-        ETH:  { price: 3512,     change: -0.87,  sentiment: -0.41 },
-        SOL:  { price: 148.3,    change:  2.11,  sentiment:  0.58 },
-        XRP:  { price: 0.5841,   change: -0.33,  sentiment: -0.22 },
-        DOGE: { price: 0.1234,   change: -0.56,  sentiment: -0.14 },
-        LTC:  { price: 62.4,     change:  0.91,  sentiment:  0.43 },
-        TRX:  { price: 0.0921,   change:  0.44,  sentiment:  0.31 },
-        XLM:  { price: 0.0841,   change: -0.12,  sentiment:  0.00 },
-        PEPE: { price: 0.000012, change: -1.23,  sentiment: -0.22 },
-      };
 
       function fmtPrice(p) {
         if (p >= 1000) return '£' + p.toLocaleString('en-GB', { maximumFractionDigits: 0 });
         if (p >= 1)    return '£' + p.toFixed(2);
         if (p >= 0.01) return '£' + p.toFixed(4);
         return '£' + p.toFixed(8);
+      }
+
+      async function fetchTickerData(sym) {
+        try {
+          const res = await fetch(`${API}/dashboard/${sym}`, { signal: AbortSignal.timeout(5000) });
+          const data = await res.json();
+
+          // get latest price
+          const prices = data.prices || [];
+          const sorted = prices.sort((a, b) => new Date(a.date) - new Date(b.date));
+          const latest = sorted[sorted.length - 1];
+          const prev = sorted[sorted.length - 2];
+          const price = latest?.close_price ?? null;
+          const prevPrice = prev?.close_price ?? null;
+          const change = price && prevPrice ? ((price - prevPrice) / prevPrice) * 100 : 0;
+
+          // get avg sentiment for latest date
+          const sentiment_data = data.sentiment || [];
+          const latestDate = latest?.date?.split('T')[0];
+          const todaySentiment = sentiment_data.filter(s => s.date?.startsWith(latestDate));
+          const avgSentiment = todaySentiment.length
+            ? todaySentiment.reduce((a, b) => a + b.score, 0) / todaySentiment.length
+            : (sentiment_data.length ? sentiment_data[sentiment_data.length - 1].score : 0);
+
+          if (price) return { sym, price, change, sentiment: avgSentiment };
+        } catch (_) {}
+        return { sym, ...FALLBACK[sym] };
       }
 
       function buildTickerHTML(results) {
@@ -1089,56 +1005,15 @@
       }
 
       async function loadLiveTicker() {
-        const results = await Promise.all(TICKERS.map(async sym => {
-          try {
-            const res = await fetch(
-              `${API}/dashboard/${sym}`,
-              { signal: AbortSignal.timeout(5000) }
-            );
-            const data = await res.json();
-            if (Array.isArray(data) && data.length >= 2) {
-              const latest = data[data.length - 1];
-              const prev   = data[data.length - 2];
-              const price  = latest.price_close ?? latest.price ?? null;
-              const prevP  = prev.price_close   ?? prev.price   ?? null;
-              if (price !== null) {
-                return {
-                  sym,
-                  price,
-                  change:    prevP ? ((price - prevP) / prevP) * 100 : 0,
-                  sentiment: latest.avg_sentiment ?? latest.sentiment ?? 0,
-                };
-              }
-            }
-          } catch (_) {}
-          return { sym, ...FALLBACK[sym] };
-        }));
-
+        const results = await Promise.all(TICKERS.map(fetchTickerData));
         const el = document.getElementById('liveTickerTrack');
         if (el) el.innerHTML = buildTickerHTML(results);
       }
 
-      // ── Hero sentiment chips ───────────────────────────────────────────────
       async function loadHeroChips() {
         const strip = document.getElementById('heroTickerStrip');
         if (!strip) return;
-
-        const results = await Promise.all(TICKERS.map(async sym => {
-          try {
-            const res = await fetch(
-              `${API}/dashboard/${sym}`,
-              { signal: AbortSignal.timeout(5000) }
-            );
-            const data = await res.json();
-            if (Array.isArray(data) && data.length >= 1) {
-              const latest = data[data.length - 1];
-              const sent = latest.avg_sentiment ?? latest.sentiment ?? null;
-              if (sent !== null) return { sym, sentiment: sent };
-            }
-          } catch (_) {}
-          return { sym, sentiment: FALLBACK[sym].sentiment };
-        }));
-
+        const results = await Promise.all(TICKERS.map(fetchTickerData));
         strip.innerHTML = results.map(({ sym, sentiment }) => {
           const cls  = sentiment > 0.05 ? 'bull' : sentiment < -0.05 ? 'bear' : '';
           const sign = sentiment >= 0 ? '+' : '';
@@ -1146,7 +1021,6 @@
         }).join('');
       }
 
-      // ── Boot ───────────────────────────────────────────────────────────────
       loadStats();
       loadHeroChips();
       loadLiveTicker();
