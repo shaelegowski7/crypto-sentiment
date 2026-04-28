@@ -50,7 +50,9 @@ class APIKey(Base):
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=True)  # kept for safety, can drop later
+    key_hash = Column(String, unique=True, index=True, nullable=True)
+    key_prefix = Column(String, nullable=True)  # e.g. "sfx_7b83463a"
     email = Column(String, index=True)
     stripe_customer_id = Column(String, nullable=True)
     stripe_subscription_id = Column(String, nullable=True)
