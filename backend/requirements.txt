@@ -15,3 +15,4 @@ resend
 stripe
 supabase
 feedparser
+slowapi

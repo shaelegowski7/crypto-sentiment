@@ -13,6 +13,11 @@ from . import models
 from .database import SessionLocal
 from scipy.stats import pearsonr
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from fastapi.responses import JSONResponse
 import numpy as np
 import resend
 import os
@@ -27,7 +32,24 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 models.Base.metadata.create_all(bind=engine)
 
+def get_api_key_value(request: Request) -> str:
+    """Rate limit by API key header, fall back to IP."""
+    return request.headers.get("x-api-key") or get_remote_address(request)
+
+limiter = Limiter(key_func=get_api_key_value)
+
 app = FastAPI()
+
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"Rate limit exceeded. {exc.detail}"}
+    )
+
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -934,7 +956,8 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1):
 # ---------------------------------------------------------------------------
 
 @app.get("/v1/sentiment/{ticker}")
-def api_sentiment(ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+@limiter.limit("30/minute")
+def api_sentiment(request: Request, ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
     calls = math.ceil(limit / 25)
     track_usage(api_key, db, calls)
@@ -963,7 +986,8 @@ def api_sentiment(ticker: str, limit: int = 25, db: Session = Depends(get_db), a
 
 
 @app.get("/v1/summary/{ticker}")
-def api_summary(ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+@limiter.limit("20/minute")
+def api_summary(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, days)
 
     since = datetime.utcnow() - timedelta(days=days)
@@ -1003,7 +1027,8 @@ def api_summary(ticker: str, days: int = 30, db: Session = Depends(get_db), api_
 
 
 @app.get("/v1/prices/{ticker}")
-def api_prices(ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+@limiter.limit("20/minute")
+def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, days)
 
     since = datetime.utcnow() - timedelta(days=days)
@@ -1030,7 +1055,8 @@ def api_prices(ticker: str, days: int = 30, db: Session = Depends(get_db), api_k
 
 
 @app.get("/v1/correlation/{ticker}")
-def api_correlation(ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+@limiter.limit("10/minute")
+def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db)
 
     headlines = db.query(models.Headline).filter(
