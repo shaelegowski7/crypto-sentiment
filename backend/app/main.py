@@ -125,6 +125,7 @@ async def require_pro(authorization: str = Header(None)):
 
 async def require_admin(secret: str = None):
     admin_secret = os.getenv("ADMIN_SECRET")
+    print(f"DEBUG require_admin: secret='{secret}' admin_secret='{admin_secret}'")
     if not admin_secret or secret != admin_secret:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
