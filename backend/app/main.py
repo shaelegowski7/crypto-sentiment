@@ -28,6 +28,10 @@ import io
 import secrets
 import hashlib
 from apscheduler.triggers.cron import CronTrigger
+import time
+
+last_scrape_time = None
+last_scrape_duration = None
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -234,6 +238,8 @@ def check_alerts(db):
 
 
 def scrape_all():
+    global last_scrape_time, last_scrape_duration
+    start = time.time()
     print(f"[SCHEDULER] fired at {datetime.utcnow()}")
     db = SessionLocal()
     try:
@@ -275,6 +281,8 @@ def scrape_all():
 
         db.commit()
         check_alerts(db)
+        last_scrape_time = datetime.utcnow().isoformat()
+        last_scrape_duration = round(time.time() - start, 2)
         print("Scheduled scrape complete")
     except Exception as e:
         print(f"Scheduler error: {e}")
@@ -1119,4 +1127,28 @@ def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db)
         "best_lag_days": best_lag,
         "correlation": round(best_corr, 3),
         "all_lags": all_lags,
+    }
+
+@app.get("/status")
+def get_status(db: Session = Depends(get_db)):
+    ticker_stats = {}
+    for t in TICKERS:
+        headline_count = db.query(models.Headline).filter(models.Headline.ticker == t).count()
+        price_count = db.query(models.Price).filter(models.Price.ticker == t).count()
+        latest_headline = db.query(models.Headline).filter(
+            models.Headline.ticker == t
+        ).order_by(models.Headline.published_at.desc()).first()
+        ticker_stats[t] = {
+            "headlines": headline_count,
+            "prices": price_count,
+            "latest_headline": latest_headline.published_at.isoformat() if latest_headline else None,
+        }
+    return {
+        "status": "operational",
+        "last_scrape": last_scrape_time,
+        "last_scrape_duration_seconds": last_scrape_duration,
+        "tickers": ticker_stats,
+        "total_headlines": db.query(models.Headline).count(),
+        "total_prices": db.query(models.Price).count(),
+        "timestamp": datetime.utcnow().isoformat(),
     }
