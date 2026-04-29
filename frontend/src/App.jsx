@@ -460,27 +460,25 @@ const styles = `
   .tier-pro { background: rgba(240,180,41,0.12); color: var(--accent); border: 1px solid rgba(240,180,41,0.3); }
   .tier-data { background: rgba(88,166,255,0.12); color: var(--accent2); border: 1px solid rgba(88,166,255,0.3); }
 
-  .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 60px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 0.1em;
+  /* Skeleton */
+  @keyframes shimmer {
+    0% { background-position: -600px 0; }
+    100% { background-position: 600px 0; }
   }
 
-  .loading::after {
-    content: '';
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 1.5px solid var(--border2);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-left: 10px;
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+    background-size: 600px 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 2px;
+  }
+
+  .skeleton-headline {
+    padding: 12px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border);
   }
 
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -563,9 +561,7 @@ const styles = `
     gap: 16px;
   }
 
-  .explainer-card {
-    padding-left: 12px;
-  }
+  .explainer-card { padding-left: 12px; }
 
   .explainer-label {
     font-family: var(--mono);
@@ -620,6 +616,44 @@ const CustomTooltip = ({ active, payload, label, symbol }) => {
     </div>
   )
 }
+
+const ChartSkeleton = () => (
+  <div style={{ padding: "16px" }}>
+    <div className="skeleton" style={{ height: "320px", width: "100%" }} />
+  </div>
+)
+
+const CorrelationSkeleton = () => (
+  <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div className="skeleton" style={{ height: "48px", width: "80px", borderRadius: "2px" }} />
+    <div className="skeleton" style={{ height: "12px", width: "90%", borderRadius: "2px" }} />
+    <div className="skeleton" style={{ height: "12px", width: "70%", borderRadius: "2px" }} />
+    <div className="skeleton" style={{ height: "12px", width: "80%", borderRadius: "2px" }} />
+    <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+      {[...Array(6)].map((_, i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "8px", borderBottom: "1px solid var(--border)" }}>
+          <div className="skeleton" style={{ height: "10px", width: "40px", borderRadius: "2px" }} />
+          <div className="skeleton" style={{ height: "10px", width: "32px", borderRadius: "2px" }} />
+        </div>
+      ))}
+    </div>
+  </div>
+)
+
+const HeadlinesSkeleton = () => (
+  <div>
+    {[...Array(HEADLINES_PER_PAGE)].map((_, i) => (
+      <div key={i} className="skeleton-headline">
+        <div className="skeleton" style={{ height: "18px", width: "52px", flexShrink: 0, borderRadius: "2px" }} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+          <div className="skeleton" style={{ height: "12px", width: "100%", borderRadius: "2px" }} />
+          <div className="skeleton" style={{ height: "12px", width: "65%", borderRadius: "2px" }} />
+        </div>
+        <div className="skeleton" style={{ height: "10px", width: "32px", flexShrink: 0, borderRadius: "2px" }} />
+      </div>
+    ))}
+  </div>
+)
 
 export default function App() {
   const [ticker, setTicker] = useState("BTC")
@@ -1009,24 +1043,32 @@ export default function App() {
             </div>
             <div className="stat-card">
               <div className="stat-label">Avg Sentiment</div>
-              <div className={`stat-value ${avgSentiment > 0.1 ? "positive-text" : avgSentiment < -0.1 ? "negative-text" : "neutral-text"}`}>
-                {avgSentiment ?? "—"}
+              <div className={`stat-value ${!loading && avgSentiment > 0.1 ? "positive-text" : !loading && avgSentiment < -0.1 ? "negative-text" : "neutral-text"}`}>
+                {loading
+                  ? <span className="skeleton" style={{ display: "inline-block", width: "80px", height: "22px", borderRadius: "2px" }} />
+                  : (avgSentiment ?? "—")}
               </div>
-              <div className="stat-sub">{sentimentSignal ?? "Loading..."}</div>
+              <div className="stat-sub">{loading ? "—" : (sentimentSignal ?? "Loading...")}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Latest Price</div>
-              <div className="stat-value accent2-text">{priceDisplay}</div>
+              <div className="stat-value accent2-text">
+                {loading
+                  ? <span className="skeleton" style={{ display: "inline-block", width: "100px", height: "22px", borderRadius: "2px" }} />
+                  : priceDisplay}
+              </div>
               <div className="stat-sub">
                 {currency === "GBP" ? "British pound" : `USD · rate: ${gbpToUsd?.toFixed(4) ?? "..."}`}
               </div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Correlation</div>
-              <div className={`stat-value ${correlation?.correlation < 0 ? "negative-text" : "positive-text"}`}>
-                {correlation?.correlation ?? "—"}
+              <div className={`stat-value ${!loading && correlation?.correlation < 0 ? "negative-text" : "positive-text"}`}>
+                {loading
+                  ? <span className="skeleton" style={{ display: "inline-block", width: "60px", height: "22px", borderRadius: "2px" }} />
+                  : (correlation?.correlation ?? "—")}
               </div>
-              <div className="stat-sub">{correlation ? `${correlation.best_lag_days}d lag` : "Loading..."}</div>
+              <div className="stat-sub">{loading ? "—" : (correlation ? `${correlation.best_lag_days}d lag` : "Loading...")}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Total Headlines</div>
@@ -1082,10 +1124,8 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <div className="panel-body">
-              {loading ? (
-                <div className="loading">FETCHING DATA</div>
-              ) : (
+            {loading ? <ChartSkeleton /> : (
+              <div className="panel-body">
                 <ResponsiveContainer width="100%" height={320}>
                   <ComposedChart data={displayData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke="#21262d" vertical={false} />
@@ -1120,8 +1160,8 @@ export default function App() {
                     <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke="#58a6ff" dot={false} strokeWidth={1.5} connectNulls={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="grid-2">
@@ -1129,79 +1169,87 @@ export default function App() {
               <div className="panel-header">
                 <span className="panel-title">PREDICTIVE SIGNAL</span>
               </div>
-              <div className="panel-body">
-                {correlation?.correlation !== undefined ? (
-                  <>
-                    <div className={`correlation-value ${correlation.correlation < 0 ? "negative-text" : "positive-text"}`}>
-                      {(Math.abs(correlation.correlation) * 100).toFixed(0)}%
+              {loading ? <CorrelationSkeleton /> : (
+                <div className="panel-body">
+                  {correlation?.correlation !== undefined ? (
+                    <>
+                      <div className={`correlation-value ${correlation.correlation < 0 ? "negative-text" : "positive-text"}`}>
+                        {(Math.abs(correlation.correlation) * 100).toFixed(0)}%
+                      </div>
+                      <div className="correlation-detail">
+                        <strong>{correlation.interpretation}</strong>
+                        <br /><br />
+                        Signal type: <strong>{correlation.signal_type}</strong>
+                        <br />
+                        Best lag: <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
+                        <br /><br />
+                        {correlation.all_lags && (
+                          <div style={{ marginTop: "8px" }}>
+                            {Object.entries(correlation.all_lags).map(([lag, corr]) => (
+                              <div key={lag} style={{
+                                display: "flex", justifyContent: "space-between",
+                                padding: "3px 0", borderBottom: "1px solid var(--border)",
+                                fontFamily: "var(--mono)", fontSize: "10px"
+                              }}>
+                                <span style={{ color: "var(--muted)" }}>{lag}d lag</span>
+                                <span style={{ color: Math.abs(corr) > 0.3 ? corr < 0 ? "var(--negative)" : "var(--positive)" : "var(--muted)" }}>
+                                  {corr > 0 ? "+" : ""}{corr}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ padding: "16px", fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
+                      Not enough data yet.
                     </div>
-                    <div className="correlation-detail">
-                      <strong>{correlation.interpretation}</strong>
-                      <br /><br />
-                      Signal type: <strong>{correlation.signal_type}</strong>
-                      <br />
-                      Best lag: <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
-                      <br /><br />
-                      {correlation.all_lags && (
-                        <div style={{ marginTop: "8px" }}>
-                          {Object.entries(correlation.all_lags).map(([lag, corr]) => (
-                            <div key={lag} style={{
-                              display: "flex", justifyContent: "space-between",
-                              padding: "3px 0", borderBottom: "1px solid var(--border)",
-                              fontFamily: "var(--mono)", fontSize: "10px"
-                            }}>
-                              <span style={{ color: "var(--muted)" }}>{lag}d lag</span>
-                              <span style={{ color: Math.abs(corr) > 0.3 ? corr < 0 ? "var(--negative)" : "var(--positive)" : "var(--muted)" }}>
-                                {corr > 0 ? "+" : ""}{corr}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="loading">COMPUTING</div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="panel">
               <div className="panel-header">
                 <span className="panel-title">LATEST HEADLINES</span>
                 <span className="panel-title" style={{ color: "#7d8590" }}>
-                  {headlines.length} ITEMS · PG {headlinePage}/{totalPages || 1}
+                  {loading ? "—" : `${headlines.length} ITEMS · PG ${headlinePage}/${totalPages || 1}`}
                 </span>
               </div>
-              <div className="headlines-list">
-                {pagedHeadlines.map((h, i) => (
-                  <div className="headline-item" key={i}>
-                    <div>
-                      <span className={`sentiment-pill pill-${h.label}`}>
-                        {h.label.toUpperCase()}
-                      </span>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div className="headline-title">{h.title}</div>
-                    </div>
-                    <div className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
-                      {h.score > 0 ? "+" : ""}{h.score}
-                    </div>
+              {loading ? <HeadlinesSkeleton /> : (
+                <>
+                  <div className="headlines-list">
+                    {pagedHeadlines.map((h, i) => (
+                      <div className="headline-item" key={i}>
+                        <div>
+                          <span className={`sentiment-pill pill-${h.label}`}>
+                            {h.label.toUpperCase()}
+                          </span>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div className="headline-title">{h.title}</div>
+                        </div>
+                        <div className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
+                          {h.score > 0 ? "+" : ""}{h.score}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              {totalPages > 1 && (
-                <div className="pagination">
-                  <button className="page-btn" onClick={() => setHeadlinePage(p => p - 1)} disabled={headlinePage === 1}>&lt;</button>
-                  {getPageNumbers().map((p, i) =>
-                    p === "..." ? (
-                      <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>...</span>
-                    ) : (
-                      <button key={p} className={`page-btn ${headlinePage === p ? "active" : ""}`} onClick={() => setHeadlinePage(p)}>{p}</button>
-                    )
+                  {totalPages > 1 && (
+                    <div className="pagination">
+                      <button className="page-btn" onClick={() => setHeadlinePage(p => p - 1)} disabled={headlinePage === 1}>&lt;</button>
+                      {getPageNumbers().map((p, i) =>
+                        p === "..." ? (
+                          <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>...</span>
+                        ) : (
+                          <button key={p} className={`page-btn ${headlinePage === p ? "active" : ""}`} onClick={() => setHeadlinePage(p)}>{p}</button>
+                        )
+                      )}
+                      <button className="page-btn" onClick={() => setHeadlinePage(p => p + 1)} disabled={headlinePage === totalPages}>&gt;</button>
+                    </div>
                   )}
-                  <button className="page-btn" onClick={() => setHeadlinePage(p => p + 1)} disabled={headlinePage === totalPages}>&gt;</button>
-                </div>
+                </>
               )}
             </div>
           </div>
