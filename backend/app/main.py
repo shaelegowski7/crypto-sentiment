@@ -1181,3 +1181,147 @@ def get_status(db: Session = Depends(get_db)):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.post("/api/keys/regenerate/request")
+async def request_key_regenerate(request: Request, db: Session = Depends(get_db)):
+    body = await request.json()
+    email = body.get("email")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+    if not existing:
+        # Don't reveal whether email exists — return same response either way
+        return {"message": "If a key exists for this email, a reset link has been sent."}
+
+    # Invalidate any existing unused tokens for this email
+    db.query(models.KeyResetToken).filter(
+        models.KeyResetToken.email == email,
+        models.KeyResetToken.used == False
+    ).delete()
+    db.commit()
+
+    # Generate token
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = datetime.utcnow() + timedelta(minutes=30)
+
+    reset_token = models.KeyResetToken(
+        email=email,
+        token_hash=token_hash,
+        expires_at=expires_at
+    )
+    db.add(reset_token)
+    db.commit()
+
+    # Send email
+    try:
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        reset_url = f"https://developers.sentimentfx.org?reset={token}"
+        resend.Emails.send({
+            "from": "SentimentFX <hello@sentimentfx.org>",
+            "to": email,
+            "subject": "Reset your SentimentFX API key",
+            "html": f"""
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#080c10;font-family:'Courier New',monospace;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#080c10;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+          <tr>
+            <td style="border-bottom:1px solid #21262d;padding-bottom:20px;">
+              <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">SentimentFX</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 0 32px;">
+              <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">— API Key Reset</p>
+              <h1 style="font-size:24px;font-weight:600;color:#e6edf3;margin:0 0 16px;">Reset your API key</h1>
+              <p style="font-size:14px;color:#7d8590;margin:0 0 24px;line-height:1.7;">
+                Click the button below to regenerate your API key. Your current key will be immediately invalidated.
+                This link expires in <strong style="color:#e6edf3;">30 minutes</strong>.
+              </p>
+              <p style="font-size:13px;color:#7d8590;margin:0 0 32px;">
+                If you didn't request this, you can safely ignore this email. Your key will not change.
+              </p>
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                <tr>
+                  <td style="background:#f0b429;border-radius:2px;">
+                    <a href="{reset_url}" style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">
+                      Reset API Key →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="font-size:11px;color:#7d8590;margin:0;">
+                Or copy this link: <span style="color:#58a6ff;">{reset_url}</span>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="border-top:1px solid #21262d;padding-top:20px;">
+              <p style="font-size:10px;color:#7d8590;margin:0;line-height:1.7;">
+                SentimentFX · Crypto sentiment intelligence<br>
+                <a href="mailto:hello@sentimentfx.org" style="color:#f0b429;text-decoration:none;">hello@sentimentfx.org</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+            """
+        })
+    except Exception as e:
+        print(f"Reset email error: {e}")
+
+    return {"message": "If a key exists for this email, a reset link has been sent."}
+
+
+@app.post("/api/keys/regenerate/confirm")
+async def confirm_key_regenerate(request: Request, db: Session = Depends(get_db)):
+    body = await request.json()
+    token = body.get("token")
+
+    if not token:
+        raise HTTPException(status_code=400, detail="Token required")
+
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    reset_token = db.query(models.KeyResetToken).filter(
+        models.KeyResetToken.token_hash == token_hash,
+        models.KeyResetToken.used == False,
+        models.KeyResetToken.expires_at > datetime.utcnow()
+    ).first()
+
+    if not reset_token:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    existing = db.query(models.APIKey).filter(
+        models.APIKey.email == reset_token.email
+    ).first()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="No key found for this email")
+
+    # Regenerate key
+    new_key = _make_key()
+    existing.key = new_key
+    existing.key_hash = _hash_key(new_key)
+    existing.key_prefix = new_key[:12]
+    existing.active = True
+
+    # Mark token as used
+    reset_token.used = True
+    db.commit()
+
+    return {
+        "key": new_key,
+        "prefix": new_key[:12],
+        "message": "Key regenerated. Save this key - it will not be shown again."
+    }
