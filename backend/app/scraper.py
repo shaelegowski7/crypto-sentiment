@@ -14,16 +14,32 @@ TICKERS = {
 }
 
 RSS_FEEDS = {
-    "BTC":  [
+    "BTC": [
         "https://cointelegraph.com/rss/tag/bitcoin",
         "https://coindesk.com/arc/outboundfeeds/rss/?outputType=xml",
+        "https://bitcoinmagazine.com/feed",
+        "https://decrypt.co/feed",
+        "https://www.theblock.co/rss.xml",
+        "https://cryptoslate.com/feed/",
     ],
-    "ETH":  ["https://cointelegraph.com/rss/tag/ethereum"],
-    "SOL":  ["https://cointelegraph.com/rss/tag/solana"],
-    "XRP":  ["https://cointelegraph.com/rss/tag/xrp"],
-    "DOGE": ["https://cointelegraph.com/rss/tag/dogecoin"],
+    "ETH": [
+        "https://cointelegraph.com/rss/tag/ethereum",
+        "https://decrypt.co/feed",
+        "https://cryptoslate.com/feed/",
+    ],
+    "SOL": [
+        "https://cointelegraph.com/rss/tag/solana",
+        "https://cryptoslate.com/feed/",
+    ],
+    "XRP": [
+        "https://cointelegraph.com/rss/tag/xrp",
+        "https://cryptoslate.com/feed/",
+    ],
+    "DOGE": [
+        "https://cointelegraph.com/rss/tag/dogecoin",
+        "https://cryptoslate.com/feed/",
+    ],
 }
-
 
 def fetch_headlines(ticker: str) -> list:
     query = TICKERS.get(ticker)
