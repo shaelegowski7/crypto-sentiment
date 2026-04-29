@@ -18,28 +18,35 @@ def get_gbp_rate() -> float:
     return round(1 / float(data["Close"].iloc[-1].iloc[0]), 6)
 
 
-def fetch_prices(ticker: str, period: str = "5y") -> list:
+def fetch_prices(ticker: str) -> list:
     yf_ticker = TICKER_MAP.get(ticker)
     if not yf_ticker:
-        print(f"Unknown ticker: {ticker}")
-        return []
-
-    data = yf.download("GBPUSD=X", period="2d", interval="1h", progress=False)
-    if data.empty:
-        print(f"No price data found for {ticker}")
+        print(f"[PRICES] Unknown ticker: {ticker}")
         return []
 
     gbp_rate = get_gbp_rate() if ticker in USD_TICKERS else 1.0
 
+    data = yf.download(yf_ticker, start="2019-01-01", interval="1d", progress=False)
+    if data.empty:
+        print(f"[PRICES] No data found for {ticker}")
+        return []
+
     prices = []
     for date, row in data.iterrows():
-        prices.append({
-            "ticker": ticker,
-            "close_price": round(float(row["Close"].iloc[0]) * gbp_rate, 8),
-            "volume": round(float(row["Volume"].iloc[0]), 2),
-            "date": date.to_pydatetime()
-        })
+        try:
+            close = float(row["Close"].iloc[0]) if hasattr(row["Close"], 'iloc') else float(row["Close"])
+            volume = float(row["Volume"].iloc[0]) if hasattr(row["Volume"], 'iloc') else float(row["Volume"])
+            prices.append({
+                "ticker": ticker,
+                "close_price": round(close * gbp_rate, 8),
+                "volume": round(volume, 2),
+                "date": date.to_pydatetime()
+            })
+        except Exception as e:
+            print(f"[PRICES] {ticker}: row parse error={e}")
+            continue
 
+    print(f"[PRICES] {ticker}: fetched {len(prices)} days")
     return prices
 
 
