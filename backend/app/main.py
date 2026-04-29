@@ -1153,3 +1153,7 @@ def get_status(db: Session = Depends(get_db)):
         "total_prices": db.query(models.Price).count(),
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
