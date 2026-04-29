@@ -273,7 +273,7 @@ def root():
 
 
 @app.post("/scrape/{ticker}")
-def scrape(ticker: str, db: Session = Depends(get_db)):
+def scrape(ticker: str, db: Session = Depends(get_db), admin=Depends(require_admin)):
     headlines = fetch_headlines(ticker.upper()) + fetch_rss_headlines(ticker.upper())
 
     if not headlines:
@@ -304,7 +304,7 @@ def scrape(ticker: str, db: Session = Depends(get_db)):
 
 
 @app.post("/prices/{ticker}")
-def save_prices(ticker: str, db: Session = Depends(get_db)):
+def save_prices(ticker: str, db: Session = Depends(get_db), admin=Depends(require_admin)):
     prices = fetch_prices(ticker.upper())
 
     if not prices:
