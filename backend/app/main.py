@@ -27,6 +27,7 @@ import csv
 import io
 import secrets
 import hashlib
+from apscheduler.triggers.cron import CronTrigger
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -234,6 +235,7 @@ def check_alerts(db):
 
 
 def scrape_all():
+    print(f"[SCHEDULER] fired at {datetime.utcnow()}")
     db = SessionLocal()
     try:
         for ticker in TICKERS:
@@ -282,7 +284,7 @@ def scrape_all():
 
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(scrape_all, "interval", hours=1)
+scheduler.add_job(scrape_all, CronTrigger(minute=0))
 scheduler.start()
 
 

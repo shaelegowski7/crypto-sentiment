@@ -1,12 +1,8 @@
 import requests
 import feedparser
 from datetime import datetime, timezone
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
-
-GNEWS_API_KEY = os.getenv("GNEWS_API_KEY")
 BASE_URL = "https://gnews.io/api/v4/search"
 
 TICKERS = {
@@ -28,39 +24,51 @@ RSS_FEEDS = {
     "DOGE": ["https://cointelegraph.com/rss/tag/dogecoin"],
 }
 
+
 def fetch_headlines(ticker: str) -> list:
     query = TICKERS.get(ticker)
-
     if not query:
-        print(f"Unknown ticker: {ticker}")
+        print(f"[GNEWS] Unknown ticker: {ticker}")
+        return []
+
+    api_key = os.getenv("GNEWS_API_KEY")
+    if not api_key:
+        print(f"[GNEWS] ERROR: GNEWS_API_KEY not set")
         return []
 
     params = {
         "q": query,
         "lang": "en",
         "max": 25,
-        "apikey": GNEWS_API_KEY
+        "apikey": api_key
     }
 
-    response = requests.get(BASE_URL, params=params)
+    try:
+        response = requests.get(BASE_URL, params=params, timeout=10)
+        articles = response.json().get("articles", [])
+        print(f"[GNEWS] {ticker}: status={response.status_code} articles={len(articles)}")
 
-    if response.status_code != 200:
-        print(f"Error fetching news: {response.status_code}")
+        if response.status_code != 200:
+            print(f"[GNEWS] {ticker}: error={response.text}")
+            return []
+
+    except Exception as e:
+        print(f"[GNEWS] {ticker}: exception={e}")
         return []
-
-    articles = response.json().get("articles", [])
 
     headlines = []
     for article in articles:
-        headlines.append({
-            "ticker": ticker,
-            "title": article["title"],
-            "source": article["source"]["name"],
-            "url": article["url"],
-            "published_at": datetime.strptime(
-                article["publishedAt"], "%Y-%m-%dT%H:%M:%SZ"
-            )
-        })
+        try:
+            headlines.append({
+                "ticker": ticker,
+                "title": article["title"],
+                "source": article["source"]["name"],
+                "url": article["url"],
+                "published_at": datetime.strptime(article["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
+            })
+        except Exception as e:
+            print(f"[GNEWS] {ticker}: parse error={e}")
+            continue
 
     return headlines
 
@@ -70,21 +78,28 @@ def fetch_rss_headlines(ticker: str) -> list:
     headlines = []
 
     for url in feeds:
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:10]:
-            try:
-                published = entry.get("published_parsed") or entry.get("updated_parsed")
-                pub_date = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
+        try:
+            feed = feedparser.parse(url)
+            print(f"[RSS] {ticker}: {url} entries={len(feed.entries)}")
 
-                headlines.append({
-                    "ticker": ticker.upper(),
-                    "title": entry.title,
-                    "source": feed.feed.get("title", url),
-                    "url": entry.link,
-                    "published_at": pub_date
-                })
-            except Exception as e:
-                print(f"RSS parse error ({url}): {e}")
-                continue
+            for entry in feed.entries[:10]:
+                try:
+                    published = entry.get("published_parsed") or entry.get("updated_parsed")
+                    pub_date = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
+
+                    headlines.append({
+                        "ticker": ticker.upper(),
+                        "title": entry.title,
+                        "source": feed.feed.get("title", url),
+                        "url": entry.link,
+                        "published_at": pub_date
+                    })
+                except Exception as e:
+                    print(f"[RSS] {ticker}: entry parse error={e}")
+                    continue
+
+        except Exception as e:
+            print(f"[RSS] {ticker}: feed error ({url})={e}")
+            continue
 
     return headlines
