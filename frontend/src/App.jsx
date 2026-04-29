@@ -1618,7 +1618,18 @@ export default function App() {
                   </div>
                   {totalPages > 1 && (
                     <div className="pagination">
-                      <button className="page-btn" onClick={() => setHeadlinePage(p => p - 1)} disabled={headlinePage === 1}>&lt;</button>
+                      <button 
+                        className="page-btn" 
+                        onClick={() => {
+                          const nextPage = headlinePage + 1
+                          setHeadlinePage(nextPage)
+                          if (nextPage * HEADLINES_PER_PAGE > headlines.length) {
+                            const apiPage = Math.ceil(headlines.length / 50) + 1
+                            fetchDashboard(range, apiPage)
+                          }
+                        }}
+                        disabled={headlinePage === totalPages}
+                      >&gt;</button>
                       {getPageNumbers().map((p, i) =>
                         p === "..." ? (
                           <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>...</span>
