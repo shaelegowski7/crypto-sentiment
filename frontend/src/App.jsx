@@ -825,11 +825,9 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const daysBack = isPro
-  ? Math.ceil((new Date() - new Date(allData[0]?.date)) / (1000 * 60 * 60 * 24)) + 1
-  : 30
-  const startDate = new Date(today)
-  startDate.setDate(startDate.getDate() - daysBack)
+  const startDate = isPro
+  ? new Date(allData.find(d => d.sentiment !== null)?.date ?? today)
+  : (() => { const d = new Date(today); d.setDate(d.getDate() - 30); return d })()
 
   // align to Sunday
   const calStart = new Date(startDate)
@@ -870,7 +868,7 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
   const selectedScore = selectedDay ? sentimentByDate[selectedDay] : null
 
   return (
-  <div style={{ overflowX: "auto", paddingBottom: "8px" }}>
+  <div style={{ overflowX: "auto", paddingBottom: "16px" }}>
     <div style={{ display: "flex", gap: "0", minWidth: "max-content" }}>
       {/* Day of week labels */}
       <div className="dow-labels" style={{ marginTop: "20px" }}>
