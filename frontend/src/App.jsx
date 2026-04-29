@@ -557,6 +557,41 @@ const styles = `
     align-items: center;
   }
 
+  .explainer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .explainer-card {
+    padding-left: 12px;
+  }
+
+  .explainer-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .explainer-text {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .disclaimer {
+    background: rgba(240,180,41,0.04);
+    border: 1px solid rgba(240,180,41,0.15);
+    border-radius: 2px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
   @media (max-width: 768px) {
     .topbar { padding: 10px 16px; }
     .ticker-bar { padding: 10px 16px; }
@@ -1089,41 +1124,124 @@ export default function App() {
             </div>
           </div>
 
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div className="grid-2">
-          <div className="panel" style={{ gridColumn: "1 / -1" }}>
+            <div className="panel correlation-panel">
+              <div className="panel-header">
+                <span className="panel-title">PREDICTIVE SIGNAL</span>
+              </div>
+              <div className="panel-body">
+                {correlation?.correlation !== undefined ? (
+                  <>
+                    <div className={`correlation-value ${correlation.correlation < 0 ? "negative-text" : "positive-text"}`}>
+                      {(Math.abs(correlation.correlation) * 100).toFixed(0)}%
+                    </div>
+                    <div className="correlation-detail">
+                      <strong>{correlation.interpretation}</strong>
+                      <br /><br />
+                      Signal type: <strong>{correlation.signal_type}</strong>
+                      <br />
+                      Best lag: <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
+                      <br /><br />
+                      {correlation.all_lags && (
+                        <div style={{ marginTop: "8px" }}>
+                          {Object.entries(correlation.all_lags).map(([lag, corr]) => (
+                            <div key={lag} style={{
+                              display: "flex", justifyContent: "space-between",
+                              padding: "3px 0", borderBottom: "1px solid var(--border)",
+                              fontFamily: "var(--mono)", fontSize: "10px"
+                            }}>
+                              <span style={{ color: "var(--muted)" }}>{lag}d lag</span>
+                              <span style={{ color: Math.abs(corr) > 0.3 ? corr < 0 ? "var(--negative)" : "var(--positive)" : "var(--muted)" }}>
+                                {corr > 0 ? "+" : ""}{corr}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="loading">COMPUTING</div>
+                )}
+              </div>
+            </div>
+
+            <div className="panel">
+              <div className="panel-header">
+                <span className="panel-title">LATEST HEADLINES</span>
+                <span className="panel-title" style={{ color: "#7d8590" }}>
+                  {headlines.length} ITEMS · PG {headlinePage}/{totalPages || 1}
+                </span>
+              </div>
+              <div className="headlines-list">
+                {pagedHeadlines.map((h, i) => (
+                  <div className="headline-item" key={i}>
+                    <div>
+                      <span className={`sentiment-pill pill-${h.label}`}>
+                        {h.label.toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div className="headline-title">{h.title}</div>
+                    </div>
+                    <div className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
+                      {h.score > 0 ? "+" : ""}{h.score}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="pagination">
+                  <button className="page-btn" onClick={() => setHeadlinePage(p => p - 1)} disabled={headlinePage === 1}>&lt;</button>
+                  {getPageNumbers().map((p, i) =>
+                    p === "..." ? (
+                      <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>...</span>
+                    ) : (
+                      <button key={p} className={`page-btn ${headlinePage === p ? "active" : ""}`} onClick={() => setHeadlinePage(p)}>{p}</button>
+                    )
+                  )}
+                  <button className="page-btn" onClick={() => setHeadlinePage(p => p + 1)} disabled={headlinePage === totalPages}>&gt;</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="panel">
             <div className="panel-header">
               <span className="panel-title">UNDERSTANDING THE SIGNAL</span>
-          </div>
-          <div className="panel-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
-              <div style={{ borderLeft: "2px solid var(--accent)", paddingLeft: "12px" }}>
-                <div style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.1em", color: "var(--accent)", textTransform: "uppercase", marginBottom: "6px" }}>What is Sentiment?</div>
-                  <div style={{ fontSize: "12px", color: "var(--muted)", lineHeight: "1.7" }}>Each news headline is scored from <span style={{ color: "var(--positive)" }}>+1 (very positive)</span> to <span style={{ color: "var(--negative)" }}>-1 (very negative)</span> using an AI model trained on financial news. The average of all recent headlines gives the overall sentiment score.</div>
-              </div>
-              <div style={{ borderLeft: "2px solid var(--accent2)", paddingLeft: "12px" }}>
-                <div style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.1em", color: "var(--accent2)", textTransform: "uppercase", marginBottom: "6px" }}>What is Correlation?</div>
-                  <div style={{ fontSize: "12px", color: "var(--muted)", lineHeight: "1.7" }}>Correlation measures how closely sentiment and price move together. <span style={{ color: "var(--text)" }}>100%</span> means they move in perfect sync. <span style={{ color: "var(--text)" }}>0%</span> means no relationship. A negative value means they move in opposite directions.</div>
-              </div>
-              <div style={{ borderLeft: "2px solid var(--positive)", paddingLeft: "12px" }}>
-                <div style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.1em", color: "var(--positive)", textTransform: "uppercase", marginBottom: "6px" }}>What is Lag?</div>
-                  <div style={{ fontSize: "12px", color: "var(--muted)", lineHeight: "1.7" }}>Lag is the delay between a sentiment shift and a price move. A <span style={{ color: "var(--text)" }}>2 day lag</span> means sentiment today tends to predict where the price goes in 2 days — giving you a potential early signal.</div>
-              </div>
-              <div style={{ borderLeft: "2px solid var(--neutral)", paddingLeft: "12px" }}>
-                <div style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.1em", color: "var(--neutral)", textTransform: "uppercase", marginBottom: "6px" }}>Momentum vs Contrarian</div>
-                  <div style={{ fontSize: "12px", color: "var(--muted)", lineHeight: "1.7" }}><span style={{ color: "var(--positive)" }}>Momentum</span> means positive news tends to be followed by price rises. <span style={{ color: "var(--negative)" }}>Contrarian</span> means positive news is followed by price drops — the market may already have priced it in.</div>
+            </div>
+            <div className="panel-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div className="explainer-grid">
+                <div className="explainer-card" style={{ borderLeft: "2px solid var(--accent)" }}>
+                  <div className="explainer-label" style={{ color: "var(--accent)" }}>What is Sentiment?</div>
+                  <div className="explainer-text">
+                    Each news headline is scored from <span style={{ color: "var(--positive)" }}>+1 (very positive)</span> to <span style={{ color: "var(--negative)" }}>-1 (very negative)</span> using an AI model trained on financial news. The average of all recent headlines gives the overall sentiment score.
+                  </div>
                 </div>
-            </div>
-            <div style={{ background: "rgba(240,180,41,0.04)", border: "1px solid rgba(240,180,41,0.15)", borderRadius: "2px", padding: "10px 14px", fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)", lineHeight: "1.6" }}>
-              ⚠ Correlation is not causation. This data is for informational purposes only and should not be used as financial advice.
+                <div className="explainer-card" style={{ borderLeft: "2px solid var(--accent2)" }}>
+                  <div className="explainer-label" style={{ color: "var(--accent2)" }}>What is Correlation?</div>
+                  <div className="explainer-text">
+                    Correlation measures how closely sentiment and price move together. <span style={{ color: "var(--text)" }}>100%</span> means they move in perfect sync. <span style={{ color: "var(--text)" }}>0%</span> means no relationship. A negative value means they move in opposite directions.
+                  </div>
+                </div>
+                <div className="explainer-card" style={{ borderLeft: "2px solid var(--positive)" }}>
+                  <div className="explainer-label" style={{ color: "var(--positive)" }}>What is Lag?</div>
+                  <div className="explainer-text">
+                    Lag is the delay between a sentiment shift and a price move. A <span style={{ color: "var(--text)" }}>2 day lag</span> means sentiment today tends to predict where the price goes in 2 days — giving you a potential early signal.
+                  </div>
+                </div>
+                <div className="explainer-card" style={{ borderLeft: "2px solid var(--neutral)" }}>
+                  <div className="explainer-label" style={{ color: "var(--neutral)" }}>Momentum vs Contrarian</div>
+                  <div className="explainer-text">
+                    <span style={{ color: "var(--positive)" }}>Momentum</span> means positive news tends to be followed by price rises. <span style={{ color: "var(--negative)" }}>Contrarian</span> means positive news is followed by price drops — the market may already have priced it in.
+                  </div>
+                </div>
+              </div>
+              <div className="disclaimer">
+                ⚠ Correlation is not causation. This data is for informational purposes only and should not be used as financial advice.
+              </div>
             </div>
           </div>
-        </div>
-    </div>
-  </div>
-
-
 
           {isPro && (
             <div className="panel">
