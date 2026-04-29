@@ -1514,26 +1514,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="panel">
-            <div className="panel-header">
-              <span className="panel-title">SENTIMENT HEATMAP</span>
-              <span className="panel-title" style={{ color: "var(--muted)" }}>
-                {isPro ? "FULL HISTORY" : "30 DAYS"}
-              </span>
-            </div>
-            <div className="panel-body">
-              {loading ? (
-                <div className="skeleton" style={{ height: "120px", width: "100%" }} />
-              ) : (
-                <SentimentHeatmap
-                  allData={allData}
-                  headlines={headlines}
-                  isPro={isPro}
-                  onUpgrade={() => { setAuthMode("signup"); setShowAuth(true) }}
-                />
-              )}
-            </div>
-          </div>
+          
 
           <div className="grid-2">
             <div className="panel correlation-panel">
@@ -1580,6 +1561,27 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            <div className="panel">
+            <div className="panel-header">
+              <span className="panel-title">SENTIMENT HEATMAP</span>
+              <span className="panel-title" style={{ color: "var(--muted)" }}>
+                {isPro ? "FULL HISTORY" : "30 DAYS"}
+              </span>
+            </div>
+            <div className="panel-body">
+              {loading ? (
+                <div className="skeleton" style={{ height: "120px", width: "100%" }} />
+              ) : (
+                <SentimentHeatmap
+                  allData={allData}
+                  headlines={headlines}
+                  isPro={isPro}
+                  onUpgrade={() => { setAuthMode("signup"); setShowAuth(true) }}
+                />
+              )}
+            </div>
+          </div>
 
             <div className="panel">
               <div className="panel-header">
