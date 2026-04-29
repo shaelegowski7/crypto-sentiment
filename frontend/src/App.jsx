@@ -1562,7 +1562,7 @@ export default function App() {
               )}
             </div>
 
-            <div className="panel">
+            <div className="panel" style={{ display: "none" }}>
             <div className="panel-header">
               <span className="panel-title">SENTIMENT HEATMAP</span>
               <span className="panel-title" style={{ color: "var(--muted)" }}>
