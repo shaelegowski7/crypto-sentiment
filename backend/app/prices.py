@@ -53,20 +53,29 @@ def fetch_prices(ticker: str) -> list:
 def fetch_latest_price(ticker: str) -> dict | None:
     yf_ticker = TICKER_MAP.get(ticker)
     if not yf_ticker:
-        print(f"Unknown ticker: {ticker}")
+        print(f"[PRICES] Unknown ticker: {ticker}")
         return None
 
-    data = yf.download(yf_ticker, period="2d", interval="1h", progress=False)
+    data = yf.download(yf_ticker, period="5d", interval="1d", progress=False)
     if data.empty:
-        print(f"No intraday price data found for {ticker}")
+        print(f"[PRICES] No daily price data found for {ticker}")
         return None
 
     gbp_rate = get_gbp_rate() if ticker in USD_TICKERS else 1.0
 
-    latest = data.iloc[-1]
-    return {
-        "ticker": ticker,
-        "close_price": round(float(latest["Close"].iloc[0]) * gbp_rate, 8),
-        "volume": round(float(latest["Volume"].iloc[0]), 2),
-        "date": data.index[-1].to_pydatetime()
-    }
+    try:
+        latest = data.iloc[-1]
+        close = float(latest["Close"].iloc[0]) if hasattr(latest["Close"], 'iloc') else float(latest["Close"])
+        volume = float(latest["Volume"].iloc[0]) if hasattr(latest["Volume"], 'iloc') else float(latest["Volume"])
+        date = data.index[-1].to_pydatetime()
+
+        print(f"[PRICES] {ticker}: latest={date.date()} close={close}")
+        return {
+            "ticker": ticker,
+            "close_price": round(close * gbp_rate, 8),
+            "volume": round(volume, 2),
+            "date": date
+        }
+    except Exception as e:
+        print(f"[PRICES] {ticker}: fetch_latest error={e}")
+        return None
