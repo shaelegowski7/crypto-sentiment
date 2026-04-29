@@ -108,7 +108,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
 .pricing-desc{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;}
 .pricing-features{list-style:none;}
 .pricing-features li{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border);}
-.pricing-features li::before{content:'→ ';color:var(--accent);}
+.pricing-features li::before{content:'-> ';color:var(--accent);}
 .badge{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0.08em;padding:2px 8px;border-radius:2px;}
 .badge-free{background:rgba(139,148,158,0.12);color:var(--muted);border:1px solid rgba(139,148,158,0.3);}
 .badge-pro{background:rgba(240,180,41,0.12);color:var(--accent);border:1px solid rgba(240,180,41,0.3);}
@@ -139,7 +139,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                 <a href="#" onclick="nav('pricing');return false;"
                     id="nav-pricing">Pricing</a>
                 <a href="https://app.sentimentfx.org" class="topbar-cta">Live
-                    Dashboard →</a>
+                    Dashboard</a>
             </nav>
         </header>
 
@@ -189,6 +189,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     <p class="page-subtitle">MANAGE YOUR API KEY AND MONITOR
                         USAGE</p>
 
+                    <!-- Step 1: no key yet -->
                     <div id="no-key-state">
                         <div class="notice">Enter your email to generate a free
                             API key. Your first 100 calls are free — no card
@@ -211,8 +212,45 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                                 free calls, usage is billed at £0.01/call via
                                 Stripe.</p>
                         </div>
+                        <p style="margin-top:16px;font-size:12px;">Already have
+                            a key? <a href="#"
+                                onclick="showLookup();return false;"
+                                style="color:var(--accent);">Look up your usage
+                                by email →</a></p>
                     </div>
 
+                    <!-- Step 2: shown once immediately after generate/regenerate -->
+                    <div id="reveal-state" style="display:none;">
+                        <div class="notice notice-warn"
+                            style="margin-bottom:16px;">
+                            ⚠ Save your API key now — it will
+                            <strong>not</strong> be shown again. If you lose it,
+                            regenerate a new one.
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">Your New API Key</span>
+                                <span class="badge badge-pro">Active</span>
+                            </div>
+                            <div class="key-display">
+                                <span id="reveal-key-value"
+                                    style="color:var(--accent);"></span>
+                                <button class="copy-btn"
+                                    onclick="copyRevealKey()">Copy</button>
+                            </div>
+                            <p
+                                style="font-size:12px;color:var(--muted);margin:0 0 12px;">Pass
+                                this as the <code
+                                    style="color:var(--accent2);">X-API-Key</code>
+                                header in all requests.</p>
+                            <button class="btn-primary"
+                                onclick="dismissReveal()"
+                                style="background:var(--surface2);color:var(--muted);border:1px solid var(--border2);">I've
+                                saved it — continue</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: ongoing dashboard — prefix + usage only -->
                     <div id="key-state" style="display:none;">
                         <div class="stats-row">
                             <div class="stat-card">
@@ -239,16 +277,20 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                                 <span class="badge badge-pro">Active</span>
                             </div>
                             <div class="key-display">
-                                <span id="key-value"
-                                    class="key-masked">••••••••••••••••••••••••••••••••</span>
-                                <button class="copy-btn"
-                                    onclick="copyKey()">Copy</button>
+                                <span id="key-prefix" class="key-masked"></span>
+                                <span class="key-masked"
+                                    style="margin-left:4px;">••••••••••••••••••••••••••••••••</span>
                             </div>
                             <p
-                                style="font-size:12px;color:var(--muted);margin:0;">Pass
-                                this key as the <code
+                                style="font-size:12px;color:var(--muted);margin:0 0 12px;">Your
+                                full key was shown once when generated. Pass it
+                                as the <code
                                     style="color:var(--accent2);">X-API-Key</code>
-                                header in all requests. Keep it secret.</p>
+                                header.</p>
+                            <button class="btn-primary"
+                                onclick="showRegenerate()"
+                                style="background:transparent;color:var(--negative);border:1px solid var(--negative);font-size:10px;">Regenerate
+                                Key</button>
                         </div>
                         <div class="notice notice-warn">After 100 free calls,
                             usage is billed at £0.01 per call via Stripe. <a
@@ -257,12 +299,18 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                                 →</a></div>
                     </div>
 
+                    <!-- Lookup by email — usage only, no key revealed -->
                     <div id="lookup-state"
                         style="display:none;margin-top:24px;">
                         <div class="card">
                             <div class="card-header"><span
-                                    class="card-title">Look Up Existing
-                                    Key</span></div>
+                                    class="card-title">Look Up Key
+                                    Info</span></div>
+                            <p
+                                style="font-size:12px;color:var(--muted);margin:0 0 12px;">Enter
+                                your email to see your key prefix and usage.
+                                Your full key is never retrievable — regenerate
+                                if lost.</p>
                             <div class="form-row">
                                 <input class="form-input" type="email"
                                     id="lookup-email"
@@ -274,10 +322,31 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                         </div>
                     </div>
 
-                    <p style="margin-top:16px;font-size:12px;">Already have a
-                        key? <a href="#" onclick="showLookup();return false;"
-                            style="color:var(--accent);">Look it up by email
-                            →</a></p>
+                    <!-- Regenerate confirm -->
+                    <div id="regen-state" style="display:none;margin-top:24px;">
+                        <div class="card">
+                            <div class="card-header"><span
+                                    class="card-title">Regenerate API
+                                    Key</span></div>
+                            <div class="notice notice-warn"
+                                style="margin-bottom:16px;">⚠ Your current key
+                                will be <strong>immediately
+                                    invalidated</strong>. Any apps using it will
+                                stop working.</div>
+                            <div class="form-row">
+                                <input class="form-input" type="email"
+                                    id="regen-email"
+                                    placeholder="Confirm your email" />
+                                <button class="btn-primary"
+                                    onclick="regenerateKey()"
+                                    style="background:var(--negative);color:#fff;">Regenerate</button>
+                            </div>
+                            <div class="msg" id="regen-msg"></div>
+                            <button onclick="hideRegenerate()"
+                                style="background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:10px;cursor:pointer;margin-top:8px;">Cancel</button>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- DOCS -->
@@ -701,180 +770,208 @@ const res = await fetch(
 
         <script>
 const API = 'https://api.sentimentfx.org'
-let currentKey = null
+let currentKey = null  // only set during reveal window, cleared on dismiss
 
-// NAV
-function nav(section) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
-  document.getElementById('section-' + section).classList.add('active')
-  document.querySelectorAll('.topbar-links a').forEach(a => a.classList.remove('active'))
-  const navEl = document.getElementById('nav-' + section)
-  if (navEl) navEl.classList.add('active')
-  document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('active'))
-  const sideEl = document.getElementById('side-' + section)
-  if (sideEl) sideEl.classList.add('active')
-  if (section === 'docs') initScrollSpy()
-}
-
-function scrollToId(id) {
-  setTimeout(() => {
-    const el = document.getElementById(id)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, 50)
-}
-
-// SCROLL SPY
-function initScrollSpy() {
-  const sections = document.querySelectorAll('.scroll-section')
-  const sideLinks = document.querySelectorAll('.sidebar-link[data-section]')
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const id = entry.target.id
-        sideLinks.forEach(l => {
-          l.classList.toggle('active', l.dataset.section === id)
-        })
-        // highlight endpoint border
-        document.querySelectorAll('.endpoint').forEach(e => e.classList.remove('in-view'))
-        const ep = entry.target.querySelector('.endpoint')
-        if (ep) ep.classList.add('in-view')
-      }
-    })
-  }, { threshold: 0.2, rootMargin: '-60px 0px -60% 0px' })
-
-  sections.forEach(s => observer.observe(s))
-}
-
-// MESSAGES
 function showMsg(id, text, type) {
-  const el = document.getElementById(id)
-  el.textContent = text
-  el.className = 'msg ' + type + ' show'
+    const el = document.getElementById(id)
+    el.textContent = text
+    el.className = 'msg ' + type + ' show'
 }
 
-// KEY STATE
-function showKey(key, callsUsed) {
-  document.getElementById('no-key-state').style.display = 'none'
-  document.getElementById('lookup-state').style.display = 'none'
-  document.getElementById('key-state').style.display = 'block'
-  currentKey = key
-  document.getElementById('key-value').textContent = key
-  document.getElementById('key-value').classList.remove('key-masked')
-  document.getElementById('calls-used').textContent = callsUsed ?? 0
-  const free = Math.max(0, 100 - (callsUsed ?? 0))
-  document.getElementById('calls-free').textContent = free
-  document.getElementById('calls-free').style.color = free > 0 ? 'var(--positive)' : 'var(--negative)'
-  updateTesterNotes(key)
-}
-
-function updateTesterNotes(key) {
-  ['sentiment','summary','prices','correlation'].forEach(ep => {
-    const note = document.getElementById('tester-' + ep + '-note')
-    if (note) note.style.display = 'none'
-  })
-}
-
-async function generateKey() {
-  const email = document.getElementById('email-input').value.trim()
-  if (!email) return showMsg('gen-msg', 'Please enter your email.', 'error')
-  const btn = event.target
-  btn.disabled = true; btn.textContent = '...'
-  try {
-    const res = await fetch(API + '/api/keys/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+function hideAll() {
+    ['no-key-state','reveal-state','key-state','lookup-state','regen-state'].forEach(id => {
+        document.getElementById(id).style.display = 'none'
     })
-    const data = await res.json()
-    if (data.key) { showKey(data.key, 0) }
-    else showMsg('gen-msg', data.detail || 'Something went wrong.', 'error')
-  } catch (e) { showMsg('gen-msg', 'Failed to connect to API.', 'error') }
-  btn.disabled = false; btn.textContent = 'Get API Key'
 }
 
-async function lookupKey() {
-  const email = document.getElementById('lookup-email').value.trim()
-  if (!email) return showMsg('lookup-msg', 'Please enter your email.', 'error')
-  const btn = event.target
-  btn.disabled = true; btn.textContent = '...'
-  try {
-    const res = await fetch(API + '/api/keys/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    })
-    const data = await res.json()
-    if (data.key) { showKey(data.key, null) }
-    else showMsg('lookup-msg', 'No key found for this email.', 'error')
-  } catch (e) { showMsg('lookup-msg', 'Failed to connect to API.', 'error') }
-  btn.disabled = false; btn.textContent = 'Look Up'
+function showReveal(key) {
+    hideAll()
+    currentKey = key
+    document.getElementById('reveal-key-value').textContent = key
+    document.getElementById('reveal-state').style.display = 'block'
+}
+
+function dismissReveal() {
+    currentKey = null
+    hideAll()
+    document.getElementById('no-key-state').style.display = 'block'
+}
+
+function showKeyState(prefix, callsUsed) {
+    hideAll()
+    document.getElementById('key-state').style.display = 'block'
+    document.getElementById('key-prefix').textContent = prefix
+    document.getElementById('calls-used').textContent = callsUsed ?? 0
+    const free = Math.max(0, 100 - (callsUsed ?? 0))
+    document.getElementById('calls-free').textContent = free
+    document.getElementById('calls-free').style.color = free > 0 ? 'var(--positive)' : 'var(--negative)'
 }
 
 function showLookup() {
-  document.getElementById('lookup-state').style.display = 'block'
+    document.getElementById('lookup-state').style.display = 'block'
 }
 
-function copyKey() {
-  if (!currentKey) return
-  navigator.clipboard.writeText(currentKey).then(() => {
-    const btn = document.querySelector('.copy-btn')
-    btn.textContent = 'Copied!'
-    setTimeout(() => btn.textContent = 'Copy', 1500)
-  })
+function showRegenerate() {
+    document.getElementById('regen-state').style.display = 'block'
+}
+
+function hideRegenerate() {
+    document.getElementById('regen-state').style.display = 'none'
+}
+
+async function generateKey() {
+    const email = document.getElementById('email-input').value.trim()
+    if (!email) return showMsg('gen-msg', 'Please enter your email.', 'error')
+    const btn = event.target
+    btn.disabled = true; btn.textContent = '...'
+    try {
+        const res = await fetch(API + '/api/keys/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        })
+        const data = await res.json()
+        if (res.status === 409) {
+            showMsg('gen-msg', 'A key already exists for this email. Use the lookup below to see your usage, or regenerate.', 'error')
+        } else if (data.key) {
+            showReveal(data.key)
+        } else {
+            showMsg('gen-msg', data.detail || 'Something went wrong.', 'error')
+        }
+    } catch (e) {
+        showMsg('gen-msg', 'Failed to connect to API.', 'error')
+    }
+    btn.disabled = false; btn.textContent = 'Get API Key'
+}
+
+async function lookupKey() {
+    const email = document.getElementById('lookup-email').value.trim()
+    if (!email) return showMsg('lookup-msg', 'Please enter your email.', 'error')
+    const btn = event.target
+    btn.disabled = true; btn.textContent = '...'
+    try {
+        const res = await fetch(API + '/api/keys/info?email=' + encodeURIComponent(email))
+        const data = await res.json()
+        if (res.ok) {
+            showKeyState(data.prefix, data.calls_used)
+        } else {
+            showMsg('lookup-msg', data.detail || 'No key found for this email.', 'error')
+        }
+    } catch (e) {
+        showMsg('lookup-msg', 'Failed to connect to API.', 'error')
+    }
+    btn.disabled = false; btn.textContent = 'Look Up'
+}
+
+async function regenerateKey() {
+    const email = document.getElementById('regen-email').value.trim()
+    if (!email) return showMsg('regen-msg', 'Please enter your email.', 'error')
+    const btn = event.target
+    btn.disabled = true; btn.textContent = '...'
+    try {
+        const res = await fetch(API + '/api/keys/regenerate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        })
+        const data = await res.json()
+        if (data.key) {
+            showReveal(data.key)
+        } else {
+            showMsg('regen-msg', data.detail || 'Something went wrong.', 'error')
+        }
+    } catch (e) {
+        showMsg('regen-msg', 'Failed to connect to API.', 'error')
+    }
+    btn.disabled = false; btn.textContent = 'Regenerate'
+}
+
+function copyRevealKey() {
+    if (!currentKey) return
+    navigator.clipboard.writeText(currentKey).then(() => {
+        const btn = document.querySelector('#reveal-state .copy-btn')
+        btn.textContent = 'Copied!'
+        setTimeout(() => btn.textContent = 'Copy', 1500)
+    })
+}
+
+// NAV
+function nav(section) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
+    document.getElementById('section-' + section).classList.add('active')
+    document.querySelectorAll('.topbar-links a').forEach(a => a.classList.remove('active'))
+    const navEl = document.getElementById('nav-' + section)
+    if (navEl) navEl.classList.add('active')
+    document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('active'))
+    const sideEl = document.getElementById('side-' + section)
+    if (sideEl) sideEl.classList.add('active')
+    if (section === 'docs') initScrollSpy()
+}
+
+function scrollToId(id) {
+    setTimeout(() => {
+        const el = document.getElementById(id)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+}
+
+function initScrollSpy() {
+    const sections = document.querySelectorAll('.scroll-section')
+    const sideLinks = document.querySelectorAll('.sidebar-link[data-section]')
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const id = entry.target.id
+                sideLinks.forEach(l => l.classList.toggle('active', l.dataset.section === id))
+                document.querySelectorAll('.endpoint').forEach(e => e.classList.remove('in-view'))
+                const ep = entry.target.querySelector('.endpoint')
+                if (ep) ep.classList.add('in-view')
+            }
+        })
+    }, { threshold: 0.2, rootMargin: '-60px 0px -60% 0px' })
+    sections.forEach(s => observer.observe(s))
 }
 
 // TESTER
 async function runTester(endpoint) {
-  if (!currentKey) {
-    alert('Generate an API key on the Dashboard first.')
-    return
-  }
+    if (!currentKey) {
+        alert('Generate an API key on the Dashboard first.')
+        return
+    }
+    const resultEl = document.getElementById('tester-' + endpoint + '-result')
+    const outputEl = document.getElementById('tester-' + endpoint + '-output')
+    const statusEl = document.getElementById('tester-' + endpoint + '-status')
+    const timeEl = document.getElementById('tester-' + endpoint + '-time')
+    const callsEl = document.getElementById('tester-' + endpoint + '-calls')
+    const btn = event.target
+    btn.disabled = true; btn.textContent = '...'
 
-  const resultEl = document.getElementById('tester-' + endpoint + '-result')
-  const outputEl = document.getElementById('tester-' + endpoint + '-output')
-  const statusEl = document.getElementById('tester-' + endpoint + '-status')
-  const timeEl = document.getElementById('tester-' + endpoint + '-time')
-  const callsEl = document.getElementById('tester-' + endpoint + '-calls')
-  const btn = event.target
-  btn.disabled = true; btn.textContent = '...'
+    const ticker = document.getElementById('t-' + endpoint + '-ticker').value
+    let url = API + '/v1/' + endpoint + '/' + ticker
 
-  const ticker = document.getElementById('t-' + endpoint + '-ticker').value
-  let url = API + '/v1/' + endpoint + '/' + ticker
+    if (endpoint === 'sentiment') url += '?limit=' + document.getElementById('t-sentiment-limit').value
+    else if (endpoint === 'summary') url += '?days=' + document.getElementById('t-summary-days').value
+    else if (endpoint === 'prices') url += '?days=' + document.getElementById('t-prices-days').value
 
-  if (endpoint === 'sentiment') {
-    const limit = document.getElementById('t-sentiment-limit').value
-    url += '?limit=' + limit
-  } else if (endpoint === 'summary') {
-    const days = document.getElementById('t-summary-days').value
-    url += '?days=' + days
-  } else if (endpoint === 'prices') {
-    const days = document.getElementById('t-prices-days').value
-    url += '?days=' + days
-  }
-
-  const start = Date.now()
-  try {
-    const res = await fetch(url, { headers: { 'X-API-Key': currentKey } })
-    const elapsed = Date.now() - start
-    const data = await res.json()
-
-    statusEl.textContent = res.ok ? '200 OK' : res.status + ' Error'
-    statusEl.className = res.ok ? 'tester-status-ok' : 'tester-status-err'
-    timeEl.textContent = elapsed + 'ms'
-    if (data.calls_used) callsEl.textContent = data.calls_used + ' call' + (data.calls_used > 1 ? 's' : '') + ' used'
-
-    outputEl.textContent = JSON.stringify(data, null, 2)
-    resultEl.classList.add('show')
-  } catch (e) {
-    statusEl.textContent = 'Network error'
-    statusEl.className = 'tester-status-err'
-    outputEl.textContent = e.message
-    resultEl.classList.add('show')
-  }
-
-  btn.disabled = false; btn.textContent = 'Send'
+    const start = Date.now()
+    try {
+        const res = await fetch(url, { headers: { 'X-API-Key': currentKey } })
+        const elapsed = Date.now() - start
+        const data = await res.json()
+        statusEl.textContent = res.ok ? '200 OK' : res.status + ' Error'
+        statusEl.className = res.ok ? 'tester-status-ok' : 'tester-status-err'
+        timeEl.textContent = elapsed + 'ms'
+        if (data.calls_used) callsEl.textContent = data.calls_used + ' call' + (data.calls_used > 1 ? 's' : '') + ' used'
+        outputEl.textContent = JSON.stringify(data, null, 2)
+        resultEl.classList.add('show')
+    } catch (e) {
+        statusEl.textContent = 'Network error'
+        statusEl.className = 'tester-status-err'
+        outputEl.textContent = e.message
+        resultEl.classList.add('show')
+    }
+    btn.disabled = false; btn.textContent = 'Send'
 }
-</script>
+        </script>
     </body>
 </html>
