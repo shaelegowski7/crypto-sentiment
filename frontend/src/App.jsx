@@ -871,7 +871,7 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: "0", overflowX: "auto" }}>
+      <div style={{ display: "flex", gap: "0", overflowX: "auto", paddingBottom: "8px" }}>
         {/* Day of week labels */}
         <div className="dow-labels" style={{ marginTop: "20px" }}>
           {["S","M","T","W","T","F","S"].map((d, i) => (
@@ -1477,7 +1477,7 @@ export default function App() {
               </div>
             </div>
             {loading ? <ChartSkeleton /> : (
-              <div className="panel-body">
+              <div className="panel-body" style={{ overflowX: "hidden" }}>
                 <ResponsiveContainer width="100%" height={320}>
                   <ComposedChart data={displayData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke="#21262d" vertical={false} />
