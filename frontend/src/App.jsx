@@ -1136,18 +1136,19 @@ export default function App() {
     }
   }
 
-  const fetchDashboard = async (selectedRange = range) => {
-  setLoading(true)
-  setHeadlinePage(1)
-  try {
-    const isAll = selectedRange === 999
-    const days = isAll ? 90 : selectedRange
-    const url = isAll && isPro
-      ? `${API}/dashboard/${ticker}?all=true`
-      : `${API}/dashboard/${ticker}?days=${Math.max(days, 90)}`
+  const fetchDashboard = async (selectedRange = range, headlinePageNum = 1) => {
+    setLoading(true)
+    if (headlinePageNum === 1) setHeadlinePage(1)
+    try {
+      const isAll = selectedRange === 999
+      const days = isAll ? 90 : selectedRange
+      const baseUrl = isAll && isPro
+        ? `${API}/dashboard/${ticker}?all=true`
+        : `${API}/dashboard/${ticker}?days=${Math.max(days, 90)}`
 
-    const res = await axios.get(url)
-      const { sentiment, prices } = res.data
+      const url = `${baseUrl}&page=${headlinePageNum}&limit=50`
+      const res = await axios.get(url)
+      const { sentiment, prices, pagination } = res.data
 
       const priceMap = {}
       prices.forEach(p => {
@@ -1180,9 +1181,14 @@ export default function App() {
         price: priceMap[date] || null,
       })).sort((a, b) => new Date(a.date) - new Date(b.date))
 
-      setAllData(merged)
-      setHeadlines(sentiment)
+      if (headlinePageNum === 1) {
+        setAllData(merged)
+        setHeadlines(sentiment)
+      } else {
+        setHeadlines(prev => [...prev, ...sentiment])
+      }
 
+      setCorrelation(null)
       const corrRes = await axios.get(`${API}/correlation/${ticker}`)
       setCorrelation(corrRes.data)
     } catch (err) {

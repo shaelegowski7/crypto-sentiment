@@ -384,7 +384,7 @@ def get_prices(ticker: str, db: Session = Depends(get_db)):
 
 
 @app.get("/dashboard/{ticker}")
-def get_dashboard(ticker: str, days: int = 90, all: bool = False, db: Session = Depends(get_db)):
+def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1, limit: int = 50, db: Session = Depends(get_db)):
     query_headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
     )
@@ -397,12 +397,24 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, db: Session = 
         query_headlines = query_headlines.filter(models.Headline.published_at >= since)
         query_prices = query_prices.filter(models.Price.date >= since)
 
-    headlines = query_headlines.order_by(models.Headline.published_at.desc()).all()
+    # prices always returned in full for the chart
     prices = query_prices.order_by(models.Price.date.desc()).all()
+
+    # headlines paginated
+    total_headlines = query_headlines.count()
+    headlines = query_headlines.order_by(
+        models.Headline.published_at.desc()
+    ).offset((page - 1) * limit).limit(limit).all()
 
     return {
         "ticker": ticker.upper(),
         "days": days if not all else None,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total_headlines,
+            "pages": (total_headlines + limit - 1) // limit
+        },
         "sentiment": [
             {
                 "date": h.published_at,
