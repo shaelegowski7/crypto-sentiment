@@ -384,16 +384,25 @@ def get_prices(ticker: str, db: Session = Depends(get_db)):
 
 
 @app.get("/dashboard/{ticker}")
-def get_dashboard(ticker: str, db: Session = Depends(get_db)):
-    headlines = db.query(models.Headline).filter(
+def get_dashboard(ticker: str, days: int = 90, all: bool = False, db: Session = Depends(get_db)):
+    query_headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
-    ).all()
-    prices = db.query(models.Price).filter(
+    )
+    query_prices = db.query(models.Price).filter(
         models.Price.ticker == ticker.upper()
-    ).all()
+    )
+
+    if not all:
+        since = datetime.utcnow() - timedelta(days=days)
+        query_headlines = query_headlines.filter(models.Headline.published_at >= since)
+        query_prices = query_prices.filter(models.Price.date >= since)
+
+    headlines = query_headlines.order_by(models.Headline.published_at.desc()).all()
+    prices = query_prices.order_by(models.Price.date.desc()).all()
 
     return {
         "ticker": ticker.upper(),
+        "days": days if not all else None,
         "sentiment": [
             {
                 "date": h.published_at,

@@ -1136,11 +1136,17 @@ export default function App() {
     }
   }
 
-  const fetchDashboard = async () => {
-    setLoading(true)
-    setHeadlinePage(1)
-    try {
-      const res = await axios.get(`${API}/dashboard/${ticker}`)
+  const fetchDashboard = async (selectedRange = range) => {
+  setLoading(true)
+  setHeadlinePage(1)
+  try {
+    const isAll = selectedRange === 999
+    const days = isAll ? 90 : selectedRange
+    const url = isAll && isPro
+      ? `${API}/dashboard/${ticker}?all=true`
+      : `${API}/dashboard/${ticker}?days=${Math.max(days, 90)}`
+
+    const res = await axios.get(url)
       const { sentiment, prices } = res.data
 
       const priceMap = {}
@@ -1466,6 +1472,7 @@ export default function App() {
                     onClick={() => {
                       if (!isPro && r > 30) { setAuthMode("signup"); setShowAuth(true); return }
                       setRange(r)
+                      fetchDashboard(r)
                     }}
                     style={rangeCtrlStyle(r)}
                   >
