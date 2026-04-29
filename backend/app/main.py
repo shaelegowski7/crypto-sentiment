@@ -8,6 +8,7 @@ from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from . import models
 from .database import SessionLocal
@@ -46,6 +47,8 @@ limiter = Limiter(key_func=get_api_key_value)
 app = FastAPI()
 
 app.state.limiter = limiter
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
