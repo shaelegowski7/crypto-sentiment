@@ -63,6 +63,7 @@ app.add_middleware(
         "https://sentimentfx.org",
         "https://developers.sentimentfx.org",
         "http://localhost:5173",
+        "https://status.sentimentfx.org",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
