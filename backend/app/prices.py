@@ -22,7 +22,7 @@ def get_gbp_rate() -> float:
     return round(1 / float(data["Close"].iloc[-1].iloc[0]), 6)
 
 
-def fetch_prices(ticker: str, period: str = "2y") -> list:
+def fetch_prices(ticker: str, period: str = "5y") -> list:
     yf_ticker = TICKER_MAP.get(ticker)
     if not yf_ticker:
         print(f"Unknown ticker: {ticker}")
