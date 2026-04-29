@@ -7,13 +7,9 @@ TICKER_MAP = {
     "SOL":  "SOL-GBP",
     "XRP":  "XRP-GBP",
     "DOGE": "DOGE-GBP",
-    "LTC":  "LTC-GBP",
-    "TRX":  "TRX-GBP",
-    "XLM":  "XLM-GBP",
-    "PEPE": "PEPE-USD",  # no GBP pair, convert manually
 }
 
-USD_TICKERS = {"PEPE"}  # tickers that need USD->GBP conversion
+USD_TICKERS = {}  # tickers that need USD->GBP conversion
 
 def get_gbp_rate() -> float:
     data = yf.download("GBPUSD=X", period="2d", interval="1d", progress=False)
