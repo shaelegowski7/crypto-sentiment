@@ -825,7 +825,9 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const daysBack = isPro ? 365 : 30
+  const daysBack = isPro
+  ? Math.ceil((new Date() - new Date(allData[0]?.date)) / (1000 * 60 * 60 * 24)) + 1
+  : 30
   const startDate = new Date(today)
   startDate.setDate(startDate.getDate() - daysBack)
 
