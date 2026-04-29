@@ -870,141 +870,141 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
   const selectedScore = selectedDay ? sentimentByDate[selectedDay] : null
 
   return (
-    <div>
-      <div style={{ display: "flex", gap: "0", overflowX: "auto", paddingBottom: "8px" }}>
-        {/* Day of week labels */}
-        <div className="dow-labels" style={{ marginTop: "20px" }}>
-          {["S","M","T","W","T","F","S"].map((d, i) => (
-            <div key={i} className="dow-label">{i % 2 === 1 ? d : ""}</div>
-          ))}
+  <div style={{ overflowX: "auto", paddingBottom: "8px" }}>
+    <div style={{ display: "flex", gap: "0", minWidth: "max-content" }}>
+      {/* Day of week labels */}
+      <div className="dow-labels" style={{ marginTop: "20px" }}>
+        {["S","M","T","W","T","F","S"].map((d, i) => (
+          <div key={i} className="dow-label">{i % 2 === 1 ? d : ""}</div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        {/* Month labels */}
+        <div style={{ display: "flex", gap: "4px", height: "16px", position: "relative" }}>
+          {weeks.map((_, wi) => {
+            const label = monthLabels.find(m => m.weekIndex === wi)
+            return (
+              <div key={wi} style={{ width: "14px", flexShrink: 0, position: "relative" }}>
+                {label && (
+                  <span style={{
+                    position: "absolute", left: 0,
+                    fontFamily: "var(--mono)", fontSize: "9px",
+                    color: "var(--muted)", whiteSpace: "nowrap", letterSpacing: "0.05em"
+                  }}>
+                    {label.label}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
-          {/* Month labels */}
-          <div style={{ display: "flex", gap: "4px", height: "16px", position: "relative" }}>
-            {weeks.map((_, wi) => {
-              const label = monthLabels.find(m => m.weekIndex === wi)
-              return (
-                <div key={wi} style={{ width: "14px", flexShrink: 0, position: "relative" }}>
-                  {label && (
-                    <span style={{
-                      position: "absolute", left: 0,
-                      fontFamily: "var(--mono)", fontSize: "9px",
-                      color: "var(--muted)", whiteSpace: "nowrap", letterSpacing: "0.05em"
-                    }}>
-                      {label.label}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+        {/* Grid */}
+        <div style={{ display: "flex", gap: "4px" }}>
+          {weeks.map((week, wi) => (
+            <div key={wi} className="heatmap-week">
+              {week.map((day, di) => {
+                if (!day.inRange) {
+                  return <div key={di} className="heatmap-cell empty" />
+                }
+                const color = sentimentColor(day.sentiment)
+                return (
+                  <div
+                    key={di}
+                    className={`heatmap-cell ${color ? "" : "no-data"} ${selectedDay === day.date ? "selected" : ""}`}
+                    style={color ? { background: color } : {}}
+                    onClick={() => setSelectedDay(selectedDay === day.date ? null : day.date)}
+                    title={`${day.date}${day.sentiment !== null ? ` · ${day.sentiment > 0 ? "+" : ""}${day.sentiment}` : " · no data"}`}
+                  />
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
 
-          {/* Grid */}
-          <div style={{ display: "flex", gap: "4px" }}>
-            {weeks.map((week, wi) => (
-              <div key={wi} className="heatmap-week">
-                {week.map((day, di) => {
-                  if (!day.inRange) {
-                    return <div key={di} className="heatmap-cell empty" />
-                  }
-                  const color = sentimentColor(day.sentiment)
-                  return (
-                    <div
-                      key={di}
-                      className={`heatmap-cell ${color ? "" : "no-data"} ${selectedDay === day.date ? "selected" : ""}`}
-                      style={color ? { background: color } : {}}
-                      onClick={() => setSelectedDay(selectedDay === day.date ? null : day.date)}
-                      title={`${day.date}${day.sentiment !== null ? ` · ${day.sentiment > 0 ? "+" : ""}${day.sentiment}` : " · no data"}`}
-                    />
-                  )
-                })}
+    {/* Legend */}
+    <div className="heatmap-legend">
+      <span className="heatmap-legend-label">BEARISH</span>
+      <div className="heatmap-legend-cells">
+        {[
+          "rgba(248,81,73,0.85)",
+          "rgba(248,81,73,0.45)",
+          "rgba(139,148,158,0.4)",
+          "rgba(63,185,80,0.45)",
+          "rgba(63,185,80,0.85)",
+        ].map((c, i) => (
+          <div key={i} className="heatmap-legend-cell" style={{ background: c }} />
+        ))}
+      </div>
+      <span className="heatmap-legend-label">BULLISH</span>
+      <div className="heatmap-legend-cell no-data" style={{ background: "var(--surface2)", border: "1px solid var(--border)", width: "12px", height: "12px", borderRadius: "2px", marginLeft: "8px" }} />
+      <span className="heatmap-legend-label">NO DATA</span>
+    </div>
+
+    {!isPro && (
+      <div style={{
+        marginTop: "12px", padding: "8px 12px",
+        background: "rgba(240,180,41,0.04)", border: "1px solid rgba(240,180,41,0.15)",
+        borderRadius: "2px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px"
+      }}>
+        <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
+          Showing 30 days · <span style={{ color: "var(--accent)" }}>Upgrade to Pro</span> for full history
+        </span>
+        <button
+          onClick={onUpgrade}
+          style={{
+            fontFamily: "var(--mono)", fontSize: "9px", fontWeight: 600,
+            letterSpacing: "0.1em", padding: "4px 10px", background: "var(--accent)",
+            border: "none", borderRadius: "2px", color: "#080c10",
+            cursor: "pointer", textTransform: "uppercase", whiteSpace: "nowrap"
+          }}
+        >
+          Upgrade
+        </button>
+      </div>
+    )}
+
+    {selectedDay && (
+      <div className="heatmap-day-detail">
+        <div className="heatmap-day-header">
+          <span className="heatmap-day-date">{selectedDay}</span>
+          {selectedScore !== null && selectedScore !== undefined ? (
+            <span className="heatmap-day-score" style={{ color: selectedScore > 0.1 ? "var(--positive)" : selectedScore < -0.1 ? "var(--negative)" : "var(--neutral)" }}>
+              {selectedScore > 0 ? "+" : ""}{selectedScore}
+            </span>
+          ) : (
+            <span style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>No sentiment data</span>
+          )}
+          <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
+            {selectedHeadlines.length} headline{selectedHeadlines.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        {selectedHeadlines.length > 0 ? (
+          <div className="heatmap-day-headlines">
+            {selectedHeadlines.map((h, i) => (
+              <div key={i} className="heatmap-day-headline">
+                <span className={`sentiment-pill pill-${h.label}`} style={{ marginTop: 0 }}>
+                  {h.label.toUpperCase()}
+                </span>
+                <span style={{ fontSize: "12px", color: "var(--text)", flex: 1, lineHeight: "1.5" }}>{h.title}</span>
+                <span className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
+                  {h.score > 0 ? "+" : ""}{h.score}
+                </span>
               </div>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="heatmap-legend">
-        <span className="heatmap-legend-label">BEARISH</span>
-        <div className="heatmap-legend-cells">
-          {[
-            "rgba(248,81,73,0.85)",
-            "rgba(248,81,73,0.45)",
-            "rgba(139,148,158,0.4)",
-            "rgba(63,185,80,0.45)",
-            "rgba(63,185,80,0.85)",
-          ].map((c, i) => (
-            <div key={i} className="heatmap-legend-cell" style={{ background: c }} />
-          ))}
-        </div>
-        <span className="heatmap-legend-label">BULLISH</span>
-        <div className="heatmap-legend-cell no-data" style={{ background: "var(--surface2)", border: "1px solid var(--border)", width: "12px", height: "12px", borderRadius: "2px", marginLeft: "8px" }} />
-        <span className="heatmap-legend-label">NO DATA</span>
-      </div>
-
-      {!isPro && (
-        <div style={{
-          marginTop: "12px", padding: "8px 12px",
-          background: "rgba(240,180,41,0.04)", border: "1px solid rgba(240,180,41,0.15)",
-          borderRadius: "2px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px"
-        }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
-            Showing 30 days · <span style={{ color: "var(--accent)" }}>Upgrade to Pro</span> for full history
-          </span>
-          <button
-            onClick={onUpgrade}
-            style={{
-              fontFamily: "var(--mono)", fontSize: "9px", fontWeight: 600,
-              letterSpacing: "0.1em", padding: "4px 10px", background: "var(--accent)",
-              border: "none", borderRadius: "2px", color: "#080c10",
-              cursor: "pointer", textTransform: "uppercase", whiteSpace: "nowrap"
-            }}
-          >
-            Upgrade
-          </button>
-        </div>
-      )}
-
-      {selectedDay && (
-        <div className="heatmap-day-detail">
-          <div className="heatmap-day-header">
-            <span className="heatmap-day-date">{selectedDay}</span>
-            {selectedScore !== null && selectedScore !== undefined ? (
-              <span className="heatmap-day-score" style={{ color: selectedScore > 0.1 ? "var(--positive)" : selectedScore < -0.1 ? "var(--negative)" : "var(--neutral)" }}>
-                {selectedScore > 0 ? "+" : ""}{selectedScore}
-              </span>
-            ) : (
-              <span style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>No sentiment data</span>
-            )}
-            <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
-              {selectedHeadlines.length} headline{selectedHeadlines.length !== 1 ? "s" : ""}
-            </span>
+        ) : (
+          <div style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
+            No headlines for this day.
           </div>
-          {selectedHeadlines.length > 0 ? (
-            <div className="heatmap-day-headlines">
-              {selectedHeadlines.map((h, i) => (
-                <div key={i} className="heatmap-day-headline">
-                  <span className={`sentiment-pill pill-${h.label}`} style={{ marginTop: 0 }}>
-                    {h.label.toUpperCase()}
-                  </span>
-                  <span style={{ fontSize: "12px", color: "var(--text)", flex: 1, lineHeight: "1.5" }}>{h.title}</span>
-                  <span className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
-                    {h.score > 0 ? "+" : ""}{h.score}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
-              No headlines for this day.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
+        )}
+      </div>
+    )}
+  </div>
+)
 }
 
 export default function App() {
