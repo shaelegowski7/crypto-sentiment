@@ -201,7 +201,7 @@ const styles = `
 
   .stat-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(5, 1fr);
     gap: 12px;
   }
 
@@ -1476,7 +1476,7 @@ export default function App() {
             </div>
             {loading ? <ChartSkeleton /> : (
               <div className="panel-body" style={{ overflowX: "hidden" }}>
-                <ResponsiveContainer width="100%" height={320}>
+                <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={displayData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke="#21262d" vertical={false} />
                     <XAxis
