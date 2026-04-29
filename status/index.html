@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>SentimentFX Status</title>
+        <meta name="description"
+            content="SentimentFX system status — API, scraper, and data pipeline health." />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico">
+        <link
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+            rel="stylesheet">
+        <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080c10;
+      --surface: #0d1117;
+      --surface2: #161b22;
+      --border: #21262d;
+      --border2: #30363d;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --accent: #f0b429;
+      --accent2: #58a6ff;
+      --positive: #3fb950;
+      --negative: #f85149;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 40px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .nav-logo span {
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .content {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    .page-header {
+      margin-bottom: 40px;
+    }
+
+    .page-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .page-title {
+      font-family: var(--mono);
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .page-sub {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* Overall status banner */
+    .status-banner {
+      border-radius: 4px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+      border: 1px solid;
+    }
+
+    .status-banner.operational {
+      background: rgba(63,185,80,0.05);
+      border-color: rgba(63,185,80,0.3);
+    }
+
+    .status-banner.degraded {
+      background: rgba(240,180,41,0.05);
+      border-color: rgba(240,180,41,0.3);
+    }
+
+    .status-banner.outage {
+      background: rgba(248,81,73,0.05);
+      border-color: rgba(248,81,73,0.3);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.operational { background: var(--positive); animation: pulse 2s infinite; }
+    .status-dot.degraded { background: var(--accent); }
+    .status-dot.outage { background: var(--negative); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .status-banner-text {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .status-banner-text.operational { color: var(--positive); }
+    .status-banner-text.degraded { color: var(--accent); }
+    .status-banner-text.outage { color: var(--negative); }
+
+    .status-banner-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+      letter-spacing: 0.05em;
+    }
+
+    .status-timestamp {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+      text-align: right;
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 32px;
+    }
+
+    .section-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Service rows */
+    .service-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .service-row {
+      background: var(--surface);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .service-row:hover { background: var(--surface2); }
+
+    .service-name {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      letter-spacing: 0.05em;
+    }
+
+    .service-detail {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+      letter-spacing: 0.04em;
+    }
+
+    .service-status {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .service-status.ok {
+      background: rgba(63,185,80,0.1);
+      color: var(--positive);
+      border: 1px solid rgba(63,185,80,0.3);
+    }
+
+    .service-status.warn {
+      background: rgba(240,180,41,0.1);
+      color: var(--accent);
+      border: 1px solid rgba(240,180,41,0.3);
+    }
+
+    .service-status.err {
+      background: rgba(248,81,73,0.1);
+      color: var(--negative);
+      border: 1px solid rgba(248,81,73,0.3);
+    }
+
+    .service-status.loading {
+      background: rgba(139,148,158,0.1);
+      color: var(--muted);
+      border: 1px solid rgba(139,148,158,0.2);
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px 20px;
+    }
+
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .stat-sub {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      margin-top: 4px;
+      letter-spacing: 0.04em;
+    }
+
+    /* Ticker table */
+    .ticker-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .ticker-table th {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      text-align: left;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .ticker-table td {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ticker-table tr:last-child td { border-bottom: none; }
+    .ticker-table tr:hover td { background: var(--surface2); }
+
+    .ticker-table td:first-child {
+      color: var(--accent);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+
+    .ticker-table td.muted { color: var(--muted); }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-logo {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    .footer-links a {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-decoration: none;
+      letter-spacing: 0.06em;
+      transition: color 0.15s;
+    }
+
+    .footer-links a:hover { color: var(--accent); }
+
+    /* Skeleton */
+    @keyframes shimmer {
+      0% { background-position: -400px 0; }
+      100% { background-position: 400px 0; }
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+      background-size: 400px 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 12px 16px; }
+      .nav-links { display: none; }
+      .content { padding: 32px 16px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      footer { flex-direction: column; gap: 12px; text-align: center; padding: 16px; }
+    }
+  </style>
+    </head>
+    <body>
+
+        <nav>
+            <a href="https://sentimentfx.org" class="nav-logo">SentimentFX
+                <span>/ Status</span></a>
+            <ul class="nav-links">
+                <li><a href="https://sentimentfx.org">Home</a></li>
+                <li><a href="https://app.sentimentfx.org">Dashboard</a></li>
+                <li><a
+                        href="https://developers.sentimentfx.org">Developers</a></li>
+            </ul>
+        </nav>
+
+        <div class="content">
+
+            <div class="page-header">
+                <div class="page-label">System Status</div>
+                <div class="page-title">SentimentFX Status</div>
+                <div class="page-sub" id="last-updated">Checking
+                    systems...</div>
+            </div>
+
+            <div class="status-banner loading" id="overall-banner">
+                <div class="status-dot" id="overall-dot"></div>
+                <div>
+                    <div class="status-banner-text loading"
+                        id="overall-text">Checking...</div>
+                    <div class="status-banner-sub" id="overall-sub">Fetching
+                        status data</div>
+                </div>
+                <div class="status-timestamp" id="overall-timestamp"></div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Headlines</div>
+                    <div class="stat-value" id="stat-headlines"><span
+                            class="skeleton"
+                            style="width:80px;height:22px;"></span></div>
+                    <div class="stat-sub">Across all tickers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Prices</div>
+                    <div class="stat-value" id="stat-prices"><span
+                            class="skeleton"
+                            style="width:80px;height:22px;"></span></div>
+                    <div class="stat-sub">Daily OHLCV records</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Last Scrape</div>
+                    <div class="stat-value"
+                        style="font-size:14px;line-height:1.3;"
+                        id="stat-scrape"><span class="skeleton"
+                            style="width:100px;height:22px;"></span></div>
+                    <div class="stat-sub" id="stat-scrape-duration">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tickers Tracked</div>
+                    <div class="stat-value">5</div>
+                    <div class="stat-sub">BTC · ETH · SOL · XRP · DOGE</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Services</div>
+                <div class="service-list">
+                    <div class="service-row">
+                        <div>
+                            <div class="service-name">API</div>
+                            <div
+                                class="service-detail">api.sentimentfx.org</div>
+                        </div>
+                        <div class="service-status loading"
+                            id="svc-api">Checking</div>
+                    </div>
+                    <div class="service-row">
+                        <div>
+                            <div class="service-name">Dashboard</div>
+                            <div
+                                class="service-detail">app.sentimentfx.org</div>
+                        </div>
+                        <div class="service-status loading"
+                            id="svc-dashboard">Checking</div>
+                    </div>
+                    <div class="service-row">
+                        <div>
+                            <div class="service-name">Scraper</div>
+                            <div class="service-detail">Hourly news pipeline ·
+                                GNews + RSS</div>
+                        </div>
+                        <div class="service-status loading"
+                            id="svc-scraper">Checking</div>
+                    </div>
+                    <div class="service-row">
+                        <div>
+                            <div class="service-name">Data Pipeline</div>
+                            <div class="service-detail">FinBERT sentiment
+                                scoring</div>
+                        </div>
+                        <div class="service-status loading"
+                            id="svc-pipeline">Checking</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Data Coverage</div>
+                <table class="ticker-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Headlines</th>
+                            <th>Price Records</th>
+                            <th>Latest Headline</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ticker-tbody">
+                        <tr><td colspan="4" class="muted"
+                                style="text-align:center;padding:20px;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+        <footer>
+            <span class="footer-logo">SENTIMENTFX</span>
+            <div class="footer-links">
+                <a href="https://sentimentfx.org">Home</a>
+                <a href="https://app.sentimentfx.org">Dashboard</a>
+                <a href="https://developers.sentimentfx.org">Developers</a>
+                <a href="mailto:hello@sentimentfx.org">Support</a>
+            </div>
+        </footer>
+
+        <script>
+    const API = 'https://api.sentimentfx.org'
+
+    function fmtDate(iso) {
+      if (!iso) return '—'
+      const d = new Date(iso)
+      return d.toUTCString().replace(' GMT', ' UTC')
+    }
+
+    function fmtRelative(iso) {
+      if (!iso) return null
+      const diff = (Date.now() - new Date(iso).getTime()) / 1000 / 60
+      if (diff < 60) return `${Math.round(diff)}m ago`
+      if (diff < 1440) return `${Math.round(diff / 60)}h ago`
+      return `${Math.round(diff / 1440)}d ago`
+    }
+
+    function setStatus(id, status, text) {
+      const el = document.getElementById(id)
+      el.className = `service-status ${status}`
+      el.textContent = text
+    }
+
+    async function checkApi() {
+      const start = Date.now()
+      try {
+        const res = await fetch(`${API}/`, { signal: AbortSignal.timeout(5000) })
+        const ms = Date.now() - start
+        if (res.ok) {
+          setStatus('svc-api', 'ok', `Operational · ${ms}ms`)
+          return true
+        } else {
+          setStatus('svc-api', 'err', `Error ${res.status}`)
+          return false
+        }
+      } catch {
+        setStatus('svc-api', 'err', 'Unreachable')
+        return false
+      }
+    }
+
+    async function checkDashboard() {
+      try {
+        const res = await fetch('https://app.sentimentfx.org', { signal: AbortSignal.timeout(5000), mode: 'no-cors' })
+        setStatus('svc-dashboard', 'ok', 'Operational')
+        return true
+      } catch {
+        setStatus('svc-dashboard', 'err', 'Unreachable')
+        return false
+      }
+    }
+
+    async function loadStatus() {
+      try {
+        const res = await fetch(`${API}/status`, { signal: AbortSignal.timeout(8000) })
+        const data = await res.json()
+
+        // last updated
+        document.getElementById('last-updated').textContent =
+          `Last checked: ${fmtDate(data.timestamp)}`
+
+        // stats
+        document.getElementById('stat-headlines').textContent =
+          data.total_headlines?.toLocaleString() ?? '—'
+        document.getElementById('stat-prices').textContent =
+          data.total_prices?.toLocaleString() ?? '—'
+
+        // scrape time
+        const scrapeEl = document.getElementById('stat-scrape')
+        const scrapeDurEl = document.getElementById('stat-scrape-duration')
+        if (data.last_scrape) {
+          scrapeEl.textContent = fmtRelative(data.last_scrape)
+          scrapeDurEl.textContent = data.last_scrape_duration_seconds
+            ? `Completed in ${data.last_scrape_duration_seconds}s`
+            : '—'
+        } else {
+          scrapeEl.textContent = 'Pending'
+          scrapeDurEl.textContent = 'Waiting for first scheduled run'
+        }
+
+        // scraper status — warn if last scrape > 2 hours ago
+        const scrapeAge = data.last_scrape
+          ? (Date.now() - new Date(data.last_scrape).getTime()) / 1000 / 60
+          : null
+
+        if (scrapeAge === null) {
+          setStatus('svc-scraper', 'warn', 'Pending')
+        } else if (scrapeAge < 120) {
+          setStatus('svc-scraper', 'ok', `Last run ${fmtRelative(data.last_scrape)}`)
+        } else {
+          setStatus('svc-scraper', 'err', `Stale · ${fmtRelative(data.last_scrape)}`)
+        }
+
+        // pipeline — check if latest headlines are recent
+        const latestHeadlines = Object.values(data.tickers)
+          .map(t => t.latest_headline)
+          .filter(Boolean)
+          .sort()
+          .reverse()
+
+        const latestAge = latestHeadlines[0]
+          ? (Date.now() - new Date(latestHeadlines[0]).getTime()) / 1000 / 60
+          : null
+
+        if (latestAge !== null && latestAge < 180) {
+          setStatus('svc-pipeline', 'ok', 'Operational')
+        } else if (latestAge !== null && latestAge < 1440) {
+          setStatus('svc-pipeline', 'warn', 'Delayed')
+        } else {
+          setStatus('svc-pipeline', 'err', 'No recent data')
+        }
+
+        // ticker table
+        const tbody = document.getElementById('ticker-tbody')
+        tbody.innerHTML = Object.entries(data.tickers).map(([ticker, stats]) => `
+          <tr>
+            <td>${ticker}</td>
+            <td>${stats.headlines?.toLocaleString() ?? '—'}</td>
+            <td>${stats.prices?.toLocaleString() ?? '—'}</td>
+            <td class="muted">${stats.latest_headline ? fmtRelative(stats.latest_headline) : '—'}</td>
+          </tr>
+        `).join('')
+
+        // overall banner
+        const apiOk = document.getElementById('svc-api').classList.contains('ok')
+        const scraperOk = scrapeAge !== null && scrapeAge < 120
+        const pipelineOk = latestAge !== null && latestAge < 180
+
+        const banner = document.getElementById('overall-banner')
+        const dot = document.getElementById('overall-dot')
+        const text = document.getElementById('overall-text')
+        const sub = document.getElementById('overall-sub')
+        const ts = document.getElementById('overall-timestamp')
+
+        if (apiOk && scraperOk && pipelineOk) {
+          banner.className = 'status-banner operational'
+          dot.className = 'status-dot operational'
+          text.className = 'status-banner-text operational'
+          text.textContent = 'All Systems Operational'
+          sub.textContent = 'API, scraper and data pipeline running normally'
+        } else if (apiOk) {
+          banner.className = 'status-banner degraded'
+          dot.className = 'status-dot degraded'
+          text.className = 'status-banner-text degraded'
+          text.textContent = 'Partial Degradation'
+          sub.textContent = 'API is up but some services may be delayed'
+        } else {
+          banner.className = 'status-banner outage'
+          dot.className = 'status-dot outage'
+          text.className = 'status-banner-text outage'
+          text.textContent = 'Service Disruption'
+          sub.textContent = 'Investigating — check back shortly'
+        }
+
+        ts.textContent = `Updated ${fmtRelative(data.timestamp)}`
+
+      } catch (e) {
+        document.getElementById('overall-banner').className = 'status-banner outage'
+        document.getElementById('overall-dot').className = 'status-dot outage'
+        document.getElementById('overall-text').className = 'status-banner-text outage'
+        document.getElementById('overall-text').textContent = 'Unable to reach API'
+        document.getElementById('overall-sub').textContent = 'Status data unavailable'
+      }
+    }
+
+    async function init() {
+      await Promise.all([checkApi(), checkDashboard(), loadStatus()])
+    }
+
+    init()
+    setInterval(init, 60000) // refresh every minute
+  </script>
+
+    </body>
+</html>
