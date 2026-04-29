@@ -21,6 +21,7 @@ import stripe
 import csv
 import io
 import secrets
+import hashlib
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -42,6 +43,33 @@ app.add_middleware(
 
 TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
 
+
+# ---------------------------------------------------------------------------
+# API key helpers
+# ---------------------------------------------------------------------------
+
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+def _make_key() -> str:
+    return "sfx_" + secrets.token_hex(24)
+
+def _create_stripe_customer(email: str):
+    try:
+        customer = stripe.Customer.create(email=email)
+        subscription = stripe.Subscription.create(
+            customer=customer.id,
+            items=[{"price": "price_1TO3DG2NzVdYK0wrxIRggage"}],
+        )
+        return customer.id, subscription.id
+    except Exception as e:
+        print(f"Stripe error: {e}")
+        return None, None
+
+
+# ---------------------------------------------------------------------------
+# Auth dependencies
+# ---------------------------------------------------------------------------
 
 async def require_pro(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -78,6 +106,24 @@ async def require_admin(secret: str = None):
     if not admin_secret or secret != admin_secret:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+
+def get_api_key(x_api_key: str = Header(None), db: Session = Depends(get_db)):
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    key_hash = _hash_key(x_api_key)
+    key = db.query(models.APIKey).filter(
+        models.APIKey.key_hash == key_hash,
+        models.APIKey.active == True
+    ).first()
+    if not key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return key
+
+
+# ---------------------------------------------------------------------------
+# Scheduled jobs
+# ---------------------------------------------------------------------------
 
 def check_alerts(db):
     alerts = db.query(models.Alert).filter(models.Alert.active == True).all()
@@ -134,7 +180,7 @@ def check_alerts(db):
                 <tr>
                   <td style="background:#f0b429;border-radius:2px;">
                     <a href="https://app.sentimentfx.org" style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">
-                      View Dashboard →
+                      View Dashboard -&gt;
                     </a>
                   </td>
                 </tr>
@@ -216,6 +262,10 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scrape_all, "interval", hours=1)
 scheduler.start()
 
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 @app.get("/")
 def root():
@@ -544,37 +594,20 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
           <tr>
             <td style="padding:40px 0 32px;">
               <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">
-                — Waitlist Confirmed
+                - Waitlist Confirmed
               </p>
               <h1 style="font-size:28px;font-weight:600;color:#e6edf3;margin:0 0 16px;line-height:1.2;letter-spacing:-0.01em;">
                 You're on the list.
               </h1>
               <p style="font-size:14px;color:#7d8590;margin:0 0 32px;line-height:1.7;">
-                We'll reach out when early access opens — you'll get founder pricing
-                and first access to the full signal suite.
+                We'll reach out when early access opens.
               </p>
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
-                <tr>
-                  <td style="padding-right:6px;">
-                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(63,185,80,0.4);border-radius:2px;color:#3fb950;background:rgba(63,185,80,0.06);">BTC +0.76</span>
-                  </td>
-                  <td style="padding-right:6px;">
-                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(248,81,73,0.4);border-radius:2px;color:#f85149;background:rgba(248,81,73,0.06);">ETH −0.54</span>
-                  </td>
-                  <td style="padding-right:6px;">
-                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(63,185,80,0.4);border-radius:2px;color:#3fb950;background:rgba(63,185,80,0.06);">SOL +0.61</span>
-                  </td>
-                  <td>
-                    <span style="font-size:10px;letter-spacing:0.08em;padding:3px 10px;border:1px solid rgba(248,81,73,0.4);border-radius:2px;color:#f85149;background:rgba(248,81,73,0.06);">XRP −0.39</span>
-                  </td>
-                </tr>
-              </table>
               <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
                 <tr>
                   <td style="background:#f0b429;border-radius:2px;">
                     <a href="https://app.sentimentfx.org"
                        style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">
-                      View Live Dashboard →
+                      View Live Dashboard
                     </a>
                   </td>
                 </tr>
@@ -587,7 +620,7 @@ def join_waitlist(data: schemas.WaitlistCreate, db: Session = Depends(get_db)):
           <tr>
             <td style="border-top:1px solid #21262d;padding-top:20px;">
               <p style="font-size:10px;color:#7d8590;margin:0;letter-spacing:0.05em;line-height:1.7;">
-                SentimentFX · Crypto sentiment intelligence<br>
+                SentimentFX - Crypto sentiment intelligence<br>
                 <a href="mailto:hello@sentimentfx.org" style="color:#f0b429;text-decoration:none;">hello@sentimentfx.org</a>
               </p>
             </td>
@@ -684,7 +717,7 @@ def backfill(ticker: str, background_tasks: BackgroundTasks, days: int = 30, off
     if ticker.upper() not in TICKER_QUERIES:
         raise HTTPException(status_code=404, detail="Unknown ticker")
     background_tasks.add_task(run_backfill, ticker, days, offset)
-    return {"message": f"Backfill started for {ticker} ({days} days, offset {offset}) — check Railway logs for progress"}
+    return {"message": f"Backfill started for {ticker} ({days} days, offset {offset}) - check Railway logs for progress"}
 
 
 @app.post("/alerts")
@@ -787,6 +820,11 @@ async def stripe_webhook(request: Request):
 
     return {"status": "ok"}
 
+
+# ---------------------------------------------------------------------------
+# API key management
+# ---------------------------------------------------------------------------
+
 @app.post("/api/keys/generate")
 async def generate_api_key(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
@@ -797,44 +835,81 @@ async def generate_api_key(request: Request, db: Session = Depends(get_db)):
 
     existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
     if existing:
-        return {"key": existing.key, "message": "Existing key returned"}
-
-    try:
-        customer = stripe.Customer.create(email=email)
-        subscription = stripe.Subscription.create(
-            customer=customer.id,
-            items=[{"price": "price_1TO3DG2NzVdYK0wrxIRggage"}],
+        raise HTTPException(
+            status_code=409,
+            detail="A key already exists for this email. Use /api/keys/regenerate to get a new one."
         )
-        stripe_customer_id = customer.id
-        stripe_subscription_id = subscription.id
-    except Exception as e:
-        print(f"Stripe error: {e}")
-        stripe_customer_id = None
-        stripe_subscription_id = None
 
-    key = "sfx_" + secrets.token_hex(24)
+    stripe_customer_id, stripe_subscription_id = _create_stripe_customer(email)
+
+    key = _make_key()
     api_key = models.APIKey(
-        key=key,
+        key=key,  # kept for safety during transition - remove after dropping column
+        key_hash=_hash_key(key),
+        key_prefix=key[:12],
         email=email,
         stripe_customer_id=stripe_customer_id,
         stripe_subscription_id=stripe_subscription_id,
     )
     db.add(api_key)
     db.commit()
-    return {"key": key, "message": "API key generated"}
+
+    # Plaintext key returned ONCE - never stored again after this point
+    return {
+        "key": key,
+        "prefix": key[:12],
+        "message": "API key generated. Save this key - it will not be shown again."
+    }
 
 
-def get_api_key(x_api_key: str = Header(None), db: Session = Depends(get_db)):
-    if not x_api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-    key = db.query(models.APIKey).filter(
-        models.APIKey.key == x_api_key,
-        models.APIKey.active == True
-    ).first()
-    if not key:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    return key
+@app.post("/api/keys/regenerate")
+async def regenerate_api_key(request: Request, db: Session = Depends(get_db)):
+    body = await request.json()
+    email = body.get("email")
 
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="No key found for this email")
+
+    new_key = _make_key()
+    existing.key = new_key  # kept for safety during transition - remove after dropping column
+    existing.key_hash = _hash_key(new_key)
+    existing.key_prefix = new_key[:12]
+    existing.active = True
+    db.commit()
+
+    return {
+        "key": new_key,
+        "prefix": new_key[:12],
+        "message": "Key regenerated. Your old key is now invalid. Save this key - it will not be shown again."
+    }
+
+
+@app.get("/api/keys/info")
+async def get_key_info(request: Request, db: Session = Depends(get_db)):
+    """Returns non-sensitive key info by email - prefix and usage only, never the full key."""
+    email = request.query_params.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="No key found for this email")
+
+    return {
+        "prefix": existing.key_prefix,
+        "calls_used": existing.calls_used,
+        "free_remaining": max(0, existing.free_calls - existing.calls_used),
+        "active": existing.active,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Usage tracking
+# ---------------------------------------------------------------------------
 
 def track_usage(api_key: models.APIKey, db: Session, count: int = 1):
     api_key.calls_used += count
@@ -853,6 +928,10 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1):
 
     db.commit()
 
+
+# ---------------------------------------------------------------------------
+# Public v1 API
+# ---------------------------------------------------------------------------
 
 @app.get("/v1/sentiment/{ticker}")
 def api_sentiment(ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
