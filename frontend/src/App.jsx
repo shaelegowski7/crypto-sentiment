@@ -1578,6 +1578,19 @@ export default function App() {
                             ))}
                           </div>
                         )}
+                        <div style={{
+                          marginTop: "16px",
+                          padding: "10px 14px",
+                          background: "var(--surface2)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "2px",
+                          fontFamily: "var(--mono)",
+                          fontSize: "11px",
+                          color: "var(--muted)",
+                          lineHeight: "1.6"
+                        }}>
+                          💡 A higher correlation at longer lags suggests sentiment is a leading indicator — news today may move prices in {correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}.
+                        </div>
                       </div>
                     </>
                   ) : (
