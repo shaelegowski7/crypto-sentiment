@@ -1539,16 +1539,29 @@ export default function App() {
                 <div className="panel-body">
                   {correlation?.correlation !== undefined ? (
                     <>
-                      <div className={`correlation-value ${correlation.correlation < 0 ? "negative-text" : "positive-text"}`}>
-                        {(Math.abs(correlation.correlation) * 100).toFixed(0)}%
-                      </div>
                       <div className="correlation-detail">
                         <strong>{correlation.interpretation}</strong>
                         <br /><br />
-                        Signal type: <strong>{correlation.signal_type}</strong>
-                        <br />
-                        Best lag: <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
-                        <br /><br />
+                        <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "2px", padding: "10px 14px", marginBottom: "12px" }}>
+                          <div style={{ marginBottom: "8px" }}>
+                            <span style={{ color: "var(--muted)" }}>Signal: </span>
+                            <strong style={{ color: correlation.signal_type?.includes("momentum") ? "var(--positive)" : "var(--negative)" }}>
+                              {correlation.signal_type?.includes("momentum") ? "📈 Momentum" : "📉 Contrarian"}
+                            </strong>
+                            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px" }}>
+                              {correlation.signal_type?.includes("momentum")
+                                ? "Positive news tends to be followed by price rises"
+                                : "Positive news tends to be followed by price drops — market may have already priced it in"}
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ color: "var(--muted)" }}>Best lag: </span>
+                            <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
+                            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px" }}>
+                              Sentiment today predicts price movement {correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""} from now
+                            </div>
+                          </div>
+                        </div>
                         {correlation.all_lags && (
                           <div style={{ marginTop: "8px" }}>
                             {Object.entries(correlation.all_lags).map(([lag, corr]) => (
