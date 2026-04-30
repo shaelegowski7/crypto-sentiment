@@ -1217,7 +1217,7 @@ export default function App() {
     price: d.price != null ? parseFloat((d.price * rate).toFixed(2)) : null,
   }))
 
-  const sentimentOnly = filteredData.filter(d => d.sentiment !== null && d.sentiment !== undefined)
+  const sentimentOnly = (range === 999 ? allData : filteredData).filter(d => d.sentiment !== null && d.sentiment !== undefined)
 
   const avgSentiment = sentimentOnly.length
     ? (sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3)
