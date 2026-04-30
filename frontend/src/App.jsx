@@ -1175,7 +1175,6 @@ export default function App() {
 
         const allDates = new Set([
           ...Object.keys(sentimentMap),
-          ...Object.keys(priceMap),
         ])
 
         const merged = Array.from(allDates).map(date => ({
