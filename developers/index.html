@@ -182,12 +182,6 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     <a class="sidebar-link"
                         href="https://status.sentimentfx.org"
                         target="_blank">Status</a>
-                    <a class="sidebar-link"
-                        href="https://status.sentimentfx.org"
-                        target="_blank">Status</a>
-                    <a class="sidebar-link"
-                        href="https://status.sentimentfx.org"
-                        target="_blank">Status</a>
                 </div>
             </aside>
 
@@ -339,17 +333,17 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                                     class="card-title">Regenerate API
                                     Key</span></div>
                             <div class="notice notice-warn"
-                                style="margin-bottom:16px;">⚠ Your current key
-                                will be <strong>immediately
-                                    invalidated</strong>. Any apps using it will
-                                stop working.</div>
+                                style="margin-bottom:16px;">⚠ A reset link will
+                                be sent to your email. Your current key stays
+                                active until you confirm.</div>
                             <div class="form-row">
                                 <input class="form-input" type="email"
                                     id="regen-email"
                                     placeholder="Confirm your email" />
                                 <button class="btn-primary"
-                                    onclick="regenerateKey()"
-                                    style="background:var(--negative);color:#fff;">Regenerate</button>
+                                    onclick="requestRegenerate()"
+                                    style="background:var(--negative);color:#fff;">Send
+                                    Reset Link</button>
                             </div>
                             <div class="msg" id="regen-msg"></div>
                             <button onclick="hideRegenerate()"
@@ -873,27 +867,45 @@ async function lookupKey() {
     btn.disabled = false; btn.textContent = 'Look Up'
 }
 
-async function regenerateKey() {
+async function requestRegenerate() {
     const email = document.getElementById('regen-email').value.trim()
     if (!email) return showMsg('regen-msg', 'Please enter your email.', 'error')
     const btn = event.target
     btn.disabled = true; btn.textContent = '...'
     try {
-        const res = await fetch(API + '/api/keys/regenerate', {
+        const res = await fetch(API + '/api/keys/regenerate/request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         })
         const data = await res.json()
-        if (data.key) {
-            showReveal(data.key)
-        } else {
-            showMsg('regen-msg', data.detail || 'Something went wrong.', 'error')
-        }
+        showMsg('regen-msg', data.message || 'Reset link sent. Check your email.', 'success')
     } catch (e) {
         showMsg('regen-msg', 'Failed to connect to API.', 'error')
     }
-    btn.disabled = false; btn.textContent = 'Regenerate'
+    btn.disabled = false; btn.textContent = 'Send Reset Link'
+}
+
+async function handleResetToken(token) {
+    try {
+        const res = await fetch(API + '/api/keys/regenerate/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        })
+        const data = await res.json()
+        if (data.key) {
+            showReveal(data.key)
+        } else {
+            hideAll()
+            document.getElementById('no-key-state').style.display = 'block'
+            showMsg('gen-msg', data.detail || 'Invalid or expired reset link.', 'error')
+        }
+    } catch (e) {
+        console.error('Reset confirm error:', e)
+    }
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname)
 }
 
 function copyRevealKey() {
@@ -981,6 +993,12 @@ async function runTester(endpoint) {
         resultEl.classList.add('show')
     }
     btn.disabled = false; btn.textContent = 'Send'
+}
+// Handle reset token from email link
+const params = new URLSearchParams(window.location.search)
+const resetToken = params.get('reset')
+if (resetToken) {
+    handleResetToken(resetToken)
 }
         </script>
     </body>
