@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Privacy Policy — SentimentFX</title>
+        <link rel="icon" type="image/x-icon" href="/favicon.ico">
+        <link
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+            rel="stylesheet">
+        <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080c10; --surface: #0d1117; --border: #21262d;
+      --text: #e6edf3; --muted: #7d8590; --accent: #f0b429;
+      --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.7; }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 40px; border-bottom: 1px solid var(--border);
+      background: var(--surface); position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.15em; color: var(--accent); text-decoration: none; text-transform: uppercase; }
+    .nav-logo span { color: var(--muted); font-weight: 400; }
+    .nav-back { font-family: var(--mono); font-size: 11px; color: var(--muted); text-decoration: none; letter-spacing: 0.08em; transition: color 0.15s; }
+    .nav-back:hover { color: var(--text); }
+    .content { max-width: 720px; margin: 0 auto; padding: 60px 24px; }
+    .page-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; }
+    h1 { font-family: var(--mono); font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+    .updated { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 48px; letter-spacing: 0.05em; }
+    h2 { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text); margin: 40px 0 12px; padding-top: 40px; border-top: 1px solid var(--border); }
+    h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+    p { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+    ul { margin: 0 0 16px 20px; }
+    li { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer { border-top: 1px solid var(--border); padding: 24px 40px; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  </style>
+    </head>
+    <body>
+        <nav>
+            <a href="/" class="nav-logo">SentimentFX <span>/ Privacy</span></a>
+            <a href="/" class="nav-back">← Back to Home</a>
+        </nav>
+
+        <div class="content">
+            <div class="page-label">Legal</div>
+            <h1>Privacy Policy</h1>
+            <div class="updated">Last updated: 30 April 2026</div>
+
+            <h2>Who we are</h2>
+            <p>SentimentFX Ltd ("we", "us", "our") is a company registered in
+                Scotland, company number SC886719. Our registered address is 35
+                Fallside Road, Bothwell, G71 8BA.</p>
+            <p>We operate the website sentimentfx.org and related services
+                including app.sentimentfx.org, api.sentimentfx.org, and
+                developers.sentimentfx.org.</p>
+            <p>For questions about this policy, contact us at <a
+                    href="mailto:hello@sentimentfx.org">hello@sentimentfx.org</a>.</p>
+
+            <h2>What data we collect</h2>
+            <p>We collect the following information when you use our
+                services:</p>
+            <ul>
+                <li><strong>Account information</strong> — email address when
+                    you sign up or generate an API key</li>
+                <li><strong>Usage data</strong> — API call counts and timestamps
+                    for billing purposes</li>
+                <li><strong>Authentication data</strong> — handled by Supabase;
+                    if you use Google Sign-In, we receive your email address and
+                    name from Google</li>
+                <li><strong>Payment information</strong> — handled entirely by
+                    Stripe; we never store card details</li>
+            </ul>
+
+            <h2>How we use your data</h2>
+            <ul>
+                <li>To provide and operate the SentimentFX service</li>
+                <li>To send transactional emails (API key confirmations, alerts,
+                    receipts)</li>
+                <li>To track API usage for metered billing</li>
+                <li>To respond to support enquiries</li>
+            </ul>
+            <p>We do not sell your data. We do not use your data for
+                advertising.</p>
+
+            <h2>Third-party services</h2>
+            <p>We use the following third-party services which may process your
+                data:</p>
+            <ul>
+                <li><strong>Supabase</strong> — authentication and database
+                    hosting</li>
+                <li><strong>Stripe</strong> — payment processing and
+                    subscription management</li>
+                <li><strong>Resend</strong> — transactional email delivery</li>
+                <li><strong>Railway</strong> — backend infrastructure
+                    hosting</li>
+                <li><strong>Vercel</strong> — frontend hosting</li>
+            </ul>
+
+            <h2>Data retention</h2>
+            <p>We retain your account data for as long as your account is
+                active. API usage logs are retained for billing and support
+                purposes. You may request deletion of your data at any time by
+                emailing <a
+                    href="mailto:hello@sentimentfx.org">hello@sentimentfx.org</a>.</p>
+
+            <h2>Your rights</h2>
+            <p>You have the right to access, correct, or delete your personal
+                data. To exercise these rights, contact us at <a
+                    href="mailto:hello@sentimentfx.org">hello@sentimentfx.org</a>.</p>
+            <p>As a UK company, we comply with UK GDPR. You have the right to
+                data portability and the right to lodge a complaint with the
+                Information Commissioner's Office (ICO) at <a
+                    href="https://ico.org.uk"
+                    target="_blank">ico.org.uk</a>.</p>
+
+            <h2>Cookies</h2>
+            <p>We use only essential cookies required for authentication. We do
+                not use tracking or advertising cookies.</p>
+
+            <h2>Changes to this policy</h2>
+            <p>We may update this policy from time to time. We will notify users
+                of significant changes by email. Continued use of the service
+                after changes constitutes acceptance of the updated policy.</p>
+        </div>
+
+        <footer>
+            SentimentFX Ltd · Registered in Scotland · SC886719 · <a
+                href="/terms">Terms of Service</a> · <a
+                href="mailto:hello@sentimentfx.org">hello@sentimentfx.org</a>
+        </footer>
+    </body>
+</html>
