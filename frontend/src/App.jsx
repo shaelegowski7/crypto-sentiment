@@ -1146,7 +1146,10 @@ export default function App() {
         ? `${API}/dashboard/${ticker}?all=true`
         : `${API}/dashboard/${ticker}?days=${Math.max(days, 90)}`
 
-      const url = `${baseUrl}&page=${headlinePageNum}&limit=50`
+      const url = headlinePageNum === 1 
+       ? `${baseUrl}&page=1&limit=800`
+       : `${baseUrl}&page=${headlinePageNum}&limit=50`
+
       const res = await axios.get(url)
       const { sentiment, prices, pagination } = res.data
 
