@@ -1142,16 +1142,24 @@ export default function App() {
     try {
       const isAll = selectedRange === 999
       const days = isAll ? 90 : selectedRange
+
+      // fetch prices + paginated headlines for the list
       const baseUrl = isAll && isPro
         ? `${API}/dashboard/${ticker}?all=true`
         : `${API}/dashboard/${ticker}?days=${Math.max(days, 90)}`
 
-      const url = headlinePageNum === 1 
-       ? `${baseUrl}&page=1&limit=800`
-       : `${baseUrl}&page=${headlinePageNum}&limit=50`
+      const url = headlinePageNum === 1
+        ? `${baseUrl}&page=1&limit=50`
+        : `${baseUrl}&page=${headlinePageNum}&limit=50`
 
-      const res = await axios.get(url)
-      const { sentiment, prices, pagination } = res.data
+      const [dashRes, sentimentRes] = await Promise.all([
+        axios.get(url),
+        headlinePageNum === 1
+          ? axios.get(`${API}/sentiment-summary/${ticker}?${isAll && isPro ? "all=true" : `days=${Math.max(days, 90)}`}`)
+          : Promise.resolve(null)
+      ])
+
+      const { sentiment, prices } = dashRes.data
 
       const priceMap = {}
       prices.forEach(p => {
@@ -1159,32 +1167,23 @@ export default function App() {
         priceMap[date] = p.close_price
       })
 
-      const sentimentByDate = {}
-      sentiment.forEach(s => {
-        const date = s.date.split("T")[0]
-        if (!sentimentByDate[date]) sentimentByDate[date] = []
-        sentimentByDate[date].push(s.score)
-      })
-
-      const allDates = new Set([
-        ...Object.keys(sentimentByDate),
-        ...Object.keys(priceMap),
-      ])
-
-      const merged = Array.from(allDates).map(date => ({
-        date,
-        sentiment: sentimentByDate[date]
-          ? parseFloat(
-              (
-                sentimentByDate[date].reduce((a, b) => a + b, 0) /
-                sentimentByDate[date].length
-              ).toFixed(3)
-            )
-          : null,
-        price: priceMap[date] || null,
-      })).sort((a, b) => new Date(a.date) - new Date(b.date))
-
       if (headlinePageNum === 1) {
+        // use sentiment-summary for chart data — full aggregated history
+        const summaryData = sentimentRes.data.data
+        const sentimentMap = {}
+        summaryData.forEach(s => { sentimentMap[s.date] = s.avg_sentiment })
+
+        const allDates = new Set([
+          ...Object.keys(sentimentMap),
+          ...Object.keys(priceMap),
+        ])
+
+        const merged = Array.from(allDates).map(date => ({
+          date,
+          sentiment: sentimentMap[date] ?? null,
+          price: priceMap[date] || null,
+        })).sort((a, b) => new Date(a.date) - new Date(b.date))
+
         setAllData(merged)
         setHeadlines(sentiment)
       } else {

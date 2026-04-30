@@ -1325,3 +1325,33 @@ async def confirm_key_regenerate(request: Request, db: Session = Depends(get_db)
         "prefix": new_key[:12],
         "message": "Key regenerated. Save this key - it will not be shown again."
     }
+
+@app.get("/sentiment-summary/{ticker}")
+def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Session = Depends(get_db)):
+    query = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper()
+    )
+    if not all:
+        since = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(models.Headline.published_at >= since)
+
+    headlines = query.all()
+
+    by_date = {}
+    for h in headlines:
+        date = str(h.published_at.date())
+        if date not in by_date:
+            by_date[date] = []
+        by_date[date].append(h.sentiment_score)
+
+    return {
+        "ticker": ticker.upper(),
+        "data": [
+            {
+                "date": date,
+                "avg_sentiment": round(sum(scores) / len(scores), 3),
+                "count": len(scores)
+            }
+            for date, scores in sorted(by_date.items())
+        ]
+    }
