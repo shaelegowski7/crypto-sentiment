@@ -40,6 +40,271 @@ const exportData = async (type, ticker, session, days) => {
   }
 }
 
+// ─── Derived insight helpers ────────────────────────────────────────────────
+
+/**
+ * Returns sentiment trend data comparing the last 7 days vs the prior 7 days.
+ * { current: number, previous: number, delta: number, direction: "up"|"down"|"flat" }
+ */
+function computeSentimentTrend(allData) {
+  const withSentiment = allData.filter(d => d.sentiment !== null && d.sentiment !== undefined)
+  if (withSentiment.length < 2) return null
+
+  const last7 = withSentiment.slice(-7)
+  const prior7 = withSentiment.slice(-14, -7)
+
+  if (last7.length === 0) return null
+
+  const avg = arr => arr.reduce((a, b) => a + b.sentiment, 0) / arr.length
+  const current = avg(last7)
+  const previous = prior7.length > 0 ? avg(prior7) : null
+
+  const delta = previous !== null ? current - previous : null
+  const direction = delta === null ? "flat" : delta > 0.01 ? "up" : delta < -0.01 ? "down" : "flat"
+
+  return {
+    current: parseFloat(current.toFixed(3)),
+    previous: previous !== null ? parseFloat(previous.toFixed(3)) : null,
+    delta: delta !== null ? parseFloat(delta.toFixed(3)) : null,
+    deltaPct: previous !== null && previous !== 0
+      ? parseFloat(((delta / Math.abs(previous)) * 100).toFixed(1))
+      : null,
+    direction,
+  }
+}
+
+/**
+ * Builds the plain-English "Today's Signal" verdict.
+ */
+function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
+  if (avgSentiment === null || avgSentiment === undefined) return null
+
+  const score = parseFloat(avgSentiment)
+  const sentimentLabel = score > 0.3 ? "strongly bullish"
+    : score > 0.1 ? "bullish"
+    : score < -0.3 ? "strongly bearish"
+    : score < -0.1 ? "bearish"
+    : "neutral"
+
+  const direction = score > 0.1 ? "BULLISH" : score < -0.1 ? "BEARISH" : "NEUTRAL"
+
+  // Signal strength from correlation magnitude
+  const corrValue = correlation?.correlation ? Math.abs(parseFloat(correlation.correlation)) : null
+  const strength = corrValue === null ? null
+    : corrValue >= 0.6 ? "strong"
+    : corrValue >= 0.35 ? "moderate"
+    : "weak"
+
+  const lagDays = correlation?.best_lag_days ?? null
+  const isMomentum = correlation?.signal_type?.includes("momentum")
+
+  // Build the narrative sentence
+  let narrative = `${ticker} sentiment is currently ${sentimentLabel} (${score > 0 ? "+" : ""}${score}).`
+
+  if (lagDays !== null && strength !== null) {
+    const followVerb = isMomentum ? "tends to follow" : "historically moves opposite to"
+    narrative += ` Based on historical patterns, price ${followVerb} sentiment`
+    if (lagDays === 0) {
+      narrative += ` on the same day.`
+    } else if (lagDays === 1) {
+      narrative += ` within 1 day.`
+    } else {
+      narrative += ` within ${lagDays} days.`
+    }
+  }
+
+  if (trend?.direction !== "flat" && trend?.deltaPct !== null) {
+    const trendWord = trend.direction === "up" ? "improving" : "deteriorating"
+    narrative += ` Sentiment has been ${trendWord} over the past week (${trend.direction === "up" ? "+" : ""}${trend.deltaPct}%).`
+  }
+
+  return { direction, sentimentLabel, score, strength, lagDays, isMomentum, narrative }
+}
+
+// ─── Strength meter bar ────────────────────────────────────────────────────
+
+function StrengthMeter({ strength }) {
+  const levels = ["weak", "moderate", "strong"]
+  const idx = levels.indexOf(strength)
+  const colors = ["#f85149", "#f0b429", "#3fb950"]
+  return (
+    <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+      {levels.map((l, i) => (
+        <div
+          key={l}
+          style={{
+            width: "28px", height: "4px", borderRadius: "2px",
+            background: i <= idx ? colors[idx] : "var(--border2)",
+            transition: "background 0.3s",
+          }}
+        />
+      ))}
+      <span style={{
+        fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em",
+        color: colors[idx], textTransform: "uppercase", marginLeft: "4px"
+      }}>
+        {strength}
+      </span>
+    </div>
+  )
+}
+
+// ─── Trend Arrow ───────────────────────────────────────────────────────────
+
+function TrendArrow({ trend }) {
+  if (!trend) return <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>—</span>
+
+  const { direction, deltaPct, current } = trend
+
+  const arrowMap = { up: "↑", down: "↓", flat: "→" }
+  const colorMap = { up: "var(--positive)", down: "var(--negative)", flat: "var(--neutral)" }
+  const labelMap = { up: "improving", down: "worsening", flat: "stable" }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+        <span style={{
+          fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600,
+          color: colorMap[direction], lineHeight: 1,
+        }}>
+          {arrowMap[direction]}
+        </span>
+        {deltaPct !== null && (
+          <span style={{
+            fontFamily: "var(--mono)", fontSize: "13px", fontWeight: 600,
+            color: colorMap[direction],
+          }}>
+            {direction === "up" ? "+" : direction === "down" ? "" : ""}{deltaPct}%
+          </span>
+        )}
+      </div>
+      <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.05em" }}>
+        {labelMap[direction]} vs prior 7d
+      </span>
+    </div>
+  )
+}
+
+// ─── Today's Signal Card ───────────────────────────────────────────────────
+
+function TodaysSignalCard({ signal, trend, loading }) {
+  if (loading) {
+    return (
+      <div style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "4px",
+        padding: "20px 24px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+      }}>
+        <div className="skeleton" style={{ height: "12px", width: "120px", borderRadius: "2px" }} />
+        <div className="skeleton" style={{ height: "28px", width: "200px", borderRadius: "2px" }} />
+        <div className="skeleton" style={{ height: "40px", width: "90%", borderRadius: "2px" }} />
+      </div>
+    )
+  }
+
+  if (!signal) return null
+
+  const directionColors = {
+    BULLISH: { border: "rgba(63,185,80,0.4)", bg: "rgba(63,185,80,0.04)", text: "var(--positive)", badge: "rgba(63,185,80,0.12)", badgeBorder: "rgba(63,185,80,0.3)" },
+    BEARISH: { border: "rgba(248,81,73,0.4)", bg: "rgba(248,81,73,0.04)", text: "var(--negative)", badge: "rgba(248,81,73,0.12)", badgeBorder: "rgba(248,81,73,0.3)" },
+    NEUTRAL: { border: "rgba(139,148,158,0.4)", bg: "rgba(139,148,158,0.04)", text: "var(--neutral)", badge: "rgba(139,148,158,0.12)", badgeBorder: "rgba(139,148,158,0.3)" },
+  }
+  const dc = directionColors[signal.direction]
+
+  return (
+    <div style={{
+      background: dc.bg,
+      border: `1px solid ${dc.border}`,
+      borderLeft: `4px solid ${dc.text}`,
+      borderRadius: "4px",
+      padding: "20px 24px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "14px",
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.15em", color: "var(--muted)", textTransform: "uppercase" }}>
+            TODAY'S SIGNAL
+          </span>
+          <span style={{
+            fontFamily: "var(--mono)", fontSize: "10px", fontWeight: 700,
+            letterSpacing: "0.12em", padding: "3px 10px", borderRadius: "2px",
+            background: dc.badge, color: dc.text, border: `1px solid ${dc.badgeBorder}`,
+          }}>
+            {signal.direction}
+          </span>
+          {signal.isMomentum !== null && (
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
+              padding: "2px 8px", borderRadius: "2px",
+              background: "var(--surface2)", color: "var(--muted)",
+              border: "1px solid var(--border2)",
+            }}>
+              {signal.isMomentum ? "MOMENTUM" : "CONTRARIAN"}
+            </span>
+          )}
+        </div>
+        {signal.strength && <StrengthMeter strength={signal.strength} />}
+      </div>
+
+      {/* Narrative */}
+      <p style={{
+        fontFamily: "var(--sans)", fontSize: "14px", lineHeight: "1.65",
+        color: "var(--text)", margin: 0,
+      }}>
+        {signal.narrative}
+      </p>
+
+      {/* Bottom row: score + trend + lag */}
+      <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start", borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
+        <div>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+            Sentiment Score
+          </div>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: dc.text, lineHeight: 1 }}>
+            {signal.score > 0 ? "+" : ""}{signal.score}
+          </div>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
+            range: −1.0 to +1.0
+          </div>
+        </div>
+
+        <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
+
+        <div>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+            7-Day Trend
+          </div>
+          <TrendArrow trend={trend} />
+        </div>
+
+        {signal.lagDays !== null && (
+          <>
+            <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+                Price Lag
+              </div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: "var(--accent2)", lineHeight: 1 }}>
+                {signal.lagDays}d
+              </div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
+                predicted lead time
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
 
@@ -829,7 +1094,6 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
   ? new Date(allData.find(d => d.sentiment !== null)?.date ?? today)
   : (() => { const d = new Date(today); d.setDate(d.getDate() - 30); return d })()
 
-  // align to Sunday
   const calStart = new Date(startDate)
   calStart.setDate(calStart.getDate() - calStart.getDay())
 
@@ -854,7 +1118,6 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
     weeks.push(week)
   }
 
-  // month labels
   const monthLabels = []
   weeks.forEach((week, wi) => {
     const firstInRange = week.find(d => d.inRange)
@@ -870,7 +1133,6 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
   return (
   <div style={{ overflowX: "auto", paddingBottom: "16px" }}>
     <div style={{ display: "flex", gap: "0", minWidth: "max-content" }}>
-      {/* Day of week labels */}
       <div className="dow-labels" style={{ marginTop: "20px" }}>
         {["S","M","T","W","T","F","S"].map((d, i) => (
           <div key={i} className="dow-label">{i % 2 === 1 ? d : ""}</div>
@@ -878,7 +1140,6 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-        {/* Month labels */}
         <div style={{ display: "flex", gap: "4px", height: "16px", position: "relative" }}>
           {weeks.map((_, wi) => {
             const label = monthLabels.find(m => m.weekIndex === wi)
@@ -898,7 +1159,6 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
           })}
         </div>
 
-        {/* Grid */}
         <div style={{ display: "flex", gap: "4px" }}>
           {weeks.map((week, wi) => (
             <div key={wi} className="heatmap-week">
@@ -923,7 +1183,6 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
       </div>
     </div>
 
-    {/* Legend */}
     <div className="heatmap-legend">
       <span className="heatmap-legend-label">BEARISH</span>
       <div className="heatmap-legend-cells">
@@ -1035,6 +1294,20 @@ export default function App() {
   const isData = profile?.tier === "data"
   const isLoggedIn = !!user
 
+  // ── Derived insight state ──────────────────────────────────────────────────
+  const sentimentTrend = loading ? null : computeSentimentTrend(allData)
+
+  const sentimentOnly = (range === 999 ? allData : allData.slice(-range))
+    .filter(d => d.sentiment !== null && d.sentiment !== undefined)
+
+  const avgSentiment = sentimentOnly.length
+    ? parseFloat((sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3))
+    : null
+
+  const todaySignal = (loading || avgSentiment === null)
+    ? null
+    : buildTodaySignal({ ticker, avgSentiment, correlation, trend: sentimentTrend })
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const authParam = params.get("auth")
@@ -1143,7 +1416,6 @@ export default function App() {
       const isAll = selectedRange === 999
       const days = isAll ? 90 : selectedRange
 
-      // fetch prices + paginated headlines for the list
       const baseUrl = isAll && isPro
         ? `${API}/dashboard/${ticker}?all=true`
         : `${API}/dashboard/${ticker}?days=${Math.max(days, 90)}`
@@ -1168,14 +1440,11 @@ export default function App() {
       })
 
       if (headlinePageNum === 1) {
-        // use sentiment-summary for chart data — full aggregated history
         const summaryData = sentimentRes.data.data
         const sentimentMap = {}
         summaryData.forEach(s => { sentimentMap[s.date] = s.avg_sentiment })
 
-        const allDates = new Set([
-          ...Object.keys(sentimentMap),
-        ])
+        const allDates = new Set([...Object.keys(sentimentMap)])
 
         const merged = Array.from(allDates).map(date => ({
           date,
@@ -1217,13 +1486,7 @@ export default function App() {
     price: d.price != null ? parseFloat((d.price * rate).toFixed(2)) : null,
   }))
 
-  const sentimentOnly = (range === 999 ? allData : filteredData).filter(d => d.sentiment !== null && d.sentiment !== undefined)
-
-  const avgSentiment = sentimentOnly.length
-    ? (sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3)
-    : null
-
-  const sentimentSignal = avgSentiment
+  const sentimentSignal = avgSentiment !== null
     ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
     : null
 
@@ -1398,6 +1661,9 @@ export default function App() {
             </div>
           )}
 
+          {/* ── TODAY'S SIGNAL CARD ─────────────────────────────────────────── */}
+          <TodaysSignalCard signal={todaySignal} trend={sentimentTrend} loading={loading} />
+
           <div className="stat-row">
             <div className="stat-card">
               <div className="stat-label">Asset</div>
@@ -1434,9 +1700,25 @@ export default function App() {
               <div className="stat-sub">{loading ? "—" : (correlation ? `${correlation.best_lag_days}d lag` : "Loading...")}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Total Headlines</div>
-              <div className="stat-value">{stats?.total_headlines?.toLocaleString() ?? "—"}</div>
-              <div className="stat-sub">{TICKERS.length} tickers tracked</div>
+              <div className="stat-label">7d Trend</div>
+              <div className="stat-value" style={{ fontSize: "18px" }}>
+                {loading
+                  ? <span className="skeleton" style={{ display: "inline-block", width: "60px", height: "22px", borderRadius: "2px" }} />
+                  : sentimentTrend
+                    ? <span style={{
+                        color: sentimentTrend.direction === "up" ? "var(--positive)" : sentimentTrend.direction === "down" ? "var(--negative)" : "var(--neutral)"
+                      }}>
+                        {sentimentTrend.direction === "up" ? "↑" : sentimentTrend.direction === "down" ? "↓" : "→"}
+                        {sentimentTrend.deltaPct !== null ? ` ${Math.abs(sentimentTrend.deltaPct)}%` : ""}
+                      </span>
+                    : "—"
+                }
+              </div>
+              <div className="stat-sub">
+                {sentimentTrend
+                  ? sentimentTrend.direction === "up" ? "improving" : sentimentTrend.direction === "down" ? "worsening" : "stable"
+                  : "vs prior 7d"}
+              </div>
             </div>
           </div>
 
@@ -1528,8 +1810,6 @@ export default function App() {
             )}
           </div>
 
-          
-
           <div className="grid-2">
             <div className="panel correlation-panel">
               <div className="panel-header">
@@ -1540,6 +1820,28 @@ export default function App() {
                   {correlation?.correlation !== undefined ? (
                     <>
                       <div className="correlation-detail">
+                        {/* ── SIGNAL SUMMARY (plain English) ───────────────────────── */}
+                        {todaySignal && (
+                          <div style={{
+                            marginBottom: "16px",
+                            padding: "12px 14px",
+                            background: "var(--surface2)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "2px",
+                            fontFamily: "var(--sans)",
+                            fontSize: "13px",
+                            color: "var(--text)",
+                            lineHeight: "1.65",
+                          }}>
+                            {todaySignal.narrative}
+                            {todaySignal.strength && (
+                              <div style={{ marginTop: "10px" }}>
+                                <StrengthMeter strength={todaySignal.strength} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <strong>{correlation.interpretation}</strong>
                         <br /><br />
                         <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "2px", padding: "10px 14px", marginBottom: "12px" }}>
