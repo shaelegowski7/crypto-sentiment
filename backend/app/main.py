@@ -272,10 +272,12 @@ def scrape_all():
 
             prices = fetch_latest_price(ticker)
             if prices:
+                print(f"[DEBUG] querying date={prices['date']} type={type(prices['date'])}")
                 existing = db.query(models.Price).filter(
                     models.Price.ticker == prices["ticker"],
                     models.Price.date == prices["date"]
                 ).first()
+                print(f"[DEBUG] existing={existing}")
                 if existing:
                     existing.close_price = prices["close_price"]
                     existing.volume = prices["volume"]
