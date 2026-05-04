@@ -858,22 +858,6 @@
             <li class="included">BTC sentiment dashboard</li>
             <li class="included">30-day history</li>
             <li class="included">Basic correlation signal</li>
-            <li>All 5 tickers</li>
-            <li>API access</li>
-            <li>Email alerts</li>
-          </ul>
-          <a href="https://app.sentimentfx.org?auth=signup"
-            class="price-btn price-btn-outline">Create Account</a>
-        </div>
-
-        <div class="price-card">
-          <div class="price-tier">Free</div>
-          <div class="price-amount">£0</div>
-          <div class="price-period">forever</div>
-          <ul class="price-features">
-            <li class="included">BTC sentiment dashboard</li>
-            <li class="included">30-day history</li>
-            <li class="included">Basic correlation signal</li>
             <li class="included">API access (100 free calls)</li>
             <li>All 5 tickers</li>
             <li>Full history</li>
@@ -972,7 +956,7 @@
           const res = await fetch(`${API}/stats`);
           const data = await res.json();
           const el = document.getElementById('stat-headlines');
-          if (el && data.total_headlines) {
+          if (el) {
             el.textContent = data.total_headlines.toLocaleString();
           }
         } catch (e) {}
