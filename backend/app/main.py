@@ -289,6 +289,7 @@ def scrape_all():
                         date=prices["date"]
                     )
                     db.add(price)
+                    time.sleep(2)
 
         db.commit()
         check_alerts(db)
