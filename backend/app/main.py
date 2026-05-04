@@ -64,6 +64,7 @@ app.add_middleware(
     allow_origins=[
         "https://app.sentimentfx.org",
         "https://sentimentfx.org",
+        "https://www.sentimentfx.org",
         "https://developers.sentimentfx.org",
         "http://localhost:5173",
         "https://status.sentimentfx.org",
