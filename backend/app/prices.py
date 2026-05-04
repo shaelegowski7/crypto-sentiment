@@ -1,5 +1,6 @@
 import yfinance as yf
-from datetime import datetime
+import requests
+from datetime import datetime, timezone
 
 TICKER_MAP = {
     "BTC":  "BTC-GBP",
@@ -9,12 +10,20 @@ TICKER_MAP = {
     "DOGE": "DOGE-GBP",
 }
 
-USD_TICKERS = {}  # tickers that need USD->GBP conversion
+COINGECKO_MAP = {
+    "BTC":  "bitcoin",
+    "ETH":  "ethereum",
+    "SOL":  "solana",
+    "XRP":  "ripple",
+    "DOGE": "dogecoin",
+}
+
+USD_TICKERS = {}
 
 def get_gbp_rate() -> float:
     data = yf.download("GBPUSD=X", period="2d", interval="1d", progress=False)
     if data.empty:
-        return 0.79  # fallback
+        return 0.79
     return round(1 / float(data["Close"].iloc[-1].iloc[0]), 6)
 
 
@@ -51,31 +60,33 @@ def fetch_prices(ticker: str) -> list:
 
 
 def fetch_latest_price(ticker: str) -> dict | None:
-    yf_ticker = TICKER_MAP.get(ticker)
-    if not yf_ticker:
+    coin_id = COINGECKO_MAP.get(ticker.upper())
+    if not coin_id:
         print(f"[PRICES] Unknown ticker: {ticker}")
         return None
 
-    data = yf.download(yf_ticker, period="5d", interval="1d", progress=False)
-    if data.empty:
-        print(f"[PRICES] No daily price data found for {ticker}")
-        return None
-
-    gbp_rate = get_gbp_rate() if ticker in USD_TICKERS else 1.0
-
     try:
-        latest = data.iloc[-1]
-        close = float(latest["Close"].iloc[0]) if hasattr(latest["Close"], 'iloc') else float(latest["Close"])
-        volume = float(latest["Volume"].iloc[0]) if hasattr(latest["Volume"], 'iloc') else float(latest["Volume"])
-        date = data.index[-1].to_pydatetime()
+        res = requests.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={
+                "ids": coin_id,
+                "vs_currencies": "gbp",
+                "include_24hr_vol": "true",
+            },
+            timeout=10
+        )
+        data = res.json()
+        price = data[coin_id]["gbp"]
+        volume = data[coin_id].get("gbp_24h_vol", 0)
+        today = datetime.now(timezone.utc).date()
 
-        print(f"[PRICES] {ticker}: latest={date.date()} close={close}")
+        print(f"[PRICES] {ticker}: live={today} close={price}")
         return {
-            "ticker": ticker,
-            "close_price": round(close * gbp_rate, 8),
+            "ticker": ticker.upper(),
+            "close_price": round(price, 8),
             "volume": round(volume, 2),
-            "date": date
+            "date": today,
         }
     except Exception as e:
-        print(f"[PRICES] {ticker}: fetch_latest error={e}")
+        print(f"[PRICES] {ticker}: CoinGecko error={e}")
         return None
