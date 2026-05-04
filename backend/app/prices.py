@@ -75,6 +75,7 @@ def fetch_latest_price(ticker: str) -> dict | None:
             },
             timeout=10
         )
+        print(f"[COINGECKO] response: {res.status_code} {res.text}")
         data = res.json()
         price = data[coin_id]["gbp"]
         volume = data[coin_id].get("gbp_24h_vol", 0)
