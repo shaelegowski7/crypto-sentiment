@@ -1348,8 +1348,11 @@ export default function App() {
   }, [user])
 
   useEffect(() => {
+  const interval = setInterval(() => {
     fetchDashboard(range, 1, ticker)
-  }, [ticker])
+  }, 5 * 60 * 1000)
+  return () => clearInterval(interval)
+  }, [ticker, range])
 
   useEffect(() => {
     axios.get(`${API}/stats`).then(r => setStats(r.data)).catch(() => {})
