@@ -506,6 +506,7 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
     avg_sentiment = {
         date: sum(scores) / len(scores)
         for date, scores in sentiment_by_date.items()
+        if len(scores) > 0
     }
 
     price_by_date = {}
@@ -1119,6 +1120,7 @@ def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db)
     avg_sentiment = {
         date: sum(scores) / len(scores)
         for date, scores in sentiment_by_date.items()
+        if len(scores) > 0
     }
 
     price_by_date = {}
@@ -1358,5 +1360,6 @@ def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Se
                 "count": len(scores)
             }
             for date, scores in sorted(by_date.items())
+            if len(scores) > 0
         ]
     }
