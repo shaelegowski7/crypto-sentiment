@@ -156,11 +156,17 @@ function StrengthMeter({ strength }) {
 function TrendArrow({ trend }) {
   if (!trend) return <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>—</span>
 
-  const { direction, deltaPct, current } = trend
+  const { direction, deltaPct, delta } = trend
 
   const arrowMap = { up: "↑", down: "↓", flat: "→" }
   const colorMap = { up: "var(--positive)", down: "var(--negative)", flat: "var(--neutral)" }
   const labelMap = { up: "improving", down: "worsening", flat: "stable" }
+
+  const deltaDisplay = deltaPct !== null
+    ? `${direction === "up" ? "+" : ""}${deltaPct}%`
+    : delta !== null
+     ? `${delta > 0 ? "+" : ""}${delta}`
+     : null
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -171,12 +177,12 @@ function TrendArrow({ trend }) {
         }}>
           {arrowMap[direction]}
         </span>
-        {deltaPct !== null && (
+        {deltaDisplay && (
           <span style={{
             fontFamily: "var(--mono)", fontSize: "13px", fontWeight: 600,
             color: colorMap[direction],
           }}>
-            {direction === "up" ? "+" : direction === "down" ? "" : ""}{deltaPct}%
+            {deltaDisplay}
           </span>
         )}
       </div>
