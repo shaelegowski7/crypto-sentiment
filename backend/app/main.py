@@ -899,18 +899,89 @@ async def stripe_webhook(request: Request):
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
+    from supabase import create_client
+    supabase_client = create_client(
+        os.getenv("SUPABASE_URL"),
+        os.getenv("SUPABASE_SERVICE_KEY")
+    )
+
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         customer_email = session["customer_details"]["email"]
-
         if customer_email:
-            from supabase import create_client
-            supabase_client = create_client(
-                os.getenv("SUPABASE_URL"),
-                os.getenv("SUPABASE_SERVICE_KEY")
-            )
             supabase_client.table("profiles").update({"tier": "pro"}).eq("email", customer_email).execute()
 
+    elif event["type"] == "customer.subscription.deleted":
+        subscription = event["data"]["object"]
+        customer_id = subscription["customer"]
+        customer = stripe.Customer.retrieve(customer_id)
+        customer_email = customer.get("email")
+        if customer_email:
+            supabase_client.table("profiles").update({"tier": "free"}).eq("email", customer_email).execute()
+
+    elif event["type"] == "invoice.payment_failed":
+        invoice = event["data"]["object"]
+        customer_email = invoice.get("customer_email")
+        if customer_email:
+            try:
+                    resend.api_key = os.getenv("RESEND_API_KEY")
+                    resend.Emails.send({
+                        "from": "SentimentFX <hello@sentimentfx.org>",
+                        "to": customer_email,
+                        "subject": "SentimentFX – Payment failed",
+                        "html": """
+    <!DOCTYPE html>
+    <html>
+    <body style="margin:0;padding:0;background:#080c10;font-family:'Courier New',monospace;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#080c10;padding:40px 20px;">
+        <tr>
+        <td align="center">
+            <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+            <tr>
+                <td style="border-bottom:1px solid #21262d;padding-bottom:20px;">
+                <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">SentimentFX</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:40px 0 32px;">
+                <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">— Payment Failed</p>
+                <h1 style="font-size:28px;font-weight:600;color:#e6edf3;margin:0 0 16px;line-height:1.2;">We couldn't process your payment</h1>
+                <p style="font-size:14px;color:#7d8590;margin:0 0 24px;line-height:1.7;">
+                    Your SentimentFX Pro subscription payment failed. Please update your payment details to keep access to Pro features.
+                </p>
+                <p style="font-size:13px;color:#7d8590;margin:0 0 32px;line-height:1.7;">
+                    If this was a mistake or your card has been updated, you can retry from your billing portal.
+                </p>
+                <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                    <tr>
+                    <td style="background:#f0b429;border-radius:2px;">
+                        <a href="https://app.sentimentfx.org" style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">
+                        Update Payment →
+                        </a>
+                    </td>
+                    </tr>
+                </table>
+                </td>
+            </tr>
+            <tr>
+                <td style="border-top:1px solid #21262d;padding-top:20px;">
+                <p style="font-size:10px;color:#7d8590;margin:0;letter-spacing:0.05em;line-height:1.7;">
+                    SentimentFX · Crypto sentiment intelligence<br>
+                    <a href="mailto:hello@sentimentfx.org" style="color:#f0b429;text-decoration:none;">hello@sentimentfx.org</a>
+                </p>
+                </td>
+            </tr>
+            </table>
+        </td>
+        </tr>
+    </table>
+    </body>
+    </html>
+                """
+            })
+            except Exception as e:
+                print(f"Payment failed email error: {e}")
+        
     return {"status": "ok"}
 
 
