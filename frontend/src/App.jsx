@@ -1379,10 +1379,15 @@ export default function App() {
       const res = await fetch(`${API}/alerts`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       })
+      if (!res.ok) {
+        setAlerts([])
+        return
+      }
       const data = await res.json()
-      setAlerts(data)
+      setAlerts(Array.isArray(data) ? data : [])
     } catch (e) {
       console.error("Failed to fetch alerts:", e)
+      setAlerts([])
     }
   }
 
