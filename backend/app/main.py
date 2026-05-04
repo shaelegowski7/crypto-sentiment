@@ -484,12 +484,17 @@ def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(requir
 
 @app.get("/correlation/{ticker}")
 def get_correlation(ticker: str, db: Session = Depends(get_db)):
+
+    since = datetime.utcnow() - timedelta(days=90)
+
     headlines = db.query(models.Headline).filter(
-        models.Headline.ticker == ticker.upper()
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since
     ).order_by(models.Headline.published_at).all()
 
     prices = db.query(models.Price).filter(
-        models.Price.ticker == ticker.upper()
+        models.Price.ticker == ticker.upper(),
+        models.Price.date >= since
     ).order_by(models.Price.date).all()
 
     if len(headlines) < 10 or len(prices) < 10:
@@ -1097,13 +1102,16 @@ def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depe
 @limiter.limit("10/minute")
 def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db)
+    since = datetime.utcnow() - timedelta(days=90)
 
     headlines = db.query(models.Headline).filter(
-        models.Headline.ticker == ticker.upper()
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since
     ).order_by(models.Headline.published_at).all()
 
     prices = db.query(models.Price).filter(
-        models.Price.ticker == ticker.upper()
+        models.Price.ticker == ticker.upper(),
+        models.Price.date >= since
     ).order_by(models.Price.date).all()
 
     if len(headlines) < 10 or len(prices) < 10:
