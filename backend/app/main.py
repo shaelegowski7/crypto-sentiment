@@ -1197,10 +1197,14 @@ def get_status(db: Session = Depends(get_db)):
         latest_headline = db.query(models.Headline).filter(
             models.Headline.ticker == t
         ).order_by(models.Headline.published_at.desc()).first()
+        latest_price = db.query(models.Price).filter(
+            models.Price.ticker == t
+        ).order_by(models.Price.date.desc()).first()
         ticker_stats[t] = {
             "headlines": headline_count,
             "prices": price_count,
             "latest_headline": latest_headline.published_at.isoformat() if latest_headline else None,
+            "latest_price": latest_price.date.isoformat() if latest_price else None,
         }
     return {
         "status": "operational",
