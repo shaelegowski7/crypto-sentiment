@@ -1353,7 +1353,7 @@ export default function App() {
   }, [user])
 
   useEffect(() => {
-    fetchDashboard()
+    fetchDashboard(range, 1, ticker)
   }, [ticker])
 
   useEffect(() => {
@@ -1418,7 +1418,7 @@ export default function App() {
     }
   }
 
-  const fetchDashboard = async (selectedRange = range, headlinePageNum = 1) => {
+  const fetchDashboard = async (selectedRange = range, headlinePageNum = 1, selectedTicker = ticker) => {
     setLoading(true)
     if (headlinePageNum === 1) setHeadlinePage(1)
     try {
@@ -1426,8 +1426,8 @@ export default function App() {
       const days = isAll ? 90 : selectedRange
 
       const baseUrl = isAll && isPro
-        ? `${API}/dashboard/${ticker}?all=true`
-        : `${API}/dashboard/${ticker}?days=${Math.max(days, 90)}`
+        ? `${API}/dashboard/${selectedTicker}?all=true`
+        : `${API}/dashboard/${selectedTicker}?days=${Math.max(days, 90)}`
 
       const url = headlinePageNum === 1
         ? `${baseUrl}&page=1&limit=50`
@@ -1436,7 +1436,7 @@ export default function App() {
       const [dashRes, sentimentRes] = await Promise.all([
         axios.get(url),
         headlinePageNum === 1
-          ? axios.get(`${API}/sentiment-summary/${ticker}?${isAll && isPro ? "all=true" : `days=${Math.max(days, 90)}`}`)
+          ? axios.get(`${API}/sentiment-summary/${selectedTicker}?${isAll && isPro ? "all=true" : `days=${Math.max(days, 90)}`}`)
           : Promise.resolve(null)
       ])
 
@@ -1468,7 +1468,7 @@ export default function App() {
       }
 
       setCorrelation(null)
-      const corrRes = await axios.get(`${API}/correlation/${ticker}`)
+      const corrRes = await axios.get(`${API}/correlation/${selectedTicker}`)
       setCorrelation(corrRes.data)
     } catch (err) {
       console.error(err)
