@@ -1444,12 +1444,12 @@ export default function App() {
         const sentimentMap = {}
         summaryData.forEach(s => { sentimentMap[s.date] = s.avg_sentiment })
 
-        const allDates = new Set([...Object.keys(sentimentMap)])
+        const allDates = new Set([...Object.keys(sentimentMap), ...Object.keys(priceMap),])
 
         const merged = Array.from(allDates).map(date => ({
           date,
           sentiment: sentimentMap[date] ?? null,
-          price: priceMap[date] || null,
+          price: priceMap[date] ?? null,
         })).sort((a, b) => new Date(a.date) - new Date(b.date))
 
         setAllData(merged)
