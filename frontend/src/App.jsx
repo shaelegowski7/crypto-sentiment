@@ -1348,6 +1348,10 @@ export default function App() {
   }, [user])
 
   useEffect(() => {
+    fetchDashboard(range, 1, ticker)
+  }, [ticker])
+
+  useEffect(() => {
   const interval = setInterval(() => {
     fetchDashboard(range, 1, ticker)
   }, 5 * 60 * 1000)
