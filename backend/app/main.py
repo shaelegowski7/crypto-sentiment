@@ -168,7 +168,9 @@ def check_alerts(db):
         if not recent:
             continue
 
-        avg_score = sum(h.sentiment_score for h in recent) / len(recent)
+        filtered = [h.sentiment_score for h in recent if abs(h.sentiment_score) > 0.05]
+        avg_score = sum(filtered) / len(filtered) if filtered else 0
+
 
         triggered = (
             alert.direction == "above" and avg_score >= alert.threshold
@@ -498,7 +500,8 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         date = str(h.published_at.date())
         if date not in sentiment_by_date:
             sentiment_by_date[date] = []
-        sentiment_by_date[date].append(h.sentiment_score)
+        if abs(h.sentiment_score) > 0.05:
+            sentiment_by_date[date].append(h.sentiment_score)
 
     avg_sentiment = {
         date: sum(scores) / len(scores)
@@ -1110,7 +1113,8 @@ def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db)
         date = str(h.published_at.date())
         if date not in sentiment_by_date:
             sentiment_by_date[date] = []
-        sentiment_by_date[date].append(h.sentiment_score)
+        if abs(h.sentiment_score) > 0.05:
+            sentiment_by_date[date].append(h.sentiment_score)
 
     avg_sentiment = {
         date: sum(scores) / len(scores)
@@ -1342,7 +1346,8 @@ def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Se
         date = str(h.published_at.date())
         if date not in by_date:
             by_date[date] = []
-        by_date[date].append(h.sentiment_score)
+        if abs(h.sentiment_score) > 0.05:
+            by_date[date].append(h.sentiment_score)
 
     return {
         "ticker": ticker.upper(),

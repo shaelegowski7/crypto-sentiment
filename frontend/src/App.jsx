@@ -47,7 +47,9 @@ const exportData = async (type, ticker, session, days) => {
  * { current: number, previous: number, delta: number, direction: "up"|"down"|"flat" }
  */
 function computeSentimentTrend(allData) {
-  const withSentiment = allData.filter(d => d.sentiment !== null && d.sentiment !== undefined)
+  const withSentiment = allData
+    .filter(d => d.sentiment !== null && d.sentiment !== undefined)
+    .filter(d => Math.abs(d.sentiment) > 0.05)
   if (withSentiment.length < 2) return null
 
   const last7 = withSentiment.slice(-7)
@@ -1299,6 +1301,7 @@ export default function App() {
 
   const sentimentOnly = (range === 999 ? allData : allData.slice(-range))
     .filter(d => d.sentiment !== null && d.sentiment !== undefined)
+    .filter(d => Math.abs(d.sentiment) > 0.05)
 
   const avgSentiment = sentimentOnly.length
     ? parseFloat((sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3))
