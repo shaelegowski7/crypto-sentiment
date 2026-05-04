@@ -1209,6 +1209,7 @@ def get_status(db: Session = Depends(get_db)):
             "prices": price_count,
             "latest_headline": latest_headline.published_at.isoformat() if latest_headline else None,
             "latest_price": latest_price.date.isoformat() if latest_price else None,
+            "latest_price_value": latest_price.close_price if latest_price else None,
         }
     return {
         "status": "operational",
