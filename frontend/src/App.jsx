@@ -1651,10 +1651,10 @@ export default function App() {
                 <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all 5 tickers, full history, API access and alerts.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TMdhiRuGYgaTM3ycfIizjLQ")}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw")}>
                   £11.99 / mo
                 </button>
-                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TMdlmRuGYgaTM3ysDve7yNI")}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0K2NzVdYK0wrcGf1mz1s")}>
                   £99.99 / yr
                 </button>
               </div>
