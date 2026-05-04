@@ -68,7 +68,7 @@ function computeSentimentTrend(allData) {
     current: parseFloat(current.toFixed(3)),
     previous: previous !== null ? parseFloat(previous.toFixed(3)) : null,
     delta: delta !== null ? parseFloat(delta.toFixed(3)) : null,
-    deltaPct: previous !== null && previous !== 0
+    deltaPct: previous !== null && Math.abs(previous) > 0.05
       ? parseFloat(((delta / Math.abs(previous)) * 100).toFixed(1))
       : null,
     direction,
