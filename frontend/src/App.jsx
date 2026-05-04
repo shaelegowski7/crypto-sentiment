@@ -68,9 +68,6 @@ function computeSentimentTrend(allData) {
     current: parseFloat(current.toFixed(3)),
     previous: previous !== null ? parseFloat(previous.toFixed(3)) : null,
     delta: delta !== null ? parseFloat(delta.toFixed(3)) : null,
-    deltaPct: previous !== null && Math.abs(previous) > 0.05
-      ? parseFloat(((delta / Math.abs(previous)) * 100).toFixed(1))
-      : null,
     direction,
   }
 }
@@ -115,9 +112,9 @@ function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
     }
   }
 
-  if (trend?.direction !== "flat" && trend?.deltaPct !== null) {
+  if (trend?.direction !== "flat" && trend?.delta !== null) {
     const trendWord = trend.direction === "up" ? "improving" : "deteriorating"
-    narrative += ` Sentiment has been ${trendWord} over the past week (${trend.direction === "up" ? "+" : ""}${trend.deltaPct}%).`
+    narrative += ` Sentiment has been ${trendWord} over the past week (${trend.delta > 0 ? "+" : ""}${trend.delta}).`
   }
 
   return { direction, sentimentLabel, score, strength, lagDays, isMomentum, narrative }
@@ -156,15 +153,13 @@ function StrengthMeter({ strength }) {
 function TrendArrow({ trend }) {
   if (!trend) return <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>—</span>
 
-  const { direction, deltaPct, delta } = trend
+  const { direction, delta } = trend
 
   const arrowMap = { up: "↑", down: "↓", flat: "→" }
   const colorMap = { up: "var(--positive)", down: "var(--negative)", flat: "var(--neutral)" }
   const labelMap = { up: "improving", down: "worsening", flat: "stable" }
 
-  const deltaDisplay = deltaPct !== null
-    ? `${direction === "up" ? "+" : ""}${deltaPct}%`
-    : delta !== null
+  const deltaDisplay = delta !== null
      ? `${delta > 0 ? "+" : ""}${delta}`
      : null
 
@@ -1718,7 +1713,7 @@ export default function App() {
                         color: sentimentTrend.direction === "up" ? "var(--positive)" : sentimentTrend.direction === "down" ? "var(--negative)" : "var(--neutral)"
                       }}>
                         {sentimentTrend.direction === "up" ? "↑" : sentimentTrend.direction === "down" ? "↓" : "→"}
-                        {sentimentTrend.deltaPct !== null ? ` ${Math.abs(sentimentTrend.deltaPct)}%` : ""}
+                        {sentimentTrend.delta !== null ? ` ${Math.abs(sentimentTrend.delta)}` : ""}
                       </span>
                     : "—"
                 }
