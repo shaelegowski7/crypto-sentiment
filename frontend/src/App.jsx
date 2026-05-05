@@ -1348,6 +1348,7 @@ export default function App() {
   const [alertThreshold, setAlertThreshold] = useState(0.3)
   const [alertDirection, setAlertDirection] = useState("above")
   const [alertLoading, setAlertLoading] = useState(false)
+  const [signalData, setSignalData] = useState(null)
 
   const urlParams = new URLSearchParams(window.location.search)
   const checkoutSuccess = urlParams.get("success")
@@ -1368,9 +1369,26 @@ export default function App() {
     ? parseFloat((sentimentOnly.reduce((a, b) => a + b.sentiment, 0) / sentimentOnly.length).toFixed(3))
     : null
 
-  const todaySignal = (loading || avgSentiment === null)
-    ? null
-    : buildTodaySignal({ ticker, avgSentiment, correlation, trend: sentimentTrend })
+  const todaySignal = signalData?.today ? {
+    direction: signalData.today.sentiment_label.includes("bear") ? "BEARISH"
+      : signalData.today.sentiment_label.includes("bull") ? "BULLISH"
+      : "NEUTRAL",
+    sentimentLabel: signalData.today.sentiment_label,
+    score: signalData.today.sentiment,
+    strength: signalData.today.shift_magnitude === "extreme" ? "strong"
+      : signalData.today.shift_magnitude === "significant" ? "weak"
+      : "inconclusive",
+    isMomentum: getPrimary(correlation)?.direction?.includes("momentum") ?? null,
+    correlation: getPrimary(correlation)?.correlation ?? null,
+    beatsMomentum: correlation?.baseline?.primary_beats_momentum ?? null,
+    sampleSize: correlation?.sample_size ?? null,
+    narrative: signalData.summary,
+    shift: signalData.today.shift,
+    shiftPercentile: signalData.today.shift_percentile,
+    shiftMagnitude: signalData.today.shift_magnitude,
+    articleCount: signalData.today.article_count,
+    daysSinceSimilar: signalData.context?.days_since_similar_shift ?? null,
+  } : null
 
   // Convenience accessors for the new correlation shape
   const primary = getPrimary(correlation)
@@ -1542,6 +1560,14 @@ export default function App() {
       setCorrelation(null)
       const corrRes = await axios.get(`${API}/correlation/${selectedTicker}`)
       setCorrelation(corrRes.data)
+
+      setSignalData(null)
+      try {
+        const sigRes = await axios.get(`${API}/signal/${selectedTicker}`)
+        setSignalData(sigRes.data)
+      } catch (e) {
+        console.error("Signal fetch error:", e)
+      }
     } catch (err) {
       console.error(err)
     }
@@ -1784,6 +1810,22 @@ export default function App() {
                   ? <span className="skeleton" style={{ display: "inline-block", width: "60px", height: "22px", borderRadius: "2px" }} />
                   : (statCorrValue ?? "—")}
               </div>
+              {signal.shiftPercentile !== undefined && signal.shiftPercentile !== null && (
+                <>
+                  <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
+                  <div>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+                      Shift Percentile
+                    </div>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: signal.shiftPercentile >= 75 ? "var(--accent)" : "var(--muted)", lineHeight: 1 }}>
+                      {signal.shiftPercentile}th
+                    </div>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
+                      {signal.shiftMagnitude} · {signal.articleCount} articles
+                    </div>
+                  </div>
+                </>
+             )}
               <div className="stat-sub">{loading ? "—" : statCorrSub}</div>
             </div>
             <div className="stat-card">
