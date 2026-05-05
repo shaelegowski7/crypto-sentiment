@@ -14,3 +14,20 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Observability
+
+Metrics are collected via Prometheus and visualised in Grafana Cloud.
+
+- **Metrics endpoint**: `https://api.sentimentfx.org/metrics` (Basic auth required)
+- **Grafana instance**: `https://sentimentfx.grafana.net`
+- **Dashboards**: SentimentFX Business, FastAPI Observability, Metrics Endpoint Overview
+- **Scrape interval**: 1 minute
+
+### Custom metrics
+- `sfx_headlines_ingested_total` — headlines scored and stored, by source and ticker
+- `sfx_scraper_runs_total` — scraper executions, labelled success/failure
+- `sfx_scraper_duration_seconds` — full scrape cycle duration
+- `sfx_active_subscriptions` — active Stripe subscriptions by plan
+- `sfx_api_calls_total` — metered developer API calls by endpoint
+- `sfx_finbert_latency_seconds` — FinBERT scoring latency per headline
