@@ -333,10 +333,29 @@ function TodaysSignalCard({ signal, trend, loading }) {
             </div>
           </>
         )}
+
+        {signal.shiftPercentile !== undefined && signal.shiftPercentile !== null && (
+          <>
+            <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+                Shift Percentile
+              </div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: signal.shiftPercentile >= 75 ? "var(--accent)" : "var(--muted)", lineHeight: 1 }}>
+                {signal.shiftPercentile}th
+              </div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
+                {signal.shiftMagnitude} · {signal.articleCount} articles
+              </div>
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   )
 }
+      
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
@@ -1810,22 +1829,7 @@ export default function App() {
                   ? <span className="skeleton" style={{ display: "inline-block", width: "60px", height: "22px", borderRadius: "2px" }} />
                   : (statCorrValue ?? "—")}
               </div>
-              {signal.shiftPercentile !== undefined && signal.shiftPercentile !== null && (
-                <>
-                  <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
-                  <div>
-                    <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
-                      Shift Percentile
-                    </div>
-                    <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: signal.shiftPercentile >= 75 ? "var(--accent)" : "var(--muted)", lineHeight: 1 }}>
-                      {signal.shiftPercentile}th
-                    </div>
-                    <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
-                      {signal.shiftMagnitude} · {signal.articleCount} articles
-                    </div>
-                  </div>
-                </>
-             )}
+
               <div className="stat-sub">{loading ? "—" : statCorrSub}</div>
             </div>
             <div className="stat-card">
