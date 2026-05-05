@@ -21,6 +21,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from fastapi.responses import JSONResponse
 from collections import defaultdict
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Gauge, Histogram
 import numpy as np
 import resend
 import os
@@ -37,6 +39,7 @@ last_scrape_time = None
 last_scrape_duration = None
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+METRICS_TOKEN = os.getenv("METRICS_TOKEN")
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -47,6 +50,64 @@ def get_api_key_value(request: Request) -> str:
 limiter = Limiter(key_func=get_api_key_value)
 
 app = FastAPI()
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics
+# ---------------------------------------------------------------------------
+
+HEADLINES_INGESTED = Counter(
+    "sfx_headlines_ingested_total",
+    "Headlines successfully scored and stored",
+    ["source", "ticker"],
+)
+SCRAPER_RUNS = Counter(
+    "sfx_scraper_runs_total",
+    "Scraper executions",
+    ["status"],  # success | failure
+)
+SCRAPER_DURATION = Histogram(
+    "sfx_scraper_duration_seconds",
+    "How long a full scrape cycle takes",
+)
+ACTIVE_SUBSCRIPTIONS = Gauge(
+    "sfx_active_subscriptions",
+    "Active Stripe subscriptions",
+    ["plan"],  # pro_monthly | pro_annual
+)
+API_CALLS = Counter(
+    "sfx_api_calls_total",
+    "Metered developer API calls",
+    ["endpoint"],
+)
+FINBERT_LATENCY = Histogram(
+    "sfx_finbert_latency_seconds",
+    "FinBERT scoring latency per headline",
+)
+
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/metrics", "/health"],
+).instrument(app).expose(
+    app,
+    endpoint="/metrics",
+    include_in_schema=False,
+)
+
+# ---------------------------------------------------------------------------
+# Metrics auth middleware — must be added before other middleware
+# ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def protect_metrics(request: Request, call_next):
+    if request.url.path == "/metrics":
+        if METRICS_TOKEN:
+            token = request.headers.get("authorization", "").replace("Bearer ", "")
+            if token != METRICS_TOKEN:
+                return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
+
+# ---------------------------------------------------------------------------
 
 app.state.limiter = limiter
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -246,6 +307,25 @@ def check_alerts(db):
                 print(f"Alert email error: {e}")
 
 
+def refresh_subscription_gauge():
+    """Query Stripe for active subscription counts and update the gauge."""
+    try:
+        monthly_count = 0
+        annual_count = 0
+        subscriptions = stripe.Subscription.list(status="active", limit=100)
+        for sub in subscriptions.auto_paging_iter():
+            for item in sub["items"]["data"]:
+                interval = item["price"].get("recurring", {}).get("interval", "")
+                if interval == "month":
+                    monthly_count += 1
+                elif interval == "year":
+                    annual_count += 1
+        ACTIVE_SUBSCRIPTIONS.labels(plan="pro_monthly").set(monthly_count)
+        ACTIVE_SUBSCRIPTIONS.labels(plan="pro_annual").set(annual_count)
+    except Exception as e:
+        print(f"Subscription gauge refresh error: {e}")
+
+
 def scrape_all():
     global last_scrape_time, last_scrape_duration
     start = time.time()
@@ -261,7 +341,11 @@ def scrape_all():
                 ).first()
                 if exists:
                     continue
+
+                t0 = time.time()
                 sentiment = analyse_sentiment(h["title"])
+                FINBERT_LATENCY.observe(time.time() - t0)
+
                 headline = models.Headline(
                     ticker=h["ticker"],
                     title=h["title"],
@@ -272,6 +356,7 @@ def scrape_all():
                     published_at=h["published_at"]
                 )
                 db.add(headline)
+                HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
 
             prices = fetch_latest_price(ticker)
             if prices:
@@ -297,8 +382,11 @@ def scrape_all():
         check_alerts(db)
         last_scrape_time = datetime.utcnow().isoformat()
         last_scrape_duration = round(time.time() - start, 2)
+        SCRAPER_RUNS.labels(status="success").inc()
+        SCRAPER_DURATION.observe(time.time() - start)
         print("Scheduled scrape complete")
     except Exception as e:
+        SCRAPER_RUNS.labels(status="failure").inc()
         print(f"Scheduler error: {e}")
     finally:
         db.close()
@@ -306,6 +394,7 @@ def scrape_all():
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(scrape_all, CronTrigger(minute=0))
+scheduler.add_job(refresh_subscription_gauge, CronTrigger(minute=30))  # refresh sub gauge every hour at :30
 scheduler.start()
 
 
@@ -332,7 +421,9 @@ def scrape(ticker: str, db: Session = Depends(get_db), admin=Depends(require_adm
         ).first()
         if exists:
             continue
+        t0 = time.time()
         sentiment = analyse_sentiment(h["title"])
+        FINBERT_LATENCY.observe(time.time() - t0)
         headline = models.Headline(
             ticker=h["ticker"],
             title=h["title"],
@@ -344,6 +435,7 @@ def scrape(ticker: str, db: Session = Depends(get_db), admin=Depends(require_adm
         )
         db.add(headline)
         saved.append(headline)
+        HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
 
     prices = fetch_latest_price(ticker.upper())
     if prices:
@@ -981,7 +1073,9 @@ def run_backfill(ticker: str, days: int, offset: int):
                 if exists:
                     continue
 
+                t0 = time.time()
                 sentiment = analyse_sentiment(article["title"])
+                FINBERT_LATENCY.observe(time.time() - t0)
                 headline = models.Headline(
                     ticker=ticker.upper(),
                     title=article["title"],
@@ -993,6 +1087,7 @@ def run_backfill(ticker: str, days: int, offset: int):
                 )
                 db.add(headline)
                 saved += 1
+                HEADLINES_INGESTED.labels(source=article["source"]["name"], ticker=ticker.upper()).inc()
 
             db.commit()
 
@@ -1109,6 +1204,7 @@ async def stripe_webhook(request: Request):
         customer_email = session["customer_details"]["email"]
         if customer_email:
             supabase_client.table("profiles").update({"tier": "pro"}).eq("email", customer_email).execute()
+        refresh_subscription_gauge()
 
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
@@ -1117,6 +1213,7 @@ async def stripe_webhook(request: Request):
         customer_email = customer.get("email")
         if customer_email:
             supabase_client.table("profiles").update({"tier": "free"}).eq("email", customer_email).execute()
+        refresh_subscription_gauge()
 
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
@@ -1274,8 +1371,9 @@ async def get_key_info(request: Request, db: Session = Depends(get_db)):
 # Usage tracking
 # ---------------------------------------------------------------------------
 
-def track_usage(api_key: models.APIKey, db: Session, count: int = 1):
+def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: str = "unknown"):
     api_key.calls_used += count
+    API_CALLS.labels(endpoint=endpoint).inc(count)
 
     if api_key.calls_used > api_key.free_calls and api_key.stripe_customer_id:
         try:
@@ -1301,7 +1399,7 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1):
 def api_sentiment(request: Request, ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
     calls = math.ceil(limit / 25)
-    track_usage(api_key, db, calls)
+    track_usage(api_key, db, calls, endpoint="sentiment")
 
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
@@ -1329,7 +1427,7 @@ def api_sentiment(request: Request, ticker: str, limit: int = 25, db: Session = 
 @app.get("/v1/summary/{ticker}")
 @limiter.limit("20/minute")
 def api_summary(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db, days)
+    track_usage(api_key, db, days, endpoint="summary")
 
     since = datetime.utcnow() - timedelta(days=days)
     headlines = db.query(models.Headline).filter(
@@ -1370,7 +1468,7 @@ def api_summary(request: Request, ticker: str, days: int = 30, db: Session = Dep
 @app.get("/v1/prices/{ticker}")
 @limiter.limit("20/minute")
 def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db, days)
+    track_usage(api_key, db, days, endpoint="prices")
 
     since = datetime.utcnow() - timedelta(days=days)
     prices = db.query(models.Price).filter(
@@ -1398,7 +1496,7 @@ def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depe
 @app.get("/v1/correlation/{ticker}")
 @limiter.limit("10/minute")
 def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db)
+    track_usage(api_key, db, endpoint="correlation")
     since = datetime.utcnow() - timedelta(days=180)
 
     headlines = db.query(models.Headline).filter(
