@@ -621,10 +621,11 @@ const res = await fetch(
                                         style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns Pearson
-                                    correlation between sentiment and price
-                                    returns across lag periods of 0–7 days.
-                                    Always 1 call.</p>
+                                <p class="endpoint-desc">Returns the Pearson
+                                    correlation between sentiment shifts and
+                                    next-day price returns, with a 95%
+                                    confidence interval and signal strength
+                                    rating. Always 1 call.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
@@ -636,15 +637,28 @@ const res = await fetch(
                                 <pre>{
   <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
   <span class="c-key">"calls_used"</span>: <span class="c-num">1</span>,
-  <span class="c-key">"best_lag_days"</span>: <span class="c-num">2</span>,
-  <span class="c-key">"correlation"</span>: <span class="c-num">0.412</span>,
-  <span class="c-key">"all_lags"</span>: {
-    <span class="c-key">"0"</span>: <span class="c-num">0.121</span>,
-    <span class="c-key">"1"</span>: <span class="c-num">0.287</span>,
-    <span class="c-key">"2"</span>: <span class="c-num">0.412</span>,
-    <span class="c-key">"3"</span>: <span class="c-num">0.198</span>
-  }
+  <span class="c-key">"window_days"</span>: <span class="c-num">180</span>,
+  <span class="c-key">"sample_size"</span>: <span class="c-num">87</span>,
+  <span class="c-key">"primary_signal"</span>: {
+    <span class="c-key">"type"</span>: <span class="c-str">"sentiment_shift_vs_next_day_return"</span>,
+    <span class="c-key">"correlation"</span>: <span class="c-num">0.241</span>,
+    <span class="c-key">"p_value"</span>: <span class="c-num">0.0241</span>,
+    <span class="c-key">"ci_95"</span>: [<span class="c-num">0.033</span>, <span class="c-num">0.431</span>],
+    <span class="c-key">"strength"</span>: <span class="c-str">"weak"</span>,
+    <span class="c-key">"direction"</span>: <span class="c-str">"positive (momentum)"</span>
+  },
+  <span class="c-key">"interpretation"</span>: <span class="c-str">"Sentiment shifts show a weak positive (momentum) signal (r=0.241, p=0.0241, n=87)"</span>
 }</pre>
+                                <div class="notice" style="margin-top:12px;">
+                                    <strong>Methodology:</strong> Correlates
+                                    daily sentiment <em>shifts</em> (deviation
+                                    from 7-day rolling average) against next-day
+                                    price returns over a 180-day window.
+                                    Strength is <code>strong</code> (p&lt;0.05,
+                                    |r|≥0.2), <code>weak</code> (p&lt;0.10,
+                                    |r|≥0.1), or <code>inconclusive</code>. CI
+                                    uses Fisher z-transform.
+                                </div>
                                 <div class="tester" id="tester-correlation">
                                     <div class="tester-title">▶ Try it</div>
                                     <div class="tester-apikey-note"
