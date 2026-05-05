@@ -659,6 +659,126 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         ),
     }
 
+@app.get("/signal/{ticker}")
+def get_signal(ticker: str, db: Session = Depends(get_db)):
+    since = datetime.utcnow() - timedelta(days=180)
+    today = datetime.utcnow().date()
+
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since
+    ).order_by(models.Headline.published_at).all()
+
+    if len(headlines) < 10:
+        return {"message": "Not enough data yet"}
+
+    # Build daily weighted sentiment (reuse same logic as correlation)
+    daily = defaultdict(lambda: {"scores": [], "weights": []})
+    for h in headlines:
+        if abs(h.sentiment_score) < 0.05:
+            continue
+        d = h.published_at.date()
+        daily[d]["scores"].append(h.sentiment_score)
+        daily[d]["weights"].append(abs(h.sentiment_score))
+
+    daily_sentiment = {}
+    daily_volume = {}
+    for d, v in daily.items():
+        if not v["scores"]:
+            continue
+        w_sum = sum(v["weights"])
+        daily_sentiment[d] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
+        daily_volume[d] = len(v["scores"])
+
+    sorted_dates = sorted(daily_sentiment.keys())
+    if len(sorted_dates) < 8:
+        return {"message": "Not enough data yet"}
+
+    # Compute sentiment shifts for all days
+    all_shifts = {}
+    for i, d in enumerate(sorted_dates):
+        window_start = max(0, i - 7)
+        window = [daily_sentiment[sorted_dates[j]] for j in range(window_start, i)]
+        if len(window) >= 3:
+            all_shifts[d] = daily_sentiment[d] - (sum(window) / len(window))
+
+    if not all_shifts:
+        return {"message": "Not enough data yet"}
+
+    # Today's values — use most recent day if today has no data yet
+    most_recent = sorted_dates[-1]
+    today_sentiment = daily_sentiment.get(most_recent)
+    today_volume = daily_volume.get(most_recent, 0)
+    today_shift = all_shifts.get(most_recent)
+
+    if today_shift is None:
+        return {"message": "Not enough data to compute today's shift"}
+
+    # Shift percentile — where does today's shift rank historically?
+    all_shift_values = sorted(all_shifts.values())
+    n_shifts = len(all_shift_values)
+    percentile = round(sum(1 for s in all_shift_values if s <= today_shift) / n_shifts * 100)
+
+    # How unusual is this? Find last time shift was this large
+    larger_shifts = [
+        d for d, s in sorted(all_shifts.items())
+        if d < most_recent and abs(s) >= abs(today_shift)
+    ]
+    last_similar = larger_shifts[-1] if larger_shifts else None
+    days_since_similar = (most_recent - last_similar).days if last_similar else None
+
+    # Shift magnitude label
+    if percentile >= 90:
+        magnitude = "extreme"
+    elif percentile >= 75:
+        magnitude = "significant"
+    elif percentile >= 50:
+        magnitude = "moderate"
+    else:
+        magnitude = "minor"
+
+    shift_direction = "up" if today_shift > 0 else "down"
+
+    # Sentiment label
+    sentiment_label = (
+        "strongly bullish" if today_sentiment > 0.3
+        else "bullish" if today_sentiment > 0.1
+        else "strongly bearish" if today_sentiment < -0.3
+        else "bearish" if today_sentiment < -0.1
+        else "neutral"
+    )
+
+    # Plain-English summary
+    sign = "+" if today_shift > 0 else ""
+    summary = f"{ticker.upper()} sentiment is {sentiment_label} ({sign}{round(today_sentiment, 3)}) "
+    summary += f"with a {magnitude} {'upward' if shift_direction == 'up' else 'downward'} shift "
+    summary += f"of {sign}{round(today_shift, 3)} vs the 7-day average "
+    summary += f"({percentile}th percentile of all daily shifts). "
+    if days_since_similar and days_since_similar > 7:
+        summary += f"The last shift of this size was {days_since_similar} days ago. "
+    if today_volume < 3:
+        summary += f"Low confidence — only {today_volume} article{'s' if today_volume != 1 else ''} today."
+    else:
+        summary += f"Based on {today_volume} article{'s' if today_volume != 1 else ''}."
+
+    return {
+        "ticker": ticker.upper(),
+        "date": str(most_recent),
+        "today": {
+            "sentiment": round(today_sentiment, 3),
+            "shift": round(today_shift, 3),
+            "shift_direction": shift_direction,
+            "shift_percentile": percentile,
+            "shift_magnitude": magnitude,
+            "article_count": today_volume,
+            "sentiment_label": sentiment_label,
+        },
+        "context": {
+            "days_since_similar_shift": days_since_similar,
+            "total_days_analysed": n_shifts,
+        },
+        "summary": summary,
+    }
 
 @app.get("/export/sentiment/{ticker}")
 async def export_sentiment(ticker: str, days: int = 0, db: Session = Depends(get_db), user=Depends(require_pro)):
