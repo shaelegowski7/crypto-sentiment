@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from . import models
+import math
 from .database import SessionLocal
 from scipy.stats import pearsonr
 from fastapi.responses import StreamingResponse
@@ -19,6 +20,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from fastapi.responses import JSONResponse
+from collections import defaultdict
 import numpy as np
 import resend
 import os
@@ -510,8 +512,7 @@ def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(requir
 
 @app.get("/correlation/{ticker}")
 def get_correlation(ticker: str, db: Session = Depends(get_db)):
-
-    since = datetime.utcnow() - timedelta(days=90)
+    since = datetime.utcnow() - timedelta(days=180)
 
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper(),
@@ -523,61 +524,140 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         models.Price.date >= since
     ).order_by(models.Price.date).all()
 
-    if len(headlines) < 10 or len(prices) < 10:
-        return {"message": "Not enough data yet"}
+    if len(headlines) < 30 or len(prices) < 30:
+        return {"message": "Not enough data yet", "headlines": len(headlines), "prices": len(prices)}
 
-    sentiment_by_date = {}
+    # Aggregate sentiment per day with volume + confidence weighting
+    daily = defaultdict(lambda: {"scores": [], "weights": []})
     for h in headlines:
-        date = str(h.published_at.date())
-        if date not in sentiment_by_date:
-            sentiment_by_date[date] = []
-        if abs(h.sentiment_score) > 0.05:
-            sentiment_by_date[date].append(h.sentiment_score)
-
-    avg_sentiment = {
-        date: sum(scores) / len(scores)
-        for date, scores in sentiment_by_date.items()
-        if len(scores) > 0
-    }
-
-    price_by_date = {}
-    sorted_prices = sorted(prices, key=lambda p: p.date)
-    for i in range(1, len(sorted_prices)):
-        date = str(sorted_prices[i].date.date())
-        prev_price = sorted_prices[i-1].close_price
-        curr_price = sorted_prices[i].close_price
-        if prev_price > 0:
-            price_by_date[date] = (curr_price - prev_price) / prev_price * 100
-
-    common_dates = sorted(set(avg_sentiment.keys()) & set(price_by_date.keys()))
-
-    if len(common_dates) < 10:
-        return {"message": "Not enough overlapping data yet"}
-
-    best_corr = 0
-    best_lag = 0
-    all_lags = {}
-
-    for lag in range(0, 8):
-        s = [avg_sentiment[d] for d in common_dates[lag:]]
-        p = [price_by_date[d] for d in common_dates[:len(common_dates) - lag]]
-        if len(s) < 10:
+        if abs(h.sentiment_score) < 0.05:
             continue
-        corr, pvalue = pearsonr(s, p)
-        all_lags[lag] = round(corr, 3)
-        if abs(corr) > abs(best_corr):
-            best_corr = corr
-            best_lag = lag
+        d = h.published_at.date()
+        weight = abs(h.sentiment_score)  # confidence proxy
+        daily[d]["scores"].append(h.sentiment_score)
+        daily[d]["weights"].append(weight)
 
-    direction = "negative (contrarian)" if best_corr < 0 else "positive (momentum)"
+    daily_sentiment = {}
+    daily_volume = {}
+    for d, v in daily.items():
+        if not v["scores"]:
+            continue
+        w_sum = sum(v["weights"])
+        daily_sentiment[d] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
+        daily_volume[d] = len(v["scores"])
+
+    # Daily returns (next-day forward returns)
+    sorted_prices = sorted(prices, key=lambda p: p.date)
+    daily_return = {}
+    for i in range(len(sorted_prices) - 1):
+        d = sorted_prices[i].date.date()
+        prev_close = sorted_prices[i].close_price
+        next_close = sorted_prices[i + 1].close_price
+        if prev_close and prev_close > 0:
+            daily_return[d] = (next_close - prev_close) / prev_close * 100
+
+    # Sentiment shift = today's sentiment minus 7-day rolling avg
+    sorted_dates = sorted(daily_sentiment.keys())
+    sentiment_shift = {}
+    for i, d in enumerate(sorted_dates):
+        window_start = max(0, i - 7)
+        window = [daily_sentiment[sorted_dates[j]] for j in range(window_start, i)]
+        if len(window) >= 3:
+            sentiment_shift[d] = daily_sentiment[d] - (sum(window) / len(window))
+
+    # Align all features against next-day returns
+    common = sorted(set(sentiment_shift.keys()) & set(daily_return.keys()) & set(daily_volume.keys()))
+    if len(common) < 30:
+        return {"message": "Not enough overlapping data yet", "overlap_days": len(common)}
+
+    shifts = np.array([sentiment_shift[d] for d in common])
+    levels = np.array([daily_sentiment[d] for d in common])
+    volumes = np.array([daily_volume[d] for d in common])
+    returns = np.array([daily_return[d] for d in common])
+
+    def safe_corr(x, y):
+        if len(x) < 10 or np.std(x) == 0 or np.std(y) == 0:
+            return None, None, None
+        r, p = pearsonr(x, y)
+        # Fisher z 95% CI
+        n = len(x)
+        if n < 4 or abs(r) >= 1:
+            return round(r, 3), round(p, 4), None
+        z = 0.5 * math.log((1 + r) / (1 - r))
+        se = 1 / math.sqrt(n - 3)
+        lo = math.tanh(z - 1.96 * se)
+        hi = math.tanh(z + 1.96 * se)
+        return round(r, 3), round(p, 4), [round(lo, 3), round(hi, 3)]
+
+    shift_r, shift_p, shift_ci = safe_corr(shifts, returns)
+    level_r, level_p, level_ci = safe_corr(levels, returns)
+    volume_r, volume_p, volume_ci = safe_corr(volumes, returns)
+
+    # Momentum baseline: yesterday's return vs today's return
+    sorted_ret_dates = sorted(daily_return.keys())
+    yest, today = [], []
+    for i in range(1, len(sorted_ret_dates)):
+        prev_d = sorted_ret_dates[i - 1]
+        curr_d = sorted_ret_dates[i]
+        if (curr_d - prev_d).days == 1:
+            yest.append(daily_return[prev_d])
+            today.append(daily_return[curr_d])
+    momentum_r, momentum_p, _ = safe_corr(np.array(yest), np.array(today)) if len(yest) >= 10 else (None, None, None)
+
+    # Headline signal = sentiment shift correlation
+    primary_r = shift_r if shift_r is not None else 0
+    primary_p = shift_p if shift_p is not None else 1
+    primary_ci = shift_ci
+
+    # Signal strength label
+    if primary_ci and primary_ci[0] * primary_ci[1] <= 0:
+        strength = "inconclusive"
+    elif primary_p < 0.05 and abs(primary_r) >= 0.2:
+        strength = "strong"
+    elif primary_p < 0.10 and abs(primary_r) >= 0.1:
+        strength = "weak"
+    else:
+        strength = "inconclusive"
+
+    direction = "negative (contrarian)" if primary_r < 0 else "positive (momentum)"
+
+    # Beats baseline?
+    beats_momentum = (
+        momentum_r is not None
+        and primary_r is not None
+        and abs(primary_r) > abs(momentum_r)
+    )
 
     return {
         "ticker": ticker.upper(),
-        "best_lag_days": best_lag,
-        "correlation": round(best_corr, 3),
-        "all_lags": all_lags,
-        "interpretation": f"Sentiment {best_lag} days ago has {round(abs(best_corr) * 100)}% correlation with price returns",
-        "signal_type": direction
+        "window_days": 180,
+        "sample_size": len(common),
+        "primary_signal": {
+            "type": "sentiment_shift_vs_next_day_return",
+            "correlation": primary_r,
+            "p_value": primary_p,
+            "ci_95": primary_ci,
+            "strength": strength,
+            "direction": direction,
+        },
+        "secondary_signals": {
+            "sentiment_level_vs_next_day_return": {
+                "correlation": level_r, "p_value": level_p, "ci_95": level_ci
+            },
+            "news_volume_vs_next_day_return": {
+                "correlation": volume_r, "p_value": volume_p, "ci_95": volume_ci
+            },
+        },
+        "baseline": {
+            "momentum_autocorrelation": momentum_r,
+            "momentum_p_value": momentum_p,
+            "primary_beats_momentum": beats_momentum,
+        },
+        "interpretation": (
+            f"Sentiment shifts show a {strength} {direction} signal "
+            f"(r={primary_r}, p={primary_p}, n={len(common)}). "
+            f"{'Outperforms' if beats_momentum else 'Does not outperform'} momentum baseline."
+        ),
     }
 
 
@@ -1200,7 +1280,7 @@ def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depe
 @limiter.limit("10/minute")
 def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db)
-    since = datetime.utcnow() - timedelta(days=90)
+    since = datetime.utcnow() - timedelta(days=180)
 
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper(),
@@ -1212,58 +1292,94 @@ def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db)
         models.Price.date >= since
     ).order_by(models.Price.date).all()
 
-    if len(headlines) < 10 or len(prices) < 10:
+    if len(headlines) < 30 or len(prices) < 30:
         raise HTTPException(status_code=404, detail="Not enough data")
 
-    sentiment_by_date = {}
+    daily = defaultdict(lambda: {"scores": [], "weights": []})
     for h in headlines:
-        date = str(h.published_at.date())
-        if date not in sentiment_by_date:
-            sentiment_by_date[date] = []
-        if abs(h.sentiment_score) > 0.05:
-            sentiment_by_date[date].append(h.sentiment_score)
+        if abs(h.sentiment_score) < 0.05:
+            continue
+        d = h.published_at.date()
+        weight = abs(h.sentiment_score)
+        daily[d]["scores"].append(h.sentiment_score)
+        daily[d]["weights"].append(weight)
 
-    avg_sentiment = {
-        date: sum(scores) / len(scores)
-        for date, scores in sentiment_by_date.items()
-        if len(scores) > 0
-    }
+    daily_sentiment = {}
+    daily_volume = {}
+    for d, v in daily.items():
+        if not v["scores"]:
+            continue
+        w_sum = sum(v["weights"])
+        daily_sentiment[d] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
+        daily_volume[d] = len(v["scores"])
 
-    price_by_date = {}
     sorted_prices = sorted(prices, key=lambda p: p.date)
-    for i in range(1, len(sorted_prices)):
-        date = str(sorted_prices[i].date.date())
-        prev_price = sorted_prices[i-1].close_price
-        curr_price = sorted_prices[i].close_price
-        if prev_price > 0:
-            price_by_date[date] = (curr_price - prev_price) / prev_price * 100
+    daily_return = {}
+    for i in range(len(sorted_prices) - 1):
+        d = sorted_prices[i].date.date()
+        prev_close = sorted_prices[i].close_price
+        next_close = sorted_prices[i + 1].close_price
+        if prev_close and prev_close > 0:
+            daily_return[d] = (next_close - prev_close) / prev_close * 100
 
-    common_dates = sorted(set(avg_sentiment.keys()) & set(price_by_date.keys()))
+    sorted_dates = sorted(daily_sentiment.keys())
+    sentiment_shift = {}
+    for i, d in enumerate(sorted_dates):
+        window_start = max(0, i - 7)
+        window = [daily_sentiment[sorted_dates[j]] for j in range(window_start, i)]
+        if len(window) >= 3:
+            sentiment_shift[d] = daily_sentiment[d] - (sum(window) / len(window))
 
-    if len(common_dates) < 10:
+    common = sorted(set(sentiment_shift.keys()) & set(daily_return.keys()) & set(daily_volume.keys()))
+    if len(common) < 30:
         raise HTTPException(status_code=404, detail="Not enough overlapping data")
 
-    best_corr = 0
-    best_lag = 0
-    all_lags = {}
+    shifts = np.array([sentiment_shift[d] for d in common])
+    returns = np.array([daily_return[d] for d in common])
 
-    for lag in range(0, 8):
-        s = [avg_sentiment[d] for d in common_dates[lag:]]
-        p = [price_by_date[d] for d in common_dates[:len(common_dates) - lag]]
-        if len(s) < 10:
-            continue
-        corr, _ = pearsonr(s, p)
-        all_lags[lag] = round(corr, 3)
-        if abs(corr) > abs(best_corr):
-            best_corr = corr
-            best_lag = lag
+    def safe_corr(x, y):
+        if len(x) < 10 or np.std(x) == 0 or np.std(y) == 0:
+            return None, None, None
+        r, p = pearsonr(x, y)
+        n = len(x)
+        if n < 4 or abs(r) >= 1:
+            return round(r, 3), round(p, 4), None
+        z = 0.5 * math.log((1 + r) / (1 - r))
+        se = 1 / math.sqrt(n - 3)
+        lo = math.tanh(z - 1.96 * se)
+        hi = math.tanh(z + 1.96 * se)
+        return round(r, 3), round(p, 4), [round(lo, 3), round(hi, 3)]
+
+    shift_r, shift_p, shift_ci = safe_corr(shifts, returns)
+
+    if shift_ci and shift_ci[0] * shift_ci[1] <= 0:
+        strength = "inconclusive"
+    elif shift_p < 0.05 and abs(shift_r) >= 0.2:
+        strength = "strong"
+    elif shift_p < 0.10 and abs(shift_r) >= 0.1:
+        strength = "weak"
+    else:
+        strength = "inconclusive"
+
+    direction = "negative (contrarian)" if shift_r < 0 else "positive (momentum)"
 
     return {
         "ticker": ticker.upper(),
         "calls_used": 1,
-        "best_lag_days": best_lag,
-        "correlation": round(best_corr, 3),
-        "all_lags": all_lags,
+        "window_days": 180,
+        "sample_size": len(common),
+        "primary_signal": {
+            "type": "sentiment_shift_vs_next_day_return",
+            "correlation": shift_r,
+            "p_value": shift_p,
+            "ci_95": shift_ci,
+            "strength": strength,
+            "direction": direction,
+        },
+        "interpretation": (
+            f"Sentiment shifts show a {strength} {direction} signal "
+            f"(r={shift_r}, p={shift_p}, n={len(common)})"
+        ),
     }
 
 @app.get("/status")
