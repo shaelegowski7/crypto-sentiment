@@ -40,12 +40,23 @@ const exportData = async (type, ticker, session, days) => {
   }
 }
 
+// ─── Correlation response helpers ──────────────────────────────────────────
+// New API shape:
+// {
+//   ticker, window_days, sample_size,
+//   primary_signal: { type, correlation, p_value, ci_95, strength, direction },
+//   secondary_signals: { sentiment_level_vs_next_day_return: {...}, news_volume_vs_next_day_return: {...} },
+//   baseline: { momentum_autocorrelation, momentum_p_value, primary_beats_momentum },
+//   interpretation
+// }
+// Returns null if "message" present (not enough data).
+
+function getPrimary(correlation) {
+  return correlation?.primary_signal ?? null
+}
+
 // ─── Derived insight helpers ────────────────────────────────────────────────
 
-/**
- * Returns sentiment trend data comparing the last 7 days vs the prior 7 days.
- * { current: number, previous: number, delta: number, direction: "up"|"down"|"flat" }
- */
 function computeSentimentTrend(allData) {
   const withSentiment = allData
     .filter(d => d.sentiment !== null && d.sentiment !== undefined)
@@ -73,7 +84,7 @@ function computeSentimentTrend(allData) {
 }
 
 /**
- * Builds the plain-English "Today's Signal" verdict.
+ * Builds the plain-English "Today's Signal" verdict using the new correlation shape.
  */
 function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
   if (avgSentiment === null || avgSentiment === undefined) return null
@@ -87,29 +98,27 @@ function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
 
   const direction = score > 0.1 ? "BULLISH" : score < -0.1 ? "BEARISH" : "NEUTRAL"
 
-  // Signal strength from correlation magnitude
-  const corrValue = correlation?.correlation ? Math.abs(parseFloat(correlation.correlation)) : null
-  const strength = corrValue === null ? null
-    : corrValue >= 0.6 ? "strong"
-    : corrValue >= 0.35 ? "moderate"
-    : "weak"
-
-  const lagDays = correlation?.best_lag_days ?? null
-  const isMomentum = correlation?.signal_type?.includes("momentum")
+  const primary = getPrimary(correlation)
+  const strength = primary?.strength ?? null
+  const isMomentum = primary?.direction?.includes("momentum") ?? null
+  const corrValue = primary?.correlation ?? null
+  const beatsMomentum = correlation?.baseline?.primary_beats_momentum ?? null
+  const sampleSize = correlation?.sample_size ?? null
 
   // Build the narrative sentence
   let narrative = `${ticker} sentiment is currently ${sentimentLabel} (${score > 0 ? "+" : ""}${score}).`
 
-  if (lagDays !== null && strength !== null) {
+  if (strength === "strong" || strength === "weak") {
     const followVerb = isMomentum ? "tends to follow" : "historically moves opposite to"
-    narrative += ` Based on historical patterns, price ${followVerb} sentiment`
-    if (lagDays === 0) {
-      narrative += ` on the same day.`
-    } else if (lagDays === 1) {
-      narrative += ` within 1 day.`
-    } else {
-      narrative += ` within ${lagDays} days.`
+    const strengthWord = strength === "strong" ? "a strong" : "a weak"
+    narrative += ` Historically, next-day price ${followVerb} sentiment shifts with ${strengthWord} ${isMomentum ? "momentum" : "contrarian"} relationship`
+    if (corrValue !== null) narrative += ` (r=${corrValue}).`
+    else narrative += `.`
+    if (beatsMomentum === false) {
+      narrative += ` Note: this signal does not outperform a simple momentum baseline.`
     }
+  } else if (strength === "inconclusive") {
+    narrative += ` Historical data is inconclusive — no statistically significant link between sentiment shifts and next-day price.`
   }
 
   if (trend?.direction !== "flat" && trend?.delta !== null) {
@@ -117,15 +126,26 @@ function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
     narrative += ` Sentiment has been ${trendWord} over the past week (${trend.delta > 0 ? "+" : ""}${trend.delta}).`
   }
 
-  return { direction, sentimentLabel, score, strength, lagDays, isMomentum, narrative }
+  return {
+    direction,
+    sentimentLabel,
+    score,
+    strength,
+    isMomentum,
+    correlation: corrValue,
+    beatsMomentum,
+    sampleSize,
+    narrative,
+  }
 }
 
 // ─── Strength meter bar ────────────────────────────────────────────────────
 
 function StrengthMeter({ strength }) {
-  const levels = ["weak", "moderate", "strong"]
+  const levels = ["inconclusive", "weak", "strong"]
   const idx = levels.indexOf(strength)
-  const colors = ["#f85149", "#f0b429", "#3fb950"]
+  const colors = ["#8b949e", "#f0b429", "#3fb950"]
+  const safeIdx = idx >= 0 ? idx : 0
   return (
     <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
       {levels.map((l, i) => (
@@ -133,14 +153,14 @@ function StrengthMeter({ strength }) {
           key={l}
           style={{
             width: "28px", height: "4px", borderRadius: "2px",
-            background: i <= idx ? colors[idx] : "var(--border2)",
+            background: i <= safeIdx ? colors[safeIdx] : "var(--border2)",
             transition: "background 0.3s",
           }}
         />
       ))}
       <span style={{
         fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em",
-        color: colors[idx], textTransform: "uppercase", marginLeft: "4px"
+        color: colors[safeIdx], textTransform: "uppercase", marginLeft: "4px"
       }}>
         {strength}
       </span>
@@ -242,7 +262,7 @@ function TodaysSignalCard({ signal, trend, loading }) {
           }}>
             {signal.direction}
           </span>
-          {signal.isMomentum !== null && (
+          {signal.isMomentum !== null && signal.strength !== "inconclusive" && (
             <span style={{
               fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
               padding: "2px 8px", borderRadius: "2px",
@@ -250,6 +270,16 @@ function TodaysSignalCard({ signal, trend, loading }) {
               border: "1px solid var(--border2)",
             }}>
               {signal.isMomentum ? "MOMENTUM" : "CONTRARIAN"}
+            </span>
+          )}
+          {signal.beatsMomentum === true && (
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
+              padding: "2px 8px", borderRadius: "2px",
+              background: "rgba(63,185,80,0.1)", color: "var(--positive)",
+              border: "1px solid rgba(63,185,80,0.3)",
+            }}>
+              BEATS BASELINE
             </span>
           )}
         </div>
@@ -264,7 +294,7 @@ function TodaysSignalCard({ signal, trend, loading }) {
         {signal.narrative}
       </p>
 
-      {/* Bottom row: score + trend + lag */}
+      {/* Bottom row: score + trend + correlation */}
       <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start", borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
         <div>
           <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
@@ -287,18 +317,18 @@ function TodaysSignalCard({ signal, trend, loading }) {
           <TrendArrow trend={trend} />
         </div>
 
-        {signal.lagDays !== null && (
+        {signal.correlation !== null && (
           <>
             <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
             <div>
               <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
-                Price Lag
+                Correlation (r)
               </div>
               <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: "var(--accent2)", lineHeight: 1 }}>
-                {signal.lagDays}d
+                {signal.correlation > 0 ? "+" : ""}{signal.correlation}
               </div>
               <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
-                predicted lead time
+                next-day return · n={signal.sampleSize ?? "?"}
               </div>
             </div>
           </>
@@ -570,6 +600,36 @@ const styles = `
   }
 
   .correlation-detail strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .stat-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+  }
+
+  .stat-block-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 0;
+  }
+
+  .stat-block-key {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .stat-block-val {
+    font-family: var(--mono);
+    font-size: 12px;
     color: var(--text);
     font-weight: 500;
   }
@@ -1039,10 +1099,10 @@ const CorrelationSkeleton = () => (
     <div className="skeleton" style={{ height: "12px", width: "70%", borderRadius: "2px" }} />
     <div className="skeleton" style={{ height: "12px", width: "80%", borderRadius: "2px" }} />
     <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
-      {[...Array(6)].map((_, i) => (
+      {[...Array(4)].map((_, i) => (
         <div key={i} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "8px", borderBottom: "1px solid var(--border)" }}>
-          <div className="skeleton" style={{ height: "10px", width: "40px", borderRadius: "2px" }} />
-          <div className="skeleton" style={{ height: "10px", width: "32px", borderRadius: "2px" }} />
+          <div className="skeleton" style={{ height: "10px", width: "100px", borderRadius: "2px" }} />
+          <div className="skeleton" style={{ height: "10px", width: "60px", borderRadius: "2px" }} />
         </div>
       ))}
     </div>
@@ -1312,6 +1372,11 @@ export default function App() {
     ? null
     : buildTodaySignal({ ticker, avgSentiment, correlation, trend: sentimentTrend })
 
+  // Convenience accessors for the new correlation shape
+  const primary = getPrimary(correlation)
+  const secondary = correlation?.secondary_signals ?? null
+  const baseline = correlation?.baseline ?? null
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const authParam = params.get("auth")
@@ -1557,6 +1622,12 @@ export default function App() {
     ? "tier-badge tier-data"
     : "tier-badge tier-free"
 
+  // Stat card values for the new shape
+  const statCorrValue = primary?.correlation ?? null
+  const statCorrSub = primary
+    ? `${primary.strength ?? "—"} · n=${correlation?.sample_size ?? "?"}`
+    : "Loading..."
+
   return (
     <>
       <style>{styles}</style>
@@ -1707,13 +1778,13 @@ export default function App() {
               </div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Correlation</div>
-              <div className={`stat-value ${!loading && correlation?.correlation < 0 ? "negative-text" : "positive-text"}`}>
+              <div className="stat-label">Correlation (r)</div>
+              <div className={`stat-value ${!loading && statCorrValue !== null && statCorrValue < 0 ? "negative-text" : "positive-text"}`}>
                 {loading
                   ? <span className="skeleton" style={{ display: "inline-block", width: "60px", height: "22px", borderRadius: "2px" }} />
-                  : (correlation?.correlation ?? "—")}
+                  : (statCorrValue ?? "—")}
               </div>
-              <div className="stat-sub">{loading ? "—" : (correlation ? `${correlation.best_lag_days}d lag` : "Loading...")}</div>
+              <div className="stat-sub">{loading ? "—" : statCorrSub}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">7d Trend</div>
@@ -1830,90 +1901,158 @@ export default function App() {
             <div className="panel correlation-panel">
               <div className="panel-header">
                 <span className="panel-title">PREDICTIVE SIGNAL</span>
+                {correlation?.window_days && (
+                  <span className="panel-title" style={{ color: "var(--muted)" }}>
+                    {correlation.window_days}D WINDOW · n={correlation.sample_size}
+                  </span>
+                )}
               </div>
               {loading ? <CorrelationSkeleton /> : (
                 <div className="panel-body">
-                  {correlation?.correlation !== undefined ? (
-                    <>
-                      <div className="correlation-detail">
-                        {/* ── SIGNAL SUMMARY (plain English) ───────────────────────── */}
-                        {todaySignal && (
-                          <div style={{
-                            marginBottom: "16px",
-                            padding: "12px 14px",
-                            background: "var(--surface2)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "2px",
-                            fontFamily: "var(--sans)",
-                            fontSize: "13px",
-                            color: "var(--text)",
-                            lineHeight: "1.65",
-                          }}>
-                            {todaySignal.narrative}
-                            {todaySignal.strength && (
-                              <div style={{ marginTop: "10px" }}>
-                                <StrengthMeter strength={todaySignal.strength} />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <strong>{correlation.interpretation}</strong>
-                        <br /><br />
-                        <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "2px", padding: "10px 14px", marginBottom: "12px" }}>
-                          <div style={{ marginBottom: "8px" }}>
-                            <span style={{ color: "var(--muted)" }}>Signal: </span>
-                            <strong style={{ color: correlation.signal_type?.includes("momentum") ? "var(--positive)" : "var(--negative)" }}>
-                              {correlation.signal_type?.includes("momentum") ? "📈 Momentum" : "📉 Contrarian"}
-                            </strong>
-                            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px" }}>
-                              {correlation.signal_type?.includes("momentum")
-                                ? "Positive news tends to be followed by price rises"
-                                : "Positive news tends to be followed by price drops — market may have already priced it in"}
-                            </div>
-                          </div>
-                          <div>
-                            <span style={{ color: "var(--muted)" }}>Best lag: </span>
-                            <strong>{correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}</strong>
-                            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px" }}>
-                              Sentiment today predicts price movement {correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""} from now
-                            </div>
-                          </div>
-                        </div>
-                        {correlation.all_lags && (
-                          <div style={{ marginTop: "8px" }}>
-                            {Object.entries(correlation.all_lags).map(([lag, corr]) => (
-                              <div key={lag} style={{
-                                display: "flex", justifyContent: "space-between",
-                                padding: "3px 0", borderBottom: "1px solid var(--border)",
-                                fontFamily: "var(--mono)", fontSize: "10px"
-                              }}>
-                                <span style={{ color: "var(--muted)" }}>{lag}d lag</span>
-                                <span style={{ color: Math.abs(corr) > 0.3 ? corr < 0 ? "var(--negative)" : "var(--positive)" : "var(--muted)" }}>
-                                  {corr > 0 ? "+" : ""}{corr}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                  {primary ? (
+                    <div className="correlation-detail">
+                      {/* ── Plain-English summary ───────────────────────── */}
+                      {todaySignal && (
                         <div style={{
-                          marginTop: "16px",
-                          padding: "10px 14px",
+                          marginBottom: "16px",
+                          padding: "12px 14px",
                           background: "var(--surface2)",
                           border: "1px solid var(--border)",
                           borderRadius: "2px",
-                          fontFamily: "var(--mono)",
-                          fontSize: "11px",
-                          color: "var(--muted)",
-                          lineHeight: "1.6"
+                          fontFamily: "var(--sans)",
+                          fontSize: "13px",
+                          color: "var(--text)",
+                          lineHeight: "1.65",
                         }}>
-                          💡 A higher correlation at longer lags suggests sentiment is a leading indicator — news today may move prices in {correlation.best_lag_days} day{correlation.best_lag_days !== 1 ? "s" : ""}.
+                          {todaySignal.narrative}
+                          {todaySignal.strength && (
+                            <div style={{ marginTop: "10px" }}>
+                              <StrengthMeter strength={todaySignal.strength} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {correlation?.interpretation && (
+                        <div style={{ marginBottom: "12px" }}>
+                          <strong>{correlation.interpretation}</strong>
+                        </div>
+                      )}
+
+                      {/* ── Primary signal stats ─────────────────────────── */}
+                      <div className="stat-block">
+                        <div style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.1em", color: "var(--accent)", textTransform: "uppercase", marginBottom: "8px" }}>
+                          Primary signal · sentiment shift → next-day return
+                        </div>
+                        <div className="stat-block-row">
+                          <span className="stat-block-key">Correlation</span>
+                          <span className="stat-block-val" style={{ color: primary.correlation < 0 ? "var(--negative)" : "var(--positive)" }}>
+                            {primary.correlation > 0 ? "+" : ""}{primary.correlation}
+                          </span>
+                        </div>
+                        <div className="stat-block-row">
+                          <span className="stat-block-key">P-value</span>
+                          <span className="stat-block-val" style={{ color: primary.p_value < 0.05 ? "var(--positive)" : primary.p_value < 0.10 ? "var(--accent)" : "var(--muted)" }}>
+                            {primary.p_value}
+                          </span>
+                        </div>
+                        {primary.ci_95 && (
+                          <div className="stat-block-row">
+                            <span className="stat-block-key">95% CI</span>
+                            <span className="stat-block-val">
+                              [{primary.ci_95[0]}, {primary.ci_95[1]}]
+                            </span>
+                          </div>
+                        )}
+                        <div className="stat-block-row">
+                          <span className="stat-block-key">Strength</span>
+                          <span className="stat-block-val" style={{
+                            color: primary.strength === "strong" ? "var(--positive)" :
+                                   primary.strength === "weak" ? "var(--accent)" :
+                                   "var(--muted)"
+                          }}>
+                            {primary.strength?.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="stat-block-row">
+                          <span className="stat-block-key">Direction</span>
+                          <span className="stat-block-val">
+                            {primary.direction?.includes("momentum") ? "📈 Momentum" : "📉 Contrarian"}
+                          </span>
                         </div>
                       </div>
-                    </>
+
+                      {/* ── Secondary signals ────────────────────────────── */}
+                      {secondary && (
+                        <div className="stat-block">
+                          <div style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "8px" }}>
+                            Secondary signals
+                          </div>
+                          {secondary.sentiment_level_vs_next_day_return?.correlation !== null && (
+                            <div className="stat-block-row">
+                              <span className="stat-block-key">Sentiment level</span>
+                              <span className="stat-block-val">
+                                r = {secondary.sentiment_level_vs_next_day_return.correlation > 0 ? "+" : ""}{secondary.sentiment_level_vs_next_day_return.correlation}
+                                <span style={{ color: "var(--muted)", marginLeft: "8px" }}>
+                                  p={secondary.sentiment_level_vs_next_day_return.p_value}
+                                </span>
+                              </span>
+                            </div>
+                          )}
+                          {secondary.news_volume_vs_next_day_return?.correlation !== null && (
+                            <div className="stat-block-row">
+                              <span className="stat-block-key">News volume</span>
+                              <span className="stat-block-val">
+                                r = {secondary.news_volume_vs_next_day_return.correlation > 0 ? "+" : ""}{secondary.news_volume_vs_next_day_return.correlation}
+                                <span style={{ color: "var(--muted)", marginLeft: "8px" }}>
+                                  p={secondary.news_volume_vs_next_day_return.p_value}
+                                </span>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Baseline comparison ──────────────────────────── */}
+                      {baseline && baseline.momentum_autocorrelation !== null && (
+                        <div className="stat-block">
+                          <div style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "8px" }}>
+                            Baseline comparison
+                          </div>
+                          <div className="stat-block-row">
+                            <span className="stat-block-key">Momentum (yesterday → today)</span>
+                            <span className="stat-block-val">
+                              r = {baseline.momentum_autocorrelation > 0 ? "+" : ""}{baseline.momentum_autocorrelation}
+                            </span>
+                          </div>
+                          <div className="stat-block-row">
+                            <span className="stat-block-key">Beats baseline?</span>
+                            <span className="stat-block-val" style={{
+                              color: baseline.primary_beats_momentum ? "var(--positive)" : "var(--negative)"
+                            }}>
+                              {baseline.primary_beats_momentum ? "✓ YES" : "✗ NO"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{
+                        marginTop: "16px",
+                        padding: "10px 14px",
+                        background: "var(--surface2)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "2px",
+                        fontFamily: "var(--mono)",
+                        fontSize: "11px",
+                        color: "var(--muted)",
+                        lineHeight: "1.6"
+                      }}>
+                        💡 The primary signal measures how much sentiment <em>shifts</em> (deviation from 7-day average) predict the <em>next day's</em> price return. Strength accounts for both effect size and statistical significance.
+                      </div>
+                    </div>
                   ) : (
                     <div style={{ padding: "16px", fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
-                      Not enough data yet.
+                      {correlation?.message ?? "Not enough data yet."}
                     </div>
                   )}
                 </div>
@@ -2009,21 +2148,21 @@ export default function App() {
                   </div>
                 </div>
                 <div className="explainer-card" style={{ borderLeft: "2px solid var(--accent2)" }}>
-                  <div className="explainer-label" style={{ color: "var(--accent2)" }}>What is Correlation?</div>
+                  <div className="explainer-label" style={{ color: "var(--accent2)" }}>What is Sentiment Shift?</div>
                   <div className="explainer-text">
-                    Correlation measures how closely sentiment and price move together. <span style={{ color: "var(--text)" }}>100%</span> means they move in perfect sync. <span style={{ color: "var(--text)" }}>0%</span> means no relationship. A negative value means they move in opposite directions.
+                    The shift is today's sentiment minus the 7-day rolling average. Markets price in steady-state sentiment — what tends to move price is <em>change</em>, not absolute level. We correlate shifts against next-day returns.
                   </div>
                 </div>
                 <div className="explainer-card" style={{ borderLeft: "2px solid var(--positive)" }}>
-                  <div className="explainer-label" style={{ color: "var(--positive)" }}>What is Lag?</div>
+                  <div className="explainer-label" style={{ color: "var(--positive)" }}>Strength &amp; P-value</div>
                   <div className="explainer-text">
-                    Lag is the delay between a sentiment shift and a price move. A <span style={{ color: "var(--text)" }}>2 day lag</span> means sentiment today tends to predict where the price goes in 2 days — giving you a potential early signal.
+                    <span style={{ color: "var(--text)" }}>Strong</span> means a meaningful effect with strong statistical evidence. <span style={{ color: "var(--text)" }}>Weak</span> means a real but smaller effect. <span style={{ color: "var(--text)" }}>Inconclusive</span> means we cannot rule out chance.
                   </div>
                 </div>
                 <div className="explainer-card" style={{ borderLeft: "2px solid var(--neutral)" }}>
                   <div className="explainer-label" style={{ color: "var(--neutral)" }}>Momentum vs Contrarian</div>
                   <div className="explainer-text">
-                    <span style={{ color: "var(--positive)" }}>Momentum</span> means positive news tends to be followed by price rises. <span style={{ color: "var(--negative)" }}>Contrarian</span> means positive news is followed by price drops — the market may already have priced it in.
+                    <span style={{ color: "var(--positive)" }}>Momentum</span> means positive sentiment shifts tend to be followed by price rises. <span style={{ color: "var(--negative)" }}>Contrarian</span> means positive shifts are followed by price drops — the market may already have priced it in.
                   </div>
                 </div>
               </div>
