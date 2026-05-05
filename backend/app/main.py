@@ -651,7 +651,7 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
         "baseline": {
             "momentum_autocorrelation": momentum_r,
             "momentum_p_value": momentum_p,
-            "primary_beats_momentum": beats_momentum,
+            "primary_beats_momentum": bool(beats_momentum) if beats_momentum is not None else None,
         },
         "interpretation": (
             f"Sentiment shifts show a {strength} {direction} signal "
