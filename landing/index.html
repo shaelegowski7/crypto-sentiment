@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SentimentFX | Crypto Sentiment Intelligence</title>
     <meta name="description"
-      content="SentimentFX tracks crypto news in real time, scores it with FinBERT AI, and surfaces predictive signals before the market reacts. Track BTC, ETH, SOL, XRP and more." />
+      content="SentimentFX tracks crypto news in real time, scores it with FinBERT AI, and gives you quantified sentiment context for BTC, ETH, SOL, XRP and more." />
     <meta property="og:title"
       content="SentimentFX | Crypto Sentiment Intelligence" />
     <meta property="og:description"
-      content="AI-powered crypto sentiment dashboard. Track news sentiment vs price for BTC, ETH, SOL, XRP and more." />
+      content="AI-powered crypto sentiment dashboard. Know what the market is reading. Track news sentiment vs price for BTC, ETH, SOL, XRP and more." />
     <meta property="og:url" content="https://sentimentfx.org" />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -494,6 +494,52 @@
       .step-title { font-size: 15px; font-weight: 500; color: var(--text); }
       .step-desc  { font-size: 13px; color: var(--muted); line-height: 1.65; }
 
+      .honest-box {
+        position: relative;
+        z-index: 1;
+        padding: 60px 40px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      .honest-inner {
+        background: rgba(88,166,255,0.04);
+        border: 1px solid rgba(88,166,255,0.2);
+        border-radius: 4px;
+        padding: 32px 40px;
+        display: flex;
+        gap: 40px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .honest-icon {
+        font-family: var(--mono);
+        font-size: 28px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+
+      .honest-content { flex: 1; min-width: 280px; }
+
+      .honest-title {
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--accent2);
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+
+      .honest-text {
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.75;
+      }
+
+      .honest-text strong { color: var(--text); font-weight: 500; }
+
       .pricing {
         position: relative;
         z-index: 1;
@@ -586,7 +632,6 @@
         align-items: flex-start;
       }
 
-      .price-features li::before { content: none; }
       .price-features li.included { color: var(--text); }
 
       .price-btn {
@@ -684,6 +729,8 @@
         .stat-item { min-width: 50%; border-bottom: 1px solid var(--border); }
         .features, .pricing { padding: 60px 20px; }
         .how { padding: 60px 20px; }
+        .honest-box { padding: 40px 20px; }
+        .honest-inner { padding: 24px; gap: 20px; }
         .bottom-cta { padding: 60px 20px; }
         footer { flex-direction: column; gap: 12px; text-align: center; padding: 24px 20px; }
         .hero-actions { flex-direction: column; align-items: center; }
@@ -710,12 +757,12 @@
     <section class="hero">
       <div class="hero-tag">AI-Powered Crypto Intelligence</div>
       <h1 class="hero-title">
-        News sentiment that<br><span>predicts market moves</span>
+        Know what the market<br><span>is reading right now</span>
       </h1>
       <p class="hero-sub">
-        SentimentFX tracks crypto news in real time, scores it with
-        FinBERT AI, and surfaces predictive signals before the market
-        reacts.
+        SentimentFX scores every crypto headline with FinBERT AI and puts the
+        data in your hands — so you always know the news sentiment behind the
+        price.
       </p>
 
       <div
@@ -768,45 +815,69 @@
           <div class="feature-title">FinBERT-powered analysis</div>
           <div class="feature-desc">Every headline scored by FinBERT —
             a BERT model fine-tuned on financial text. Not generic
-            sentiment. Finance-specific.</div>
+            sentiment. Finance-specific NLP built for markets.</div>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">02 — Predictive Signal</div>
-          <div class="feature-title">Lag correlation engine</div>
-          <div class="feature-desc">Automatically detects how many
-            days sentiment leads price movement. Contrarian and
-            momentum signals per ticker.</div>
+          <div class="feature-icon">02 — Signal Analysis</div>
+          <div class="feature-title">Honest correlation engine</div>
+          <div class="feature-desc">Analyses the historical relationship
+            between sentiment shifts and next-day price returns — with
+            statistical confidence intervals, not cherry-picked
+            correlations.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">03 — Real-time Data</div>
           <div class="feature-title">Hourly scraping pipeline</div>
           <div class="feature-desc">News scraped every hour across 5
             major crypto assets. Prices pulled from live market
-            feeds.</div>
+            feeds and stored for historical analysis.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">04 — API Access</div>
           <div class="feature-title">Developer-ready endpoints</div>
           <div class="feature-desc">REST API with sentiment scores,
-            price history, and correlation data. Integrate into your
-            own trading systems.</div>
+            price history, and correlation data at £0.01/call.
+            Integrate into your own trading systems or bots.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">05 — Historical Data</div>
           <div class="feature-title">Growing dataset</div>
           <div class="feature-desc">Sentiment history building daily.
-            The longer we run, the more valuable the signal. Get in
-            early for the fullest dataset.</div>
+            Backfilled across multiple years. The longer we run,
+            the richer the dataset becomes.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">06 — Dashboard</div>
           <div class="feature-title">Terminal-style UI</div>
           <div class="feature-desc">Bloomberg-inspired interface.
-            Sentiment vs price charts, predictive signals, and
-            headline feed in one view.</div>
+            Sentiment vs price charts, signal strength ratings, and
+            a live headline feed — all in one view.</div>
         </div>
       </div>
     </section>
+
+    <!-- Honest box -->
+    <div class="honest-box">
+      <div class="honest-inner">
+        <div class="honest-icon">📊</div>
+        <div class="honest-content">
+          <div class="honest-title">A note on signal strength</div>
+          <div class="honest-text">
+            Crypto markets are noisy. We don't claim sentiment predicts price
+            with certainty —
+            no tool does. What SentimentFX gives you is <strong>quantified
+              context</strong>:
+            how the market narrative is shifting, scored objectively, updated
+            hourly.
+            Use it to inform your thinking, not replace it.
+            Our correlation engine tells you honestly whether a signal is
+            <strong>strong, weak, or inconclusive</strong> — with p-values and
+            confidence intervals,
+            not marketing copy.
+          </div>
+        </div>
+      </div>
+    </div>
 
     <section class="how" id="how">
       <div class="how-inner">
@@ -818,7 +889,7 @@
             <div class="step-title">News scraping</div>
             <div class="step-desc">Every hour, our pipeline scrapes
               the latest crypto headlines across BTC, ETH, SOL,
-              XRP and DOGE.</div>
+              XRP, DOGE and more.</div>
           </div>
           <div class="step">
             <div class="step-num">STEP 02</div>
@@ -830,16 +901,16 @@
           <div class="step">
             <div class="step-num">STEP 03</div>
             <div class="step-title">Correlation analysis</div>
-            <div class="step-desc">We calculate the lag between
-              sentiment and price movement, finding the optimal
-              predictive window per asset.</div>
+            <div class="step-desc">We measure whether sentiment shifts
+              historically correlate with next-day returns, with
+              honest signal strength ratings and confidence intervals.</div>
           </div>
           <div class="step">
             <div class="step-num">STEP 04</div>
             <div class="step-title">Signal delivery</div>
             <div class="step-desc">Signals surface in the dashboard
-              and via API. Traders get insight. Developers get
-              data. Both get an edge.</div>
+              and via API. Traders get context. Developers get
+              structured data. No black boxes.</div>
           </div>
         </div>
       </div>
@@ -857,7 +928,7 @@
           <ul class="price-features">
             <li class="included">BTC sentiment dashboard</li>
             <li class="included">30-day history</li>
-            <li class="included">Basic correlation signal</li>
+            <li class="included">Correlation signal</li>
             <li class="included">API access (100 free calls)</li>
             <li>All 5 tickers</li>
             <li>Full history</li>
@@ -902,44 +973,45 @@
           <a href="https://app.sentimentfx.org?auth=signup"
             class="price-btn price-btn-outline">Get Started</a>
         </div>
-      </section>
 
-      <section class="bottom-cta">
-        <div class="hero-tag" style="justify-content:center;">Now Live</div>
-        <h2
-          style="font-family:var(--mono);font-size:clamp(24px,4vw,40px);font-weight:600;margin-bottom:16px;letter-spacing:-0.01em;">
-          Start reading the market
-        </h2>
-        <p
-          style="font-size:14px;color:var(--muted);margin-bottom:36px;max-width:440px;margin-left:auto;margin-right:auto;">
-          Sign up free and get your first sentiment signals in minutes.
-          No credit card required.
-        </p>
-        <div
-          style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
-          <a href="https://app.sentimentfx.org?auth=signup"
-            class="btn-primary">Create Account</a>
-          <a href="https://app.sentimentfx.org?auth=login"
-            class="btn-secondary">Log In</a>
-        </div>
-      </section>
+      </div>
+    </section>
 
-      <footer>
-        <span class="footer-logo">SentimentFX</span>
-        <span class="footer-text">Crypto sentiment intelligence — powered by
-          FinBERT · <a href="mailto:hello@sentimentfx.org"
-            style="color:var(--accent);text-decoration:none;">hello@sentimentfx.org</a>
-          · <a href="/privacy"
-            style="color:var(--muted);text-decoration:none;">Privacy</a>
-          · <a href="/terms"
-            style="color:var(--muted);text-decoration:none;">Terms</a></span>
-        <a href="https://status.sentimentfx.org" target="_blank"
-          class="footer-link">Status</a>
-        <a href="https://app.sentimentfx.org" target="_blank"
-          class="footer-link">Live Dashboard →</a>
-      </footer>
+    <section class="bottom-cta">
+      <div class="hero-tag" style="justify-content:center;">Now Live</div>
+      <h2
+        style="font-family:var(--mono);font-size:clamp(24px,4vw,40px);font-weight:600;margin-bottom:16px;letter-spacing:-0.01em;">
+        Start reading the market
+      </h2>
+      <p
+        style="font-size:14px;color:var(--muted);margin-bottom:36px;max-width:440px;margin-left:auto;margin-right:auto;">
+        Sign up free and get your first sentiment signals in minutes.
+        No credit card required.
+      </p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="https://app.sentimentfx.org?auth=signup"
+          class="btn-primary">Create Account</a>
+        <a href="https://app.sentimentfx.org?auth=login"
+          class="btn-secondary">Log In</a>
+      </div>
+    </section>
 
-      <script>
+    <footer>
+      <span class="footer-logo">SentimentFX</span>
+      <span class="footer-text">Crypto sentiment intelligence — powered by
+        FinBERT · <a href="mailto:hello@sentimentfx.org"
+          style="color:var(--accent);text-decoration:none;">hello@sentimentfx.org</a>
+        · <a href="/privacy"
+          style="color:var(--muted);text-decoration:none;">Privacy</a>
+        · <a href="/terms"
+          style="color:var(--muted);text-decoration:none;">Terms</a></span>
+      <a href="https://status.sentimentfx.org" target="_blank"
+        class="footer-link">Status</a>
+      <a href="https://app.sentimentfx.org" target="_blank"
+        class="footer-link">Live Dashboard →</a>
+    </footer>
+
+    <script>
       const API = "https://api.sentimentfx.org";
       const TICKERS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'];
 
@@ -956,9 +1028,7 @@
           const res = await fetch(`${API}/stats`);
           const data = await res.json();
           const el = document.getElementById('stat-headlines');
-          if (el) {
-            el.textContent = data.total_headlines.toLocaleString();
-          }
+          if (el) el.textContent = data.total_headlines.toLocaleString();
         } catch (e) {}
       }
 
@@ -974,7 +1044,6 @@
           const res = await fetch(`${API}/dashboard/${sym}`, { signal: AbortSignal.timeout(5000) });
           const data = await res.json();
 
-          // get latest price
           const prices = data.prices || [];
           const sorted = prices.sort((a, b) => new Date(a.date) - new Date(b.date));
           const latest = sorted[sorted.length - 1];
@@ -983,7 +1052,6 @@
           const prevPrice = prev?.close_price ?? null;
           const change = price && prevPrice ? ((price - prevPrice) / prevPrice) * 100 : 0;
 
-          // get avg sentiment for latest date
           const sentiment_data = data.sentiment || [];
           const latestDate = latest?.date?.split('T')[0];
           const todaySentiment = sentiment_data.filter(s => s.date?.startsWith(latestDate));
@@ -1036,5 +1104,5 @@
       setInterval(loadLiveTicker, 60000);
       setInterval(loadHeroChips, 60000);
     </script>
-    </body>
-  </html>
+  </body>
+</html>
