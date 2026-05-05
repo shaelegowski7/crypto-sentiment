@@ -34,6 +34,7 @@ import secrets
 import hashlib
 from apscheduler.triggers.cron import CronTrigger
 import time
+import base64
 
 last_scrape_time = None
 last_scrape_duration = None
@@ -102,8 +103,19 @@ Instrumentator(
 async def protect_metrics(request: Request, call_next):
     if request.url.path == "/metrics":
         if METRICS_TOKEN:
-            token = request.headers.get("authorization", "").replace("Bearer ", "")
-            if token != METRICS_TOKEN:
+            auth = request.headers.get("authorization", "")
+            if auth.startswith("Basic "):
+                try:
+                    decoded = base64.b64decode(auth[6:]).decode()
+                    password = decoded.split(":", 1)[-1]
+                    if password != METRICS_TOKEN:
+                        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+                except Exception:
+                    return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+            elif auth.startswith("Bearer "):
+                if auth[7:] != METRICS_TOKEN:
+                    return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+            else:
                 return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     return await call_next(request)
 

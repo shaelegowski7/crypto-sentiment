@@ -16,3 +16,4 @@ stripe
 supabase
 feedparser
 slowapi
+prometheus_fastapi_instrumentator
