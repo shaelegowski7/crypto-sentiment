@@ -1406,7 +1406,7 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
 # Public v1 API
 # ---------------------------------------------------------------------------
 
-@app.get("/v1/sentiment/{ticker}")
+@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored headlines for a given ticker. Use `limit` to control how many results are returned (max 100). Each call costs 1 API credit per 25 headlines.")
 @limiter.limit("30/minute")
 def api_sentiment(request: Request, ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
@@ -1436,7 +1436,7 @@ def api_sentiment(request: Request, ticker: str, limit: int = 25, db: Session = 
     }
 
 
-@app.get("/v1/summary/{ticker}")
+@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily sentiment scores for a given ticker over the specified number of days. Each day costs 1 API credit.")
 @limiter.limit("20/minute")
 def api_summary(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, days, endpoint="summary")
@@ -1477,7 +1477,7 @@ def api_summary(request: Request, ticker: str, days: int = 30, db: Session = Dep
     }
 
 
-@app.get("/v1/prices/{ticker}")
+@app.get("/v1/prices/{ticker}", summary="Get historical prices", description="Returns daily close prices in GBP for a given ticker over the specified number of days. Each day costs 1 API credit.")
 @limiter.limit("20/minute")
 def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, days, endpoint="prices")
@@ -1505,7 +1505,7 @@ def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depe
     }
 
 
-@app.get("/v1/correlation/{ticker}")
+@app.get("/v1/correlation/{ticker}", summary="Get sentiment-price correlation", description="Returns a 180-day Pearson correlation analysis between sentiment shifts and next-day price returns, including signal strength, direction, and 95% confidence interval. Costs 1 API credit.")
 @limiter.limit("10/minute")
 def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, endpoint="correlation")
