@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
+from app.brief import send_morning_briefs
 from . import models
 import math
 from .database import SessionLocal
@@ -405,6 +406,12 @@ def scrape_all():
 
 
 scheduler = BackgroundScheduler()
+scheduler.add_job(
+    lambda: send_morning_briefs(next(get_db())),
+    CronTrigger(hour=7, minute=0, timezone="Europe/London"),
+    id="morning_brief",
+    replace_existing=True,
+)
 scheduler.add_job(scrape_all, CronTrigger(minute=0))
 scheduler.add_job(refresh_subscription_gauge, CronTrigger(minute=30))  # refresh sub gauge every hour at :30
 scheduler.start()
@@ -1819,3 +1826,9 @@ def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Se
             if len(scores) > 0
         ]
     }
+
+@app.post("/api/brief/unsubscribe")
+def unsubscribe_brief(user_id: str, db: Session = Depends(get_db)):
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    supabase.from_("profiles").update({"morning_brief_enabled": False}).eq("id", user_id).execute()
+    return {"message": "Unsubscribed from morning brief."}
