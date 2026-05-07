@@ -23,6 +23,22 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [resetSent, setResetSent] = useState(false)
+
+  const handlePasswordReset = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://app.sentimentfx.org",
+      })
+      if (error) throw error
+      setResetSent(true)
+    } catch (err) {
+      setError(friendlyError(err.message))
+    }
+    setLoading(false)
+  }
 
   const handleEmailAuth = async () => {
     setLoading(true)
@@ -121,44 +137,84 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
 
         <div style={styles.logo}>SentimentFX</div>
         <div style={styles.subtitle}>
-          {mode === "login" ? "SIGN IN TO YOUR ACCOUNT" : "CREATE AN ACCOUNT"}
+          {mode === "login" ? "SIGN IN TO YOUR ACCOUNT" : mode === "signup" ? "CREATE AN ACCOUNT" : "RESET PASSWORD"}
         </div>
 
-        <button style={styles.btnGoogle} onClick={handleGoogle}>
-          Continue with Google
-        </button>
+        {mode === "reset" ? (
+          resetSent ? (
+            <div style={{ fontFamily: "IBM Plex Mono", fontSize: "11px", color: "#3fb950", marginBottom: "24px" }}>
+              Reset link sent — check your inbox.
+            </div>
+          ) : (
+            <>
+              <input
+                style={styles.input}
+                type="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handlePasswordReset()}
+              />
+              {error && <div style={styles.error}>{error}</div>}
+              <button style={styles.btnPrimary} onClick={handlePasswordReset} disabled={loading}>
+                {loading ? "..." : "Send reset link"}
+              </button>
+            </>
+          )
+        ) : (
+          <>
+            <button style={styles.btnGoogle} onClick={handleGoogle}>
+              Continue with Google
+            </button>
 
-        <div style={styles.divider}>
-          <div style={styles.dividerLine} />
-          <span style={styles.dividerText}>OR</span>
-          <div style={styles.dividerLine} />
-        </div>
+            <div style={styles.divider}>
+              <div style={styles.dividerLine} />
+              <span style={styles.dividerText}>OR</span>
+              <div style={styles.dividerLine} />
+            </div>
 
-        <input
-          style={styles.input}
-          type="email"
-          placeholder="your@email.com"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleEmailAuth()}
-        />
-        <input
-          style={styles.input}
-          type="password"
-          placeholder="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleEmailAuth()}
-        />
+            <input
+              style={styles.input}
+              type="email"
+              placeholder="your@email.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleEmailAuth()}
+            />
+            <input
+              style={styles.input}
+              type="password"
+              placeholder="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleEmailAuth()}
+            />
 
-        {error && <div style={styles.error}>{error}</div>}
+            {mode === "login" && (
+              <div style={{ textAlign: "right", marginBottom: "4px" }}>
+                <span
+                  style={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", cursor: "pointer" }}
+                  onClick={() => { setError(null); setMode("reset") }}
+                >
+                  Forgot password?
+                </span>
+              </div>
+            )}
 
-        <button style={styles.btnPrimary} onClick={handleEmailAuth} disabled={loading}>
-          {loading ? "..." : mode === "login" ? "Sign In" : "Create Account"}
-        </button>
+            {error && <div style={styles.error}>{error}</div>}
+
+            <button style={styles.btnPrimary} onClick={handleEmailAuth} disabled={loading}>
+              {loading ? "..." : mode === "login" ? "Sign In" : "Create Account"}
+            </button>
+          </>
+        )}
 
         <div style={styles.toggle}>
-          {mode === "login" ? (
+          {mode === "reset" ? (
+            <span style={styles.toggleLink} onClick={() => { setMode("login"); setResetSent(false); setError(null) }}>
+              Back to sign in
+            </span>
+          ) : mode === "login" ? (
             <>No account?{" "}
               <span style={styles.toggleLink} onClick={() => setMode("signup")}>Sign up</span>
             </>

@@ -2225,3 +2225,90 @@ def unsubscribe_brief(user_id: str, db: Session = Depends(get_db)):
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
     supabase.from_("profiles").update({"morning_brief_enabled": False}).eq("id", user_id).execute()
     return {"message": "Unsubscribed from morning brief."}
+
+
+async def _get_user_from_token(authorization: str):
+    """Validate Bearer token and return Supabase user."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    token = authorization.split(" ")[1]
+    from supabase import create_client
+    supabase_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+    user_resp = supabase_client.auth.get_user(token)
+    user = user_resp.user
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user, supabase_client
+
+
+@app.post("/billing-portal")
+async def billing_portal(authorization: str = Header(None)):
+    try:
+        user, _ = await _get_user_from_token(authorization)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
+
+    customers = stripe.Customer.list(email=user.email, limit=1)
+    if not customers.data:
+        raise HTTPException(status_code=404, detail="No billing account found")
+
+    portal = stripe.billing_portal.Session.create(
+        customer=customers.data[0].id,
+        return_url="https://app.sentimentfx.org",
+    )
+    return {"url": portal.url}
+
+
+@app.patch("/profile/brief")
+async def update_brief_preference(request: Request, authorization: str = Header(None)):
+    try:
+        user, supabase_client = await _get_user_from_token(authorization)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
+
+    body = await request.json()
+    enabled = body.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(status_code=400, detail="'enabled' must be a boolean")
+
+    supabase_client.table("profiles").update({"morning_brief_enabled": enabled}).eq("id", user.id).execute()
+    return {"morning_brief_enabled": enabled}
+
+
+@app.delete("/account")
+async def delete_account(authorization: str = Header(None), db: Session = Depends(get_db)):
+    try:
+        user, supabase_client = await _get_user_from_token(authorization)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
+
+    # Cancel active Stripe subscription
+    try:
+        customers = stripe.Customer.list(email=user.email, limit=1)
+        if customers.data:
+            subs = stripe.Subscription.list(customer=customers.data[0].id, status="active", limit=10)
+            for sub in subs.data:
+                stripe.Subscription.cancel(sub.id)
+    except Exception as e:
+        print(f"Stripe cancel error during account deletion: {e}")
+
+    # Delete alerts from DB
+    db.query(models.Alert).filter(models.Alert.user_id == user.id).delete()
+
+    # Deactivate API key
+    api_key_row = db.query(models.APIKey).filter(models.APIKey.email == user.email).first()
+    if api_key_row:
+        api_key_row.active = False
+
+    db.commit()
+
+    # Delete Supabase auth user
+    supabase_client.auth.admin.delete_user(user.id)
+
+    return {"message": "Account deleted"}

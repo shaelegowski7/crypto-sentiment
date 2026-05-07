@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { supabase } from "./supabaseClient"
 import AuthModal from "./AuthModal"
+import AccountModal from "./AccountModal"
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
@@ -1895,6 +1896,11 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
   const [authMode, setAuthMode] = useState("login")
+  const [showAccount, setShowAccount] = useState(false)
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false)
+  const [passwordResetDone, setPasswordResetDone] = useState(false)
   const [alerts, setAlerts] = useState([])
   const [alertTicker, setAlertTicker] = useState("BTC")
   const [alertThreshold, setAlertThreshold] = useState(0.3)
@@ -1966,9 +1972,12 @@ export default function App() {
       setUser(session?.user ?? null)
       setSession(session ?? null)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
       setSession(session ?? null)
+      if (event === "PASSWORD_RECOVERY") {
+        setShowPasswordReset(true)
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -2242,18 +2251,15 @@ export default function App() {
             {user ? (
               <>
                 <span className={tierBadgeClass}>{profile?.tier ?? "free"}</span>
-                <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
-                  {user.email}
-                </span>
                 <button
-                  onClick={() => supabase.auth.signOut()}
+                  onClick={() => setShowAccount(true)}
                   style={{
                     fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
                     padding: "4px 10px", border: "1px solid var(--border)", borderRadius: "2px",
                     cursor: "pointer", background: "transparent", color: "var(--muted)",
                   }}
                 >
-                  SIGN OUT
+                  ACCOUNT
                 </button>
               </>
             ) : (
@@ -2838,6 +2844,84 @@ export default function App() {
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} initialMode={authMode} />}
+
+      {showAccount && user && (
+        <AccountModal
+          user={user}
+          session={session}
+          profile={profile}
+          onClose={() => setShowAccount(false)}
+          onSignOut={() => { supabase.auth.signOut(); setShowAccount(false) }}
+          onProfileUpdate={(updated) => setProfile(updated)}
+        />
+      )}
+
+      {showPasswordReset && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(8,12,16,0.85)",
+          backdropFilter: "blur(4px)", zIndex: 200,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "#0d1117", border: "1px solid #21262d", borderRadius: "4px",
+            padding: "40px", width: "100%", maxWidth: "400px",
+          }}>
+            <div style={{ fontFamily: "IBM Plex Mono", fontSize: "13px", fontWeight: 600, letterSpacing: "0.2em", color: "#f0b429", textTransform: "uppercase", marginBottom: "8px" }}>
+              SentimentFX
+            </div>
+            <div style={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", letterSpacing: "0.1em", marginBottom: "32px" }}>
+              SET NEW PASSWORD
+            </div>
+            {passwordResetDone ? (
+              <div style={{ fontFamily: "IBM Plex Mono", fontSize: "11px", color: "#3fb950" }}>
+                Password updated. You are now signed in.
+              </div>
+            ) : (
+              <>
+                <input
+                  style={{
+                    width: "100%", background: "#161b22", border: "1px solid #30363d",
+                    borderRadius: "2px", padding: "10px 14px", fontFamily: "IBM Plex Mono",
+                    fontSize: "12px", color: "#e6edf3", outline: "none", marginBottom: "12px",
+                    boxSizing: "border-box",
+                  }}
+                  type="password"
+                  placeholder="new password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  onKeyDown={async e => {
+                    if (e.key === "Enter") {
+                      setPasswordResetLoading(true)
+                      await supabase.auth.updateUser({ password: newPassword })
+                      setPasswordResetDone(true)
+                      setPasswordResetLoading(false)
+                      setTimeout(() => setShowPasswordReset(false), 2000)
+                    }
+                  }}
+                />
+                <button
+                  style={{
+                    width: "100%", background: "#f0b429", border: "none", borderRadius: "2px",
+                    padding: "12px", fontFamily: "IBM Plex Mono", fontSize: "11px",
+                    fontWeight: 600, letterSpacing: "0.1em", color: "#080c10",
+                    cursor: "pointer", textTransform: "uppercase",
+                  }}
+                  disabled={passwordResetLoading}
+                  onClick={async () => {
+                    setPasswordResetLoading(true)
+                    await supabase.auth.updateUser({ password: newPassword })
+                    setPasswordResetDone(true)
+                    setPasswordResetLoading(false)
+                    setTimeout(() => setShowPasswordReset(false), 2000)
+                  }}
+                >
+                  {passwordResetLoading ? "..." : "Update Password"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }
