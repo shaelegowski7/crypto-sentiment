@@ -1911,6 +1911,197 @@ def get_divergence(ticker: str, db: Session = Depends(get_db)):
     }
 
 
+@app.get("/backtest/{ticker}")
+def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db: Session = Depends(get_db)):
+    hold_days = max(1, min(hold_days, 30))
+    if signal not in ("divergence", "shift"):
+        raise HTTPException(status_code=400, detail="signal must be 'divergence' or 'shift'")
+
+    since = datetime.utcnow() - timedelta(days=365)
+
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since
+    ).order_by(models.Headline.published_at).all()
+
+    prices = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper(),
+        models.Price.date >= since
+    ).order_by(models.Price.date).all()
+
+    if len(headlines) < 20 or len(prices) < 30:
+        return {"message": "Not enough data", "trades": [], "equity_curve": []}
+
+    daily_bucket = defaultdict(lambda: {"scores": [], "weights": []})
+    for h in headlines:
+        if abs(h.sentiment_score) < 0.05:
+            continue
+        d = h.published_at.date()
+        daily_bucket[d]["scores"].append(h.sentiment_score)
+        daily_bucket[d]["weights"].append(abs(h.sentiment_score))
+
+    daily_sentiment = {}
+    for d, v in daily_bucket.items():
+        if not v["scores"]:
+            continue
+        w_sum = sum(v["weights"])
+        daily_sentiment[d] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
+
+    daily_price = {p.date.date(): p.close_price for p in prices}
+    sorted_price_dates = sorted(daily_price.keys())
+
+    common = sorted(set(daily_sentiment.keys()) & set(daily_price.keys()))
+    if len(common) < 20:
+        return {"message": "Not enough overlapping data", "trades": [], "equity_curve": []}
+
+    THRESHOLD_S, THRESHOLD_P = 0.02, 0.5
+
+    def _div_signal(window):
+        if len(window) < 14:
+            return "none"
+        p7, r7 = window[:7], window[7:]
+        ps = sum(daily_sentiment[d] for d in p7) / 7
+        rs = sum(daily_sentiment[d] for d in r7) / 7
+        pp = sum(daily_price[d] for d in p7) / 7
+        rp = sum(daily_price[d] for d in r7) / 7
+        sc = rs - ps
+        pc = (rp - pp) / pp * 100 if pp > 0 else 0
+        if sc > THRESHOLD_S and pc < -THRESHOLD_P:
+            return "bullish"
+        if sc < -THRESHOLD_S and pc > THRESHOLD_P:
+            return "bearish"
+        return "none"
+
+    signal_series = {}
+    if signal == "divergence":
+        for i in range(14, len(common) + 1):
+            signal_series[common[i - 1]] = _div_signal(common[i - 14:i])
+    else:
+        SHIFT_THRESH = 0.05
+        for i, d in enumerate(common):
+            prior = [daily_sentiment[common[j]] for j in range(max(0, i - 7), i)]
+            if len(prior) >= 3:
+                shift = daily_sentiment[d] - sum(prior) / len(prior)
+                if shift > SHIFT_THRESH:
+                    signal_series[d] = "bullish"
+                elif shift < -SHIFT_THRESH:
+                    signal_series[d] = "bearish"
+                else:
+                    signal_series[d] = "none"
+
+    # Simulate long-only trades, no overlap
+    trades = []
+    in_trade_until = None
+
+    for d in sorted(signal_series.keys()):
+        if in_trade_until and d <= in_trade_until:
+            continue
+        if signal_series[d] != "bullish":
+            continue
+
+        entry_date = next((pd for pd in sorted_price_dates if pd > d), None)
+        if not entry_date:
+            continue
+        entry_price = daily_price[entry_date]
+
+        target = entry_date + timedelta(days=hold_days)
+        exit_date = next((pd for pd in sorted_price_dates if pd >= target), sorted_price_dates[-1])
+        exit_price = daily_price[exit_date]
+
+        ret = (exit_price - entry_price) / entry_price * 100
+        trades.append({
+            "entry_date": str(entry_date),
+            "exit_date": str(exit_date),
+            "entry_price": round(entry_price, 2),
+            "exit_price": round(exit_price, 2),
+            "return_pct": round(ret, 2),
+        })
+        in_trade_until = exit_date
+
+    if not trades:
+        return {
+            "ticker": ticker.upper(), "signal": signal, "hold_days": hold_days,
+            "message": "No trades generated — signal did not fire in this window.",
+            "trades": [], "equity_curve": [],
+        }
+
+    returns = [t["return_pct"] for t in trades]
+    winning = [r for r in returns if r > 0]
+
+    # Compounded total return
+    pv = 100.0
+    for r in returns:
+        pv *= (1 + r / 100)
+    total_return = round(pv - 100, 2)
+
+    # Max drawdown
+    peak, running, max_dd = 100.0, 100.0, 0.0
+    for r in returns:
+        running *= (1 + r / 100)
+        peak = max(peak, running)
+        max_dd = min(max_dd, (running - peak) / peak * 100)
+
+    first_price = daily_price[sorted_price_dates[0]]
+    last_price = daily_price[sorted_price_dates[-1]]
+    buy_hold = round((last_price - first_price) / first_price * 100, 2)
+    alpha = round(total_return - buy_hold, 2)
+
+    r_arr = np.array(returns)
+    sharpe = None
+    if len(returns) >= 3 and np.std(r_arr) > 0:
+        sharpe = round(float(np.mean(r_arr) / np.std(r_arr) * np.sqrt(252 / hold_days)), 2)
+
+    # Daily equity curve: portfolio tracks price during active trades
+    portfolio_cash = 100.0
+    pending = None  # (exit_date, exit_price, portfolio_at_entry, entry_price)
+    trade_by_entry = {
+        datetime.strptime(t["entry_date"], "%Y-%m-%d").date(): (
+            datetime.strptime(t["exit_date"], "%Y-%m-%d").date(),
+            t["exit_price"]
+        )
+        for t in trades
+    }
+
+    equity_curve = []
+    for d in sorted_price_dates:
+        price = daily_price[d]
+
+        if pending and d >= pending[0]:
+            portfolio_cash = pending[2] * (pending[1] / pending[3])
+            pending = None
+
+        if d in trade_by_entry and pending is None:
+            xd, xp = trade_by_entry[d]
+            pending = (xd, xp, portfolio_cash, price)
+
+        current = pending[2] * (price / pending[3]) if pending else portfolio_cash
+        equity_curve.append({
+            "date": str(d),
+            "portfolio": round(current, 2),
+            "buy_hold": round(100.0 * price / first_price, 2),
+        })
+
+    return {
+        "ticker": ticker.upper(),
+        "signal": signal,
+        "hold_days": hold_days,
+        "window_days": (sorted_price_dates[-1] - sorted_price_dates[0]).days,
+        "summary": {
+            "total_trades": len(trades),
+            "winning_trades": len(winning),
+            "win_rate": round(len(winning) / len(returns), 3),
+            "avg_return_pct": round(float(np.mean(r_arr)), 2),
+            "total_return_pct": total_return,
+            "max_drawdown_pct": round(max_dd, 2),
+            "buy_hold_return_pct": buy_hold,
+            "alpha_pct": alpha,
+            "sharpe": sharpe,
+        },
+        "trades": trades,
+        "equity_curve": equity_curve,
+    }
+
+
 @app.get("/sentiment-summary/{ticker}")
 def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Session = Depends(get_db)):
     query = db.query(models.Headline).filter(

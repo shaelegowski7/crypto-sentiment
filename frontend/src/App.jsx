@@ -4,7 +4,7 @@ import { supabase } from "./supabaseClient"
 import AuthModal from "./AuthModal"
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
 
 const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
@@ -1476,6 +1476,237 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
 )
 }
 
+// ─── Backtest Panel ────────────────────────────────────────────────────────
+
+const BT_DATE_FMT = (s) => {
+  if (!s) return ""
+  const d = new Date(s + "T00:00:00")
+  return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" })
+}
+
+function BacktestPanel({ ticker }) {
+  const [btData, setBtData] = useState(null)
+  const [btLoading, setBtLoading] = useState(false)
+  const [btSignal, setBtSignal] = useState("divergence")
+  const [btHoldDays, setBtHoldDays] = useState(7)
+
+  useEffect(() => {
+    let cancelled = false
+    setBtLoading(true)
+    setBtData(null)
+    axios.get(`${API}/backtest/${ticker}?signal=${btSignal}&hold_days=${btHoldDays}`)
+      .then(r => { if (!cancelled) { setBtData(r.data); setBtLoading(false) } })
+      .catch(() => { if (!cancelled) { setBtData({ error: true }); setBtLoading(false) } })
+    return () => { cancelled = true }
+  }, [ticker, btSignal, btHoldDays])
+
+  const ctrlBtn = (active) => ({
+    fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+    padding: "4px 10px", borderRadius: "2px", cursor: "pointer", transition: "all 0.15s",
+    border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+    background: active ? "rgba(240,180,41,0.08)" : "transparent",
+    color: active ? "var(--accent)" : "var(--muted)",
+    textTransform: "uppercase",
+  })
+
+  const summary = btData?.summary
+  const trades = btData?.trades ?? []
+  const equityCurve = btData?.equity_curve ?? []
+
+  const retColor = (v) => v > 0 ? "var(--positive)" : v < 0 ? "var(--negative)" : "var(--muted)"
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span className="panel-title">BACKTEST SIMULATOR</span>
+        {!btLoading && summary && (
+          <span className="panel-title" style={{ color: "var(--muted)" }}>
+            {btData.window_days}D WINDOW · {summary.total_trades} TRADES
+          </span>
+        )}
+      </div>
+      <div className="panel-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+        {/* Controls */}
+        <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }}>SIGNAL</span>
+            {["divergence", "shift"].map(s => (
+              <button key={s} style={ctrlBtn(btSignal === s)} onClick={() => setBtSignal(s)}>
+                {s === "divergence" ? "DIVERGENCE" : "SHIFT"}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }}>HOLD</span>
+            {[1, 3, 7, 14].map(h => (
+              <button key={h} style={ctrlBtn(btHoldDays === h)} onClick={() => setBtHoldDays(h)}>{h}D</button>
+            ))}
+          </div>
+        </div>
+
+        {btLoading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "12px" }}>
+              {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: "64px", borderRadius: "4px" }} />)}
+            </div>
+            <div className="skeleton" style={{ height: "200px", borderRadius: "4px" }} />
+          </div>
+        )}
+
+        {!btLoading && btData?.message && (
+          <div style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
+            {btData.message}
+          </div>
+        )}
+
+        {!btLoading && btData?.error && (
+          <div style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--negative)" }}>
+            Failed to load backtest data.
+          </div>
+        )}
+
+        {!btLoading && summary && (
+          <>
+            {/* Summary stats */}
+            <div className="stat-row">
+              <div className="stat-card">
+                <div className="stat-label">Total Return</div>
+                <div className="stat-value" style={{ color: retColor(summary.total_return_pct) }}>
+                  {summary.total_return_pct > 0 ? "+" : ""}{summary.total_return_pct}%
+                </div>
+                <div className="stat-sub">compounded</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Win Rate</div>
+                <div className="stat-value" style={{ color: summary.win_rate >= 0.5 ? "var(--positive)" : "var(--negative)" }}>
+                  {(summary.win_rate * 100).toFixed(0)}%
+                </div>
+                <div className="stat-sub">{summary.winning_trades}/{summary.total_trades} trades</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Avg / Trade</div>
+                <div className="stat-value" style={{ color: retColor(summary.avg_return_pct) }}>
+                  {summary.avg_return_pct > 0 ? "+" : ""}{summary.avg_return_pct}%
+                </div>
+                <div className="stat-sub">max drawdown {summary.max_drawdown_pct}%</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">vs Buy &amp; Hold</div>
+                <div className="stat-value" style={{ color: retColor(summary.alpha_pct) }}>
+                  {summary.alpha_pct > 0 ? "+" : ""}{summary.alpha_pct}%
+                </div>
+                <div className="stat-sub">BH: {summary.buy_hold_return_pct > 0 ? "+" : ""}{summary.buy_hold_return_pct}%</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Sharpe</div>
+                <div className="stat-value" style={{ color: summary.sharpe >= 1 ? "var(--positive)" : summary.sharpe >= 0 ? "var(--accent)" : "var(--negative)" }}>
+                  {summary.sharpe ?? "—"}
+                </div>
+                <div className="stat-sub">annualised</div>
+              </div>
+            </div>
+
+            {/* Equity curve */}
+            {equityCurve.length > 1 && (
+              <div style={{ marginTop: "4px" }}>
+                <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "8px" }}>
+                  EQUITY CURVE
+                </div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <ComposedChart data={equityCurve} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+                    <CartesianGrid strokeDasharray="2 4" stroke="#21262d" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={BT_DATE_FMT}
+                      stroke="#30363d"
+                      tick={{ fill: "#7d8590", fontSize: 9, fontFamily: "IBM Plex Mono" }}
+                      tickLine={false}
+                      axisLine={{ stroke: "#21262d" }}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      stroke="#30363d"
+                      tick={{ fill: "#7d8590", fontSize: 9, fontFamily: "IBM Plex Mono" }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => `${v}`}
+                      width={36}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        return (
+                          <div className="custom-tooltip">
+                            <div className="tooltip-label">{BT_DATE_FMT(label)}</div>
+                            {payload.map((p, i) => (
+                              <div className="tooltip-row" key={i}>
+                                <span className="tooltip-key">{p.name}</span>
+                                <span className="tooltip-val" style={{ color: p.color }}>{p.value?.toFixed(1)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }}
+                    />
+                    <ReferenceLine y={100} stroke="#30363d" strokeDasharray="4 2" />
+                    <Line dataKey="portfolio" name="Strategy" stroke="var(--accent)" dot={false} strokeWidth={1.5} connectNulls />
+                    <Line dataKey="buy_hold" name="Buy & Hold" stroke="var(--accent2)" dot={false} strokeWidth={1} strokeDasharray="4 2" connectNulls />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Trades table */}
+            {trades.length > 0 && (
+              <div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "8px" }}>
+                  TRADE LOG
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <div style={{ minWidth: "480px" }}>
+                    <div style={{
+                      display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 80px",
+                      fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
+                      color: "var(--muted)", textTransform: "uppercase",
+                      padding: "6px 12px", background: "var(--surface2)",
+                      borderBottom: "1px solid var(--border)",
+                    }}>
+                      <span>ENTRY</span><span>EXIT</span><span>IN (£)</span><span>OUT (£)</span><span style={{ textAlign: "right" }}>RETURN</span>
+                    </div>
+                    <div style={{ maxHeight: "200px", overflowY: "auto", background: "var(--border)", display: "flex", flexDirection: "column", gap: "1px" }}>
+                      {trades.map((t, i) => (
+                        <div key={i} style={{
+                          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 80px",
+                          fontFamily: "var(--mono)", fontSize: "11px",
+                          padding: "8px 12px", background: "var(--surface)",
+                          alignItems: "center",
+                        }}>
+                          <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.entry_date)}</span>
+                          <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.exit_date)}</span>
+                          <span style={{ color: "var(--text)" }}>{t.entry_price.toLocaleString()}</span>
+                          <span style={{ color: "var(--text)" }}>{t.exit_price.toLocaleString()}</span>
+                          <span style={{ color: retColor(t.return_pct), textAlign: "right", fontWeight: 600 }}>
+                            {t.return_pct > 0 ? "+" : ""}{t.return_pct}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="disclaimer">
+              ⚠ Long-only strategy. Entry at next close after signal, exit after {btHoldDays} calendar days. Past results do not predict future performance. Not financial advice.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [ticker, setTicker] = useState("BTC")
   const [allData, setAllData] = useState([])
@@ -2246,6 +2477,8 @@ export default function App() {
 
             <DivergenceCard data={divergenceData} loading={loading} />
           </div>
+
+          <BacktestPanel ticker={ticker} />
 
           <div className="panel">
             <div className="panel-header">
