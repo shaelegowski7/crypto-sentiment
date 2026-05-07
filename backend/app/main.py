@@ -1795,6 +1795,122 @@ async def confirm_key_regenerate(request: Request, db: Session = Depends(get_db)
         "message": "Key regenerated. Save this key - it will not be shown again."
     }
 
+@app.get("/divergence/{ticker}")
+def get_divergence(ticker: str, db: Session = Depends(get_db)):
+    since = datetime.utcnow() - timedelta(days=45)
+
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since
+    ).order_by(models.Headline.published_at).all()
+
+    prices = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper(),
+        models.Price.date >= since
+    ).order_by(models.Price.date).all()
+
+    if len(headlines) < 10 or len(prices) < 14:
+        return {"message": "Not enough data"}
+
+    # Build daily weighted sentiment
+    daily = defaultdict(lambda: {"scores": [], "weights": []})
+    for h in headlines:
+        if abs(h.sentiment_score) < 0.05:
+            continue
+        d = h.published_at.date()
+        daily[d]["scores"].append(h.sentiment_score)
+        daily[d]["weights"].append(abs(h.sentiment_score))
+
+    daily_sentiment = {}
+    for d, v in daily.items():
+        if not v["scores"]:
+            continue
+        w_sum = sum(v["weights"])
+        daily_sentiment[d] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
+
+    daily_price = {p.date.date(): p.close_price for p in prices}
+
+    common = sorted(set(daily_sentiment.keys()) & set(daily_price.keys()))
+
+    if len(common) < 14:
+        return {"message": "Not enough overlapping data"}
+
+    THRESHOLD_S = 0.02   # minimum meaningful sentiment shift
+    THRESHOLD_P = 0.5    # minimum meaningful price change (%)
+
+    def _check_window(window):
+        p7, r7 = window[:7], window[7:]
+        ps = sum(daily_sentiment[d] for d in p7) / 7
+        rs = sum(daily_sentiment[d] for d in r7) / 7
+        pp = sum(daily_price[d] for d in p7) / 7
+        rp = sum(daily_price[d] for d in r7) / 7
+        sc = rs - ps
+        pc = (rp - pp) / pp * 100 if pp > 0 else 0
+        s_up = sc > THRESHOLD_S
+        s_dn = sc < -THRESHOLD_S
+        p_up = pc > THRESHOLD_P
+        p_dn = pc < -THRESHOLD_P
+        if s_up and p_dn:
+            return "bullish", sc, pc
+        if s_dn and p_up:
+            return "bearish", sc, pc
+        return "none", sc, pc
+
+    divergence_type, sentiment_change, price_change_pct = _check_window(common[-14:])
+
+    # Count consecutive days (sliding window back)
+    streak = 0
+    if divergence_type != "none":
+        for shift in range(min(len(common) - 14, 30)):
+            end = len(common) - shift
+            if end < 14:
+                break
+            dtype, _, _ = _check_window(common[end - 14:end])
+            if dtype == divergence_type:
+                streak += 1
+            else:
+                break
+
+    magnitude = round(min(abs(sentiment_change) * abs(price_change_pct) / 5, 1.0), 3)
+
+    sent_dir = "up" if sentiment_change > THRESHOLD_S else "down" if sentiment_change < -THRESHOLD_S else "flat"
+    price_dir = "up" if price_change_pct > THRESHOLD_P else "down" if price_change_pct < -THRESHOLD_P else "flat"
+    sign_s = "+" if sentiment_change >= 0 else ""
+    sign_p = "+" if price_change_pct >= 0 else ""
+
+    if divergence_type == "bullish":
+        summary = (
+            f"{ticker.upper()} sentiment is rising ({sign_s}{round(sentiment_change, 3)}) "
+            f"while price is falling ({sign_p}{round(price_change_pct, 1)}%) over the last 7 days. "
+            f"Bullish divergence — narrative improvement has not yet been reflected in price."
+        )
+    elif divergence_type == "bearish":
+        summary = (
+            f"{ticker.upper()} sentiment is falling ({sign_s}{round(sentiment_change, 3)}) "
+            f"while price is rising ({sign_p}{round(price_change_pct, 1)}%) over the last 7 days. "
+            f"Bearish divergence — price is rising against deteriorating sentiment."
+        )
+    else:
+        summary = (
+            f"{ticker.upper()} sentiment ({sign_s}{round(sentiment_change, 3)}) and price "
+            f"({sign_p}{round(price_change_pct, 1)}%) are moving in alignment over the last 7 days — "
+            f"no meaningful divergence detected."
+        )
+
+    return {
+        "ticker": ticker.upper(),
+        "date": str(common[-1]),
+        "divergence": divergence_type,
+        "sentiment_direction": sent_dir,
+        "price_direction": price_dir,
+        "sentiment_change_7d": round(sentiment_change, 4),
+        "price_change_7d": round(price_change_pct, 2),
+        "streak_days": streak,
+        "magnitude": magnitude,
+        "summary": summary,
+    }
+
+
 @app.get("/sentiment-summary/{ticker}")
 def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Session = Depends(get_db)):
     query = db.query(models.Headline).filter(

@@ -139,6 +139,136 @@ function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
   }
 }
 
+// ─── Divergence Signal Card ───────────────────────────────────────────────
+
+function DivergenceCard({ data, loading }) {
+  if (loading) {
+    return (
+      <div className="panel" style={{ borderLeft: "3px solid var(--border2)" }}>
+        <div className="panel-header">
+          <span className="panel-title">DIVERGENCE SIGNAL</span>
+          <span className="panel-title" style={{ color: "var(--muted)" }}>7D WINDOW</span>
+        </div>
+        <div className="panel-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div className="skeleton" style={{ height: "28px", width: "180px", borderRadius: "2px" }} />
+          <div style={{ display: "flex", gap: "24px" }}>
+            <div className="skeleton" style={{ height: "48px", width: "80px", borderRadius: "2px" }} />
+            <div className="skeleton" style={{ height: "48px", width: "80px", borderRadius: "2px" }} />
+          </div>
+          <div className="skeleton" style={{ height: "40px", width: "100%", borderRadius: "2px" }} />
+        </div>
+      </div>
+    )
+  }
+
+  if (!data || data.message) {
+    return (
+      <div className="panel" style={{ borderLeft: "3px solid var(--border2)" }}>
+        <div className="panel-header">
+          <span className="panel-title">DIVERGENCE SIGNAL</span>
+          <span className="panel-title" style={{ color: "var(--muted)" }}>7D WINDOW</span>
+        </div>
+        <div className="panel-body" style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
+          {data?.message ?? "Not enough data yet."}
+        </div>
+      </div>
+    )
+  }
+
+  const { divergence, sentiment_direction, price_direction, sentiment_change_7d, price_change_7d, streak_days, summary } = data
+
+  const borderColor = divergence === "bullish" ? "var(--positive)" : divergence === "bearish" ? "var(--negative)" : "var(--border2)"
+  const badgeColor = divergence === "bullish" ? "var(--positive)" : divergence === "bearish" ? "var(--negative)" : "var(--muted)"
+  const badgeBg = divergence === "bullish" ? "rgba(63,185,80,0.08)" : divergence === "bearish" ? "rgba(248,81,73,0.08)" : "rgba(139,148,158,0.08)"
+  const badgeBorder = divergence === "bullish" ? "rgba(63,185,80,0.3)" : divergence === "bearish" ? "rgba(248,81,73,0.3)" : "rgba(139,148,158,0.3)"
+  const label = divergence === "bullish" ? "BULLISH DIVERGENCE" : divergence === "bearish" ? "BEARISH DIVERGENCE" : "ALIGNED"
+
+  const dirIcon = d => d === "up" ? "↑" : d === "down" ? "↓" : "→"
+  const dirLabel = d => d === "up" ? "rising" : d === "down" ? "falling" : "stable"
+  const sentColor = sentiment_change_7d > 0 ? "var(--positive)" : sentiment_change_7d < 0 ? "var(--negative)" : "var(--muted)"
+  const priceColor = price_change_7d > 0 ? "var(--positive)" : price_change_7d < 0 ? "var(--negative)" : "var(--muted)"
+
+  return (
+    <div className="panel" style={{ borderLeft: `3px solid ${borderColor}` }}>
+      <div className="panel-header">
+        <span className="panel-title">DIVERGENCE SIGNAL</span>
+        <span className="panel-title" style={{ color: "var(--muted)" }}>7D WINDOW</span>
+      </div>
+      <div className="panel-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <span style={{
+          display: "inline-block", alignSelf: "flex-start",
+          fontFamily: "var(--mono)", fontSize: "11px", fontWeight: 700,
+          letterSpacing: "0.12em", padding: "5px 14px", borderRadius: "2px",
+          background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}`,
+        }}>
+          {label}
+        </span>
+
+        <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+              Sentiment 7D
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: sentColor, lineHeight: 1 }}>
+              {sentiment_change_7d > 0 ? "+" : ""}{sentiment_change_7d}
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
+              {dirIcon(sentiment_direction)} {dirLabel(sentiment_direction)}
+            </div>
+          </div>
+
+          <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
+
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+              Price 7D
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: priceColor, lineHeight: 1 }}>
+              {price_change_7d > 0 ? "+" : ""}{price_change_7d}%
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
+              {dirIcon(price_direction)} {dirLabel(price_direction)}
+            </div>
+          </div>
+
+          {streak_days > 0 && (
+            <>
+              <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
+              <div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+                  Duration
+                </div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: "var(--accent)", lineHeight: 1 }}>
+                  {streak_days}d
+                </div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
+                  consecutive
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <p style={{ fontFamily: "var(--sans)", fontSize: "13px", lineHeight: "1.65", color: "var(--text)", margin: 0 }}>
+          {summary}
+        </p>
+
+        {divergence !== "none" && (
+          <div style={{
+            padding: "10px 14px", background: "var(--surface2)",
+            border: "1px solid var(--border)", borderRadius: "2px",
+            fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)", lineHeight: "1.6",
+          }}>
+            💡 {divergence === "bullish"
+              ? "Bullish divergences suggest improving narrative has not yet been priced in — historically may precede upward corrections in momentum markets."
+              : "Bearish divergences suggest the market is pricing in optimism not supported by news flow — watch for potential downside realignment."}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Strength meter bar ────────────────────────────────────────────────────
 
 function StrengthMeter({ strength }) {
@@ -1368,6 +1498,7 @@ export default function App() {
   const [alertDirection, setAlertDirection] = useState("above")
   const [alertLoading, setAlertLoading] = useState(false)
   const [signalData, setSignalData] = useState(null)
+  const [divergenceData, setDivergenceData] = useState(null)
 
   const urlParams = new URLSearchParams(window.location.search)
   const checkoutSuccess = urlParams.get("success")
@@ -1586,6 +1717,14 @@ export default function App() {
         setSignalData(sigRes.data)
       } catch (e) {
         console.error("Signal fetch error:", e)
+      }
+
+      setDivergenceData(null)
+      try {
+        const divRes = await axios.get(`${API}/divergence/${selectedTicker}`)
+        setDivergenceData(divRes.data)
+      } catch (e) {
+        console.error("Divergence fetch error:", e)
       }
     } catch (err) {
       console.error(err)
@@ -1944,7 +2083,7 @@ export default function App() {
           </div>
 
           <div className="grid-2">
-            <div className="panel correlation-panel">
+            <div className="panel correlation-panel" style={{ gridColumn: "1" }}>
               <div className="panel-header">
                 <span className="panel-title">PREDICTIVE SIGNAL</span>
                 {correlation?.window_days && (
@@ -2105,80 +2244,61 @@ export default function App() {
               )}
             </div>
 
-            <div className="panel" style={{ display: "none" }}>
-            <div className="panel-header">
-              <span className="panel-title">SENTIMENT HEATMAP</span>
-              <span className="panel-title" style={{ color: "var(--muted)" }}>
-                {isPro ? "FULL HISTORY" : "30 DAYS"}
-              </span>
-            </div>
-            <div className="panel-body">
-              {loading ? (
-                <div className="skeleton" style={{ height: "120px", width: "100%" }} />
-              ) : (
-                <SentimentHeatmap
-                  allData={allData}
-                  headlines={headlines}
-                  isPro={isPro}
-                  onUpgrade={() => { setAuthMode("signup"); setShowAuth(true) }}
-                />
-              )}
-            </div>
+            <DivergenceCard data={divergenceData} loading={loading} />
           </div>
 
-            <div className="panel">
-              <div className="panel-header">
-                <span className="panel-title">LATEST HEADLINES</span>
-                <span className="panel-title" style={{ color: "#7d8590" }}>
-                  {loading ? "—" : `${headlines.length} ITEMS · PG ${headlinePage}/${totalPages || 1}`}
-                </span>
-              </div>
-              {loading ? <HeadlinesSkeleton /> : (
-                <>
-                  <div className="headlines-list">
-                    {pagedHeadlines.map((h, i) => (
-                      <div className="headline-item" key={i}>
-                        <div>
-                          <span className={`sentiment-pill pill-${h.label}`}>
-                            {h.label.toUpperCase()}
-                          </span>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div className="headline-title">{h.title}</div>
-                        </div>
-                        <div className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
-                          {h.score > 0 ? "+" : ""}{h.score}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {totalPages > 1 && (
-                    <div className="pagination">
-                      <button 
-                        className="page-btn" 
-                        onClick={() => {
-                          const nextPage = headlinePage + 1
-                          setHeadlinePage(nextPage)
-                          if (nextPage * HEADLINES_PER_PAGE > headlines.length) {
-                            const apiPage = Math.ceil(headlines.length / 50) + 1
-                            fetchDashboard(range, apiPage)
-                          }
-                        }}
-                        disabled={headlinePage === totalPages}
-                      >&gt;</button>
-                      {getPageNumbers().map((p, i) =>
-                        p === "..." ? (
-                          <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>...</span>
-                        ) : (
-                          <button key={p} className={`page-btn ${headlinePage === p ? "active" : ""}`} onClick={() => setHeadlinePage(p)}>{p}</button>
-                        )
-                      )}
-                      <button className="page-btn" onClick={() => setHeadlinePage(p => p + 1)} disabled={headlinePage === totalPages}>&gt;</button>
-                    </div>
-                  )}
-                </>
-              )}
+          <div className="panel">
+            <div className="panel-header">
+              <span className="panel-title">LATEST HEADLINES</span>
+              <span className="panel-title" style={{ color: "#7d8590" }}>
+                {loading ? "—" : `${headlines.length} ITEMS · PG ${headlinePage}/${totalPages || 1}`}
+              </span>
             </div>
+            {loading ? <HeadlinesSkeleton /> : (
+              <>
+                <div className="headlines-list">
+                  {pagedHeadlines.map((h, i) => (
+                    <div className="headline-item" key={i}>
+                      <div>
+                        <span className={`sentiment-pill pill-${h.label}`}>
+                          {h.label.toUpperCase()}
+                        </span>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div className="headline-title">{h.title}</div>
+                      </div>
+                      <div className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
+                        {h.score > 0 ? "+" : ""}{h.score}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button
+                      className="page-btn"
+                      onClick={() => {
+                        const nextPage = headlinePage + 1
+                        setHeadlinePage(nextPage)
+                        if (nextPage * HEADLINES_PER_PAGE > headlines.length) {
+                          const apiPage = Math.ceil(headlines.length / 50) + 1
+                          fetchDashboard(range, apiPage)
+                        }
+                      }}
+                      disabled={headlinePage === totalPages}
+                    >&gt;</button>
+                    {getPageNumbers().map((p, i) =>
+                      p === "..." ? (
+                        <span key={`ellipsis-${i}`} style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", padding: "0 4px" }}>...</span>
+                      ) : (
+                        <button key={p} className={`page-btn ${headlinePage === p ? "active" : ""}`} onClick={() => setHeadlinePage(p)}>{p}</button>
+                      )
+                    )}
+                    <button className="page-btn" onClick={() => setHeadlinePage(p => p + 1)} disabled={headlinePage === totalPages}>&gt;</button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div className="panel">
