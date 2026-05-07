@@ -1989,7 +1989,7 @@ export default function App() {
       .select("*")
       .eq("id", user.id)
       .single()
-      .then(({ data }) => setProfile(data))
+      .then(({ data }) => setProfile(data ?? {}))
   }, [user])
 
   useEffect(() => {
@@ -2144,8 +2144,9 @@ export default function App() {
     setLoading(false)
   }
 
+  const profileLoading = !!user && !profile
   const handleTickerClick = (t) => {
-    const isLocked = !FREE_TICKERS.includes(t) && !isPro
+    const isLocked = !profileLoading && !FREE_TICKERS.includes(t) && !isPro
     if (isLocked) { setAuthMode("signup"); setShowAuth(true); return }
     setTicker(t)
   }
@@ -2283,7 +2284,7 @@ export default function App() {
 
         <nav className="ticker-bar">
           {TICKERS.map(t => {
-            const locked = !FREE_TICKERS.includes(t) && !isPro
+            const locked = !profileLoading && !FREE_TICKERS.includes(t) && !isPro
             return (
               <button
                 key={t}
