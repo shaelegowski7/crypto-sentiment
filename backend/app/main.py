@@ -2102,6 +2102,92 @@ def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db
     }
 
 
+@app.get("/headline-impact/{ticker}")
+def get_headline_impact(ticker: str, days: int = 90, limit: int = 20, db: Session = Depends(get_db)):
+    days = max(7, min(days, 365))
+    limit = max(5, min(limit, 100))
+    since = datetime.utcnow() - timedelta(days=days + 2)  # +2 to ensure next-day price exists
+
+    headlines = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since,
+        models.Headline.sentiment_score.isnot(None)
+    ).order_by(models.Headline.published_at).all()
+
+    prices = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper(),
+        models.Price.date >= since
+    ).order_by(models.Price.date).all()
+
+    if not headlines or len(prices) < 2:
+        return {"ticker": ticker.upper(), "days": days, "total_analysed": 0, "headlines": [], "summary": None}
+
+    price_by_date = {p.date.date(): p.close_price for p in prices}
+    sorted_price_dates = sorted(price_by_date.keys())
+
+    # Precompute next-day return for each price date
+    daily_return = {}
+    for i in range(len(sorted_price_dates) - 1):
+        d = sorted_price_dates[i]
+        nd = sorted_price_dates[i + 1]
+        prev = price_by_date[d]
+        if prev and prev > 0:
+            daily_return[d] = round((price_by_date[nd] - prev) / prev * 100, 2)
+
+    results = []
+    for h in headlines:
+        if abs(h.sentiment_score) < 0.1:
+            continue
+        h_date = h.published_at.date()
+
+        # Find the most recent price date on or before this headline
+        price_date = max((d for d in price_by_date if d <= h_date), default=None)
+        if price_date is None or price_date not in daily_return:
+            continue
+
+        next_ret = daily_return[price_date]
+        if abs(next_ret) < 0.5:
+            continue
+
+        impact = abs(h.sentiment_score) * abs(next_ret)
+
+        sent_positive = h.sentiment_score > 0
+        price_up = next_ret > 0
+        alignment = "confirmed" if sent_positive == price_up else "contrarian"
+
+        results.append({
+            "id": h.id,
+            "title": h.title,
+            "source": h.source,
+            "url": h.url,
+            "published_at": h.published_at.isoformat(),
+            "sentiment_score": round(h.sentiment_score, 3),
+            "sentiment_label": h.sentiment_label,
+            "next_day_return_pct": next_ret,
+            "impact_score": round(impact, 3),
+            "alignment": alignment,
+        })
+
+    results.sort(key=lambda x: x["impact_score"], reverse=True)
+    top = results[:limit]
+
+    confirmed = sum(1 for r in top if r["alignment"] == "confirmed")
+    contrarian = len(top) - confirmed
+    confirmed_pct = round(confirmed / len(top) * 100) if top else None
+
+    return {
+        "ticker": ticker.upper(),
+        "days": days,
+        "total_analysed": len(results),
+        "headlines": top,
+        "summary": {
+            "confirmed": confirmed,
+            "contrarian": contrarian,
+            "confirmed_pct": confirmed_pct,
+        } if top else None,
+    }
+
+
 @app.get("/sentiment-summary/{ticker}")
 def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Session = Depends(get_db)):
     query = db.query(models.Headline).filter(

@@ -1476,6 +1476,178 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
 )
 }
 
+// ─── Headline Impact Panel ────────────────────────────────────────────────
+
+function HeadlineImpactPanel({ ticker }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [days, setDays] = useState(90)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setData(null)
+    axios.get(`${API}/headline-impact/${ticker}?days=${days}&limit=20`)
+      .then(r => { if (!cancelled) { setData(r.data); setLoading(false) } })
+      .catch(() => { if (!cancelled) { setData({ error: true }); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [ticker, days])
+
+  const daysBtn = (d) => ({
+    fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+    padding: "4px 10px", borderRadius: "2px", cursor: "pointer", transition: "all 0.15s",
+    border: `1px solid ${days === d ? "var(--accent)" : "var(--border)"}`,
+    background: days === d ? "rgba(240,180,41,0.08)" : "transparent",
+    color: days === d ? "var(--accent)" : "var(--muted)",
+  })
+
+  const headlines = data?.headlines ?? []
+  const summary = data?.summary
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span className="panel-title">HEADLINE IMPACT</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {summary && (
+            <span className="panel-title" style={{ color: "var(--muted)" }}>
+              {summary.confirmed_pct}% CONFIRMED · {100 - summary.confirmed_pct}% CONTRARIAN
+            </span>
+          )}
+          {[30, 90, 180].map(d => (
+            <button key={d} style={daysBtn(d)} onClick={() => setDays(d)}>{d}D</button>
+          ))}
+        </div>
+      </div>
+      <div className="panel-body" style={{ padding: 0 }}>
+
+        {loading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "var(--border)" }}>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} style={{ background: "var(--surface)", padding: "12px 16px", display: "flex", gap: "12px" }}>
+                <div className="skeleton" style={{ width: "60px", height: "18px", borderRadius: "2px", flexShrink: 0 }} />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "5px" }}>
+                  <div className="skeleton" style={{ width: "100%", height: "12px", borderRadius: "2px" }} />
+                  <div className="skeleton" style={{ width: "60%", height: "10px", borderRadius: "2px" }} />
+                </div>
+                <div className="skeleton" style={{ width: "50px", height: "18px", borderRadius: "2px", flexShrink: 0 }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loading && data?.error && (
+          <div style={{ padding: "16px", fontFamily: "var(--mono)", fontSize: "11px", color: "var(--negative)" }}>
+            Failed to load headline impact data.
+          </div>
+        )}
+
+        {!loading && !data?.error && headlines.length === 0 && (
+          <div style={{ padding: "16px", fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>
+            Not enough data — need headlines with both strong sentiment and significant next-day price moves.
+          </div>
+        )}
+
+        {!loading && headlines.length > 0 && (
+          <>
+            {/* Column header */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "90px 1fr 88px 72px 96px",
+              fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
+              color: "var(--muted)", textTransform: "uppercase",
+              padding: "7px 16px", background: "var(--surface2)",
+              borderBottom: "1px solid var(--border)",
+            }}>
+              <span>DATE</span>
+              <span>HEADLINE</span>
+              <span>SENTIMENT</span>
+              <span>NEXT-DAY Δ</span>
+              <span style={{ textAlign: "right" }}>SIGNAL</span>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "var(--border)" }}>
+              {headlines.map((h, i) => {
+                const sentColor = h.sentiment_score > 0.3 ? "var(--positive)"
+                  : h.sentiment_score > 0 ? "rgba(63,185,80,0.7)"
+                  : h.sentiment_score < -0.3 ? "var(--negative)"
+                  : "rgba(248,81,73,0.7)"
+                const priceColor = h.next_day_return_pct > 0 ? "var(--positive)" : "var(--negative)"
+                const priceArrow = h.next_day_return_pct > 0 ? "↑" : "↓"
+                const alignColor = h.alignment === "confirmed" ? "var(--positive)" : "var(--accent)"
+                const alignBg = h.alignment === "confirmed" ? "rgba(63,185,80,0.08)" : "rgba(240,180,41,0.08)"
+                const alignBorder = h.alignment === "confirmed" ? "rgba(63,185,80,0.25)" : "rgba(240,180,41,0.25)"
+
+                return (
+                  <div key={h.id ?? i} style={{
+                    display: "grid",
+                    gridTemplateColumns: "90px 1fr 88px 72px 96px",
+                    padding: "10px 16px",
+                    background: "var(--surface)",
+                    alignItems: "start",
+                    gap: "8px",
+                    transition: "background 0.1s",
+                  }}
+                    onMouseOver={e => e.currentTarget.style.background = "var(--surface2)"}
+                    onMouseOut={e => e.currentTarget.style.background = "var(--surface)"}
+                  >
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", lineHeight: 1.5 }}>
+                      <div>{new Date(h.published_at + "Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</div>
+                      <div style={{ fontSize: "9px", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.source}</div>
+                    </div>
+
+                    <a
+                      href={h.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontFamily: "var(--sans)", fontSize: "12px", color: "var(--text)", lineHeight: 1.5, textDecoration: "none" }}
+                      onMouseOver={e => e.currentTarget.style.color = "var(--accent2)"}
+                      onMouseOut={e => e.currentTarget.style.color = "var(--text)"}
+                    >
+                      {h.title}
+                    </a>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <span className={`sentiment-pill pill-${h.sentiment_label}`} style={{ marginTop: 0 }}>
+                        {h.sentiment_label.slice(0, 3).toUpperCase()}
+                      </span>
+                      <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: sentColor, fontWeight: 600 }}>
+                        {h.sentiment_score > 0 ? "+" : ""}{h.sentiment_score}
+                      </span>
+                    </div>
+
+                    <span style={{ fontFamily: "var(--mono)", fontSize: "11px", color: priceColor, fontWeight: 600 }}>
+                      {priceArrow} {Math.abs(h.next_day_return_pct)}%
+                    </span>
+
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{
+                        fontFamily: "var(--mono)", fontSize: "9px", fontWeight: 700,
+                        letterSpacing: "0.1em", padding: "2px 8px", borderRadius: "2px",
+                        background: alignBg, color: alignColor, border: `1px solid ${alignBorder}`,
+                      }}>
+                        {h.alignment === "confirmed" ? "CONFIRMED" : "CONTRARIAN"}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={{
+              padding: "10px 16px", background: "var(--surface2)",
+              borderTop: "1px solid var(--border)",
+              fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", lineHeight: 1.6,
+            }}>
+              Ranked by impact score (|sentiment| × |next-day return|). <strong style={{ color: "var(--positive)" }}>Confirmed</strong> = sentiment direction matched next-day price. <strong style={{ color: "var(--accent)" }}>Contrarian</strong> = market moved opposite to sentiment.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Backtest Panel ────────────────────────────────────────────────────────
 
 const BT_DATE_FMT = (s) => {
@@ -2479,6 +2651,8 @@ export default function App() {
           </div>
 
           <BacktestPanel ticker={ticker} />
+
+          <HeadlineImpactPanel ticker={ticker} />
 
           <div className="panel">
             <div className="panel-header">
