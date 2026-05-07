@@ -5,7 +5,7 @@ from . import models, schemas
 from .database import engine, get_db
 from .scraper import fetch_headlines, fetch_rss_headlines
 from .sentiment import analyse_sentiment
-from .prices import fetch_prices, fetch_latest_price
+from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -345,6 +345,8 @@ def scrape_all():
     print(f"[SCHEDULER] fired at {datetime.utcnow()}")
     db = SessionLocal()
     try:
+        latest_prices = fetch_latest_prices_all()
+
         for ticker in TICKERS:
             headlines = fetch_headlines(ticker) + fetch_rss_headlines(ticker)
 
@@ -371,7 +373,7 @@ def scrape_all():
                 db.add(headline)
                 HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
 
-            prices = fetch_latest_price(ticker)
+            prices = latest_prices.get(ticker)
             if prices:
                 existing = db.query(models.Price).filter(
                     models.Price.ticker == prices["ticker"],
@@ -388,9 +390,7 @@ def scrape_all():
                         date=prices["date"]
                     )
                     db.add(price)
-                    
-        
-        time.sleep(2)
+
         db.commit()
         check_alerts(db)
         last_scrape_time = datetime.utcnow().isoformat()

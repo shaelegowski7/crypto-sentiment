@@ -59,6 +59,42 @@ def fetch_prices(ticker: str) -> list:
     return prices
 
 
+def fetch_latest_prices_all() -> dict:
+    """Fetch latest prices for all tickers in a single CoinGecko call."""
+    coin_ids = ",".join(COINGECKO_MAP.values())
+    try:
+        res = requests.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={
+                "ids": coin_ids,
+                "vs_currencies": "gbp",
+                "include_24hr_vol": "true",
+            },
+            timeout=10
+        )
+        print(f"[COINGECKO] batch response: {res.status_code}")
+        data = res.json()
+        today = datetime.now(timezone.utc).date()
+        result = {}
+        for ticker, coin_id in COINGECKO_MAP.items():
+            if coin_id not in data:
+                print(f"[PRICES] {ticker}: missing from CoinGecko response")
+                continue
+            price = data[coin_id]["gbp"]
+            volume = data[coin_id].get("gbp_24h_vol", 0)
+            result[ticker] = {
+                "ticker": ticker,
+                "close_price": round(price, 8),
+                "volume": round(volume, 2),
+                "date": today,
+            }
+            print(f"[PRICES] {ticker}: live={today} close={price}")
+        return result
+    except Exception as e:
+        print(f"[PRICES] CoinGecko batch error={e}")
+        return {}
+
+
 def fetch_latest_price(ticker: str) -> dict | None:
     coin_id = COINGECKO_MAP.get(ticker.upper())
     if not coin_id:

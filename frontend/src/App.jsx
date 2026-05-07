@@ -2168,7 +2168,7 @@ export default function App() {
     ? avgSentiment > 0.1 ? "BULLISH" : avgSentiment < -0.1 ? "BEARISH" : "NEUTRAL"
     : null
 
-  const latestPrice = displayData.length ? displayData[displayData.length - 1]?.price : null
+  const latestPrice = [...displayData].reverse().find(d => d.price != null)?.price ?? null
   const priceDisplay = latestPrice != null
     ? `${symbol}${latestPrice >= 1000 ? latestPrice.toLocaleString() : latestPrice.toFixed(2)}`
     : "—"
