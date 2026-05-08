@@ -1068,11 +1068,14 @@ def waitlist_count(db: Session = Depends(get_db)):
 
 
 TICKER_QUERIES = {
-    "BTC":  "bitcoin crypto",
-    "ETH":  "ethereum crypto",
-    "SOL":  "solana crypto",
-    "XRP":  "ripple XRP crypto",
-    "DOGE": "dogecoin crypto",
+    "BTC":    "bitcoin crypto",
+    "ETH":    "ethereum crypto",
+    "SOL":    "solana crypto",
+    "XRP":    "ripple XRP crypto",
+    "DOGE":   "dogecoin crypto",
+    "EURUSD": '"EUR/USD" forex',
+    "GBPUSD": '"GBP/USD" pound dollar forex',
+    "USDJPY": '"USD/JPY" dollar yen forex',
 }
 
 
