@@ -1690,9 +1690,15 @@ def get_status(db: Session = Depends(get_db)):
             "latest_price": latest_price.date.isoformat() if latest_price else None,
             "latest_price_value": latest_price.close_price if latest_price else None,
         }
+    resolved_scrape_time = last_scrape_time
+    if not resolved_scrape_time:
+        latest = db.query(models.Headline).order_by(models.Headline.published_at.desc()).first()
+        if latest:
+            resolved_scrape_time = latest.published_at.isoformat()
+
     return {
         "status": "operational",
-        "last_scrape": last_scrape_time,
+        "last_scrape": resolved_scrape_time,
         "last_scrape_duration_seconds": last_scrape_duration,
         "tickers": ticker_stats,
         "total_headlines": db.query(models.Headline).count(),
