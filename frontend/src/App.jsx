@@ -2409,7 +2409,7 @@ export default function App() {
       <div className="dashboard">
         <header className="topbar">
           <div className="topbar-left">
-            <span className="logo">SentimentFX</span>
+            <a href="https://sentimentfx.org" className="logo" style={{ textDecoration: "none" }}>SentimentFX</a>
             <div className="logo-divider" />
             <span className="tagline">CRYPTO SENTIMENT INTELLIGENCE</span>
           </div>
