@@ -97,7 +97,7 @@ def generate_ai_summary(ticker_data: list[dict]) -> str:
     ])
 
     response = anthropic_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=400,
         messages=[{
             "role": "user",
@@ -116,13 +116,15 @@ Do not use phrases like "as of this morning" or "good morning". Start with the m
 
 def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: str) -> str:
     """Build the HTML email body."""
+    MONO = "'IBM Plex Mono','Courier New',monospace"
+    SANS = "'IBM Plex Sans',system-ui,sans-serif"
 
     def sentiment_color(score):
         if score >= 0.1:
-            return "#16a34a"
+            return "#3fb950"
         elif score <= -0.1:
-            return "#dc2626"
-        return "#d97706"
+            return "#f85149"
+        return "#f0b429"
 
     def arrow(val):
         return "↑" if val >= 0 else "↓"
@@ -131,9 +133,9 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
     for d in ticker_data:
         divergence_banner = ""
         if d["divergence"]:
-            divergence_banner = """
-            <div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:6px 10px;margin-top:8px;border-radius:2px;font-size:12px;color:#92400e;">
-                ⚠️ Divergence signal — sentiment and price moving in opposite directions
+            divergence_banner = f"""
+            <div style="background:rgba(240,180,41,0.08);border-left:2px solid #f0b429;padding:8px 10px;margin-top:10px;font-family:{MONO};font-size:10px;color:#f0b429;letter-spacing:0.06em;">
+                &#9888; DIVERGENCE &mdash; SENTIMENT AND PRICE MOVING IN OPPOSITE DIRECTIONS
             </div>"""
 
         headline_block = ""
@@ -141,74 +143,75 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
             h = d["top_headline"]
             score_color = sentiment_color(h["sentiment_score"])
             headline_block = f"""
-            <div style="margin-top:10px;padding:8px 10px;background:#f8fafc;border-radius:4px;font-size:12px;color:#64748b;">
-                Top headline: <a href="{h['url']}" style="color:#6366f1;text-decoration:none;">{h['title'][:90]}{'...' if len(h['title']) > 90 else ''}</a>
-                <span style="color:{score_color};margin-left:6px;font-weight:600;">{h['sentiment_score']:+.3f}</span>
+            <div style="margin-top:10px;padding:8px 10px;background:#161b22;font-size:12px;color:#7d8590;font-family:{SANS};">
+                <a href="{h['url']}" style="color:#58a6ff;text-decoration:none;">{h['title'][:90]}{'...' if len(h['title']) > 90 else ''}</a>
+                <span style="font-family:{MONO};color:{score_color};margin-left:8px;font-size:11px;">{h['sentiment_score']:+.3f}</span>
             </div>"""
 
-        price_str = f"£{d['current_price_gbp']:,.2f}" if d["current_price_gbp"] else "N/A"
+        is_fx = d["current_price_gbp"] is not None and d["ticker"] in ("EURUSD", "GBPUSD", "USDJPY")
+        if d["current_price_gbp"] is not None:
+            price_str = f"{d['current_price_gbp']:.4f}" if is_fx else f"£{d['current_price_gbp']:,.2f}"
+        else:
+            price_str = "N/A"
         price_change_str = f"{'+' if (d['price_change_pct'] or 0) >= 0 else ''}{d['price_change_pct'] or 0:.2f}%" if d["price_change_pct"] is not None else "N/A"
-        price_color = "#16a34a" if (d["price_change_pct"] or 0) >= 0 else "#dc2626"
+        price_color = "#3fb950" if (d["price_change_pct"] or 0) >= 0 else "#f85149"
         sent_color = sentiment_color(d["current_sentiment"])
 
         ticker_blocks += f"""
-        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="background:#0d1117;border:1px solid #21262d;padding:16px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
                 <div>
-                    <span style="font-weight:700;font-size:15px;color:#0f172a;">{d['ticker']}</span>
-                    <span style="color:#94a3b8;font-size:12px;margin-left:6px;">{d['name']}</span>
+                    <span style="font-family:{MONO};font-size:13px;font-weight:600;color:#e6edf3;">{d['ticker']}</span>
+                    <span style="font-family:{SANS};font-size:11px;color:#7d8590;margin-left:8px;">{d['name']}</span>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-weight:700;font-size:15px;color:#0f172a;">{price_str}</div>
-                    <div style="font-size:12px;color:{price_color};font-weight:600;">{price_change_str} 24h</div>
+                    <div style="font-family:{MONO};font-size:13px;font-weight:500;color:#e6edf3;">{price_str}</div>
+                    <div style="font-family:{MONO};font-size:11px;color:{price_color};">{price_change_str}</div>
                 </div>
             </div>
-            <div style="margin-top:10px;display:flex;gap:12px;">
-                <div style="background:#f1f5f9;border-radius:4px;padding:6px 10px;font-size:12px;">
-                    <span style="color:#64748b;">Sentiment</span>
-                    <span style="color:{sent_color};font-weight:700;margin-left:6px;">{d['current_sentiment']:+.3f}</span>
-                    <span style="color:#94a3b8;margin-left:4px;">{arrow(d['sentiment_delta'])}{abs(d['sentiment_delta']):.3f}</span>
-                </div>
+            <div style="background:#161b22;padding:8px 10px;display:inline-block;">
+                <span style="font-family:{MONO};font-size:10px;color:#7d8590;letter-spacing:0.08em;">SENTIMENT</span>
+                <span style="font-family:{MONO};font-size:13px;font-weight:600;color:{sent_color};margin-left:8px;">{d['current_sentiment']:+.3f}</span>
+                <span style="font-family:{MONO};font-size:11px;color:#7d8590;margin-left:6px;">{arrow(d['sentiment_delta'])}{abs(d['sentiment_delta']):.3f}</span>
             </div>
             {headline_block}
             {divergence_banner}
         </div>"""
 
-    today = datetime.now(timezone.utc).strftime("%A, %d %B %Y")
+    today = datetime.now(timezone.utc).strftime("%A, %d %B %Y").upper()
 
     return f"""<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-    <div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#080c10;font-family:{SANS};">
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
 
-        <!-- Header -->
-        <div style="text-align:center;margin-bottom:24px;">
-            <div style="font-size:20px;font-weight:800;color:#6366f1;letter-spacing:-0.5px;">SentimentFX</div>
-            <div style="font-size:12px;color:#94a3b8;margin-top:2px;">Morning Brief · {today}</div>
-        </div>
-
-        <!-- AI Summary -->
-        <div style="background:#6366f1;border-radius:10px;padding:18px 20px;margin-bottom:20px;">
-            <div style="font-size:11px;font-weight:600;color:#c7d2fe;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:8px;">Today's Signal</div>
-            <div style="color:#ffffff;font-size:14px;line-height:1.6;">{ai_summary}</div>
-        </div>
-
-        <!-- Ticker blocks -->
-        {ticker_blocks}
-
-        <!-- Footer -->
-        <div style="text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;">
-            <div style="font-size:11px;color:#94a3b8;">
-                SentimentFX Pro · <a href="https://app.sentimentfx.org" style="color:#6366f1;text-decoration:none;">Open Dashboard</a>
-            </div>
-            <div style="font-size:11px;color:#cbd5e1;margin-top:6px;">
-                <a href="{unsubscribe_url}" style="color:#cbd5e1;">Unsubscribe from morning brief</a>
-            </div>
-            <div style="font-size:10px;color:#e2e8f0;margin-top:8px;">Not financial advice.</div>
-        </div>
-
+    <div style="border-bottom:1px solid #21262d;padding-bottom:20px;margin-bottom:24px;">
+      <div style="font-family:{MONO};font-size:16px;font-weight:600;color:#f0b429;letter-spacing:0.06em;">SENTIMENTFX</div>
+      <div style="font-family:{MONO};font-size:10px;color:#7d8590;margin-top:4px;letter-spacing:0.1em;">MORNING BRIEF &middot; {today}</div>
     </div>
+
+    <div style="background:#0d1117;border:1px solid #30363d;border-left:3px solid #f0b429;padding:16px 18px;margin-bottom:24px;">
+      <div style="font-family:{MONO};font-size:9px;font-weight:600;color:#f0b429;letter-spacing:0.12em;margin-bottom:10px;">TODAY&#39;S SIGNAL</div>
+      <div style="color:#e6edf3;font-size:14px;line-height:1.7;font-weight:300;">{ai_summary}</div>
+    </div>
+
+    {ticker_blocks}
+
+    <div style="border-top:1px solid #21262d;padding-top:20px;margin-top:8px;">
+      <div style="font-family:{MONO};font-size:10px;color:#7d8590;letter-spacing:0.06em;">
+        <a href="https://app.sentimentfx.org" style="color:#58a6ff;text-decoration:none;">OPEN DASHBOARD</a>
+        &nbsp;&middot;&nbsp;
+        <a href="{unsubscribe_url}" style="color:#7d8590;text-decoration:none;">UNSUBSCRIBE</a>
+      </div>
+      <div style="font-family:{MONO};font-size:9px;color:#30363d;margin-top:8px;letter-spacing:0.05em;">NOT FINANCIAL ADVICE</div>
+    </div>
+
+  </div>
 </body>
 </html>"""
 
