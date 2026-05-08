@@ -13,6 +13,25 @@ TICKERS = {
     "DOGE": "dogecoin DOGE",
 }
 
+# Keywords used to filter general RSS feeds (e.g. cryptoslate, decrypt) so that
+# articles are only saved under a ticker if the title actually mentions it.
+# Tag-specific feeds (e.g. cointelegraph.com/rss/tag/solana) are always included.
+TICKER_KEYWORDS = {
+    "BTC":  ["bitcoin", "btc"],
+    "ETH":  ["ethereum", "eth"],
+    "SOL":  ["solana", "sol"],
+    "XRP":  ["ripple", "xrp"],
+    "DOGE": ["dogecoin", "doge"],
+}
+
+# Feeds that are general (not ticker-specific) and need keyword filtering
+GENERAL_FEEDS = {
+    "https://coindesk.com/arc/outboundfeeds/rss/?outputType=xml",
+    "https://decrypt.co/feed",
+    "https://www.theblock.co/rss.xml",
+    "https://cryptoslate.com/feed/",
+}
+
 RSS_FEEDS = {
     "BTC": [
         "https://cointelegraph.com/rss/tag/bitcoin",
@@ -91,15 +110,21 @@ def fetch_headlines(ticker: str) -> list:
 
 def fetch_rss_headlines(ticker: str) -> list:
     feeds = RSS_FEEDS.get(ticker.upper(), [])
+    keywords = TICKER_KEYWORDS.get(ticker.upper(), [])
     headlines = []
 
     for url in feeds:
         try:
             feed = feedparser.parse(url)
-            print(f"[RSS] {ticker}: {url} entries={len(feed.entries)}")
+            is_general = url in GENERAL_FEEDS
+            print(f"[RSS] {ticker}: {url} entries={len(feed.entries)} general={is_general}")
 
             for entry in feed.entries[:10]:
                 try:
+                    title_lower = entry.title.lower()
+                    if is_general and not any(kw in title_lower for kw in keywords):
+                        continue
+
                     published = entry.get("published_parsed") or entry.get("updated_parsed")
                     pub_date = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
 

@@ -344,10 +344,15 @@ def scrape_all():
     start = time.time()
     print(f"[SCHEDULER] fired at {datetime.utcnow()}")
     db = SessionLocal()
+    any_failure = False
     try:
         latest_prices = fetch_latest_prices_all()
+    except Exception as e:
+        print(f"[SCHEDULER] price fetch error: {e}")
+        latest_prices = {}
 
-        for ticker in TICKERS:
+    for ticker in TICKERS:
+        try:
             headlines = fetch_headlines(ticker) + fetch_rss_headlines(ticker)
 
             for h in headlines:
@@ -391,18 +396,27 @@ def scrape_all():
                     )
                     db.add(price)
 
-        db.commit()
+            db.commit()
+            print(f"[SCHEDULER] {ticker} committed")
+        except Exception as e:
+            any_failure = True
+            db.rollback()
+            print(f"[SCHEDULER] {ticker} error: {e}")
+
+    try:
         check_alerts(db)
-        last_scrape_time = datetime.utcnow().isoformat()
-        last_scrape_duration = round(time.time() - start, 2)
-        SCRAPER_RUNS.labels(status="success").inc()
-        SCRAPER_DURATION.observe(time.time() - start)
-        print("Scheduled scrape complete")
     except Exception as e:
-        SCRAPER_RUNS.labels(status="failure").inc()
-        print(f"Scheduler error: {e}")
+        print(f"[SCHEDULER] alert check error: {e}")
     finally:
         db.close()
+
+    elapsed = round(time.time() - start, 2)
+    status = "failure" if any_failure else "success"
+    SCRAPER_RUNS.labels(status=status).inc()
+    SCRAPER_DURATION.observe(elapsed)
+    last_scrape_time = datetime.utcnow().isoformat()
+    last_scrape_duration = elapsed
+    print(f"Scheduled scrape complete in {elapsed}s (status={status})")
 
 
 scheduler = BackgroundScheduler()
