@@ -11,9 +11,9 @@ TICKERS = {
     "SOL":    "solana SOL",
     "XRP":    "ripple XRP",
     "DOGE":   "dogecoin DOGE",
-    "EURUSD": '"EUR/USD" forex',
-    "GBPUSD": '"GBP/USD" pound dollar forex',
-    "USDJPY": '"USD/JPY" dollar yen forex',
+    "EURUSD": "EUR/USD euro dollar forex",
+    "GBPUSD": "GBP/USD pound dollar forex",
+    "USDJPY": "USD/JPY dollar yen forex",
 }
 
 # Keywords used to filter general RSS feeds (e.g. cryptoslate, decrypt) so that

@@ -1073,9 +1073,9 @@ TICKER_QUERIES = {
     "SOL":    "solana crypto",
     "XRP":    "ripple XRP crypto",
     "DOGE":   "dogecoin crypto",
-    "EURUSD": '"EUR/USD" forex',
-    "GBPUSD": '"GBP/USD" pound dollar forex',
-    "USDJPY": '"USD/JPY" dollar yen forex',
+    "EURUSD": "EUR/USD euro dollar forex",
+    "GBPUSD": "GBP/USD pound dollar forex",
+    "USDJPY": "USD/JPY dollar yen forex",
 }
 
 
@@ -1119,7 +1119,6 @@ def run_backfill(ticker: str, days: int, offset: int):
 
             try:
                 response = requests.get("https://gnews.io/api/v4/search", params=params)
-                print(f"Backfill {ticker} day {i}: {response.status_code}")
 
                 if response.status_code != 200:
                     print(f"Backfill {ticker} day {i}: error={response.text}")
@@ -1127,6 +1126,7 @@ def run_backfill(ticker: str, days: int, offset: int):
                     continue
 
                 articles = response.json().get("articles", [])
+                day_saved = 0
 
                 for article in articles:
                     exists = db.query(models.Headline).filter(
@@ -1149,6 +1149,9 @@ def run_backfill(ticker: str, days: int, offset: int):
                     )
                     db.add(headline)
                     saved += 1
+                    day_saved += 1
+
+                print(f"Backfill {ticker} day {i} ({from_dt.strftime('%Y-%m-%d')}): saved {day_saved}/{len(articles)} articles")
                     HEADLINES_INGESTED.labels(source=article["source"]["name"], ticker=ticker.upper()).inc()
 
                 db.commit()
