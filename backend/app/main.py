@@ -2273,6 +2273,33 @@ def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Se
         ]
     }
 
+@app.post("/api/brief/test")
+def test_brief(email: str, db: Session = Depends(get_db), admin=Depends(require_admin)):
+    from app.brief import fetch_ticker_data, generate_ai_summary, build_email_html, TICKERS
+    import resend as resend_lib
+    resend_lib.api_key = os.environ["RESEND_API_KEY"]
+    ticker_data = []
+    seen_urls = set()
+    for ticker in TICKERS:
+        data = fetch_ticker_data(db, ticker)
+        if data.get("top_headline"):
+            url = data["top_headline"]["url"]
+            if url in seen_urls:
+                data["top_headline"] = None
+            else:
+                seen_urls.add(url)
+        ticker_data.append(data)
+    ai_summary = generate_ai_summary(ticker_data)
+    html = build_email_html(ticker_data, ai_summary, "https://api.sentimentfx.org/api/brief/unsubscribe?user_id=test")
+    resend_lib.Emails.send({
+        "from": "SentimentFX <hello@sentimentfx.org>",
+        "to": email,
+        "subject": f"[TEST] Morning Brief — {datetime.utcnow().strftime('%d %b')}",
+        "html": html,
+    })
+    return {"message": f"Test brief sent to {email}"}
+
+
 @app.post("/api/brief/unsubscribe")
 def unsubscribe_brief(user_id: str, db: Session = Depends(get_db)):
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
