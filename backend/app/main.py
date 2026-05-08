@@ -149,7 +149,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
+TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY"]
 
 
 # ---------------------------------------------------------------------------

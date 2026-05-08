@@ -8,8 +8,10 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
 
-const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
+const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY"]
 const FREE_TICKERS = ["BTC"]
+const FX_TICKERS = ["EURUSD", "GBPUSD", "USDJPY"]
+const FX_LABELS = { EURUSD: "EUR/USD", GBPUSD: "GBP/USD", USDJPY: "USD/JPY" }
 const API = "https://api.sentimentfx.org"
 const HEADLINES_PER_PAGE = 10
 
@@ -1961,6 +1963,7 @@ export default function App() {
   const checkoutCancelled = urlParams.get("cancelled")
 
   const isPro = profile?.tier === "pro" || profile?.tier === "data"
+  const isFX = FX_TICKERS.includes(ticker)
   const isData = profile?.tier === "data"
   const isLoggedIn = !!user
 
@@ -2201,8 +2204,8 @@ export default function App() {
     return range === 999 ? allData : allData.slice(-range)
   })()
 
-  const rate = currency === "USD" && gbpToUsd ? gbpToUsd : 1
-  const symbol = currency === "USD" ? "$" : "£"
+  const rate = !isFX && currency === "USD" && gbpToUsd ? gbpToUsd : 1
+  const symbol = isFX ? "" : (currency === "USD" ? "$" : "£")
 
   const displayData = filteredData.map(d => ({
     ...d,
@@ -2215,7 +2218,9 @@ export default function App() {
 
   const latestPrice = [...displayData].reverse().find(d => d.price != null)?.price ?? null
   const priceDisplay = latestPrice != null
-    ? `${symbol}${latestPrice >= 1000 ? latestPrice.toLocaleString() : latestPrice.toFixed(2)}`
+    ? isFX
+      ? latestPrice.toFixed(4)
+      : `${symbol}${latestPrice >= 1000 ? latestPrice.toLocaleString() : latestPrice.toFixed(2)}`
     : "—"
 
   const totalPages = Math.ceil(headlines.length / HEADLINES_PER_PAGE)
@@ -2254,6 +2259,7 @@ export default function App() {
   })
 
   const yAxisTickFormatter = v => {
+    if (isFX) return v.toFixed(4)
     if (v >= 1000) return `${symbol}${(v / 1000).toFixed(0)}k`
     return `${symbol}${v.toFixed(2)}`
   }
@@ -2336,7 +2342,7 @@ export default function App() {
                 className={`ticker-btn ${ticker === t ? "active" : ""} ${locked ? "locked" : ""}`}
                 onClick={() => handleTickerClick(t)}
               >
-                {t}
+                {FX_LABELS[t] ?? t}
               </button>
             )
           })}
@@ -2347,7 +2353,7 @@ export default function App() {
           {!isLoggedIn && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Sign in to unlock all 5 tickers, full history, API access and alerts.
+                <strong>Free tier:</strong> BTC only · 30 day history · Sign in to unlock all tickers including EUR/USD, GBP/USD and USD/JPY, full history, API access and alerts.
               </span>
               <button className="upgrade-btn" onClick={() => { setAuthMode("signup"); setShowAuth(true) }}>
                 Sign In / Sign Up
@@ -2358,7 +2364,7 @@ export default function App() {
           {isLoggedIn && !isPro && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all 5 tickers, full history, API access and alerts.
+                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all tickers including EUR/USD, GBP/USD and USD/JPY, full history, API access and alerts.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw")}>
@@ -2413,7 +2419,7 @@ export default function App() {
                   : priceDisplay}
               </div>
               <div className="stat-sub">
-                {currency === "GBP" ? "British pound" : `USD · rate: ${gbpToUsd?.toFixed(4) ?? "..."}`}
+                {isFX ? "exchange rate" : currency === "GBP" ? "British pound" : `USD · rate: ${gbpToUsd?.toFixed(4) ?? "..."}`}
               </div>
             </div>
             <div className="stat-card">
@@ -2476,9 +2482,9 @@ export default function App() {
 
           <div className="panel">
             <div className="panel-header">
-              <span className="panel-title">{ticker} / SENTIMENT vs PRICE ({currency})</span>
+              <span className="panel-title">{FX_LABELS[ticker] ?? ticker} / SENTIMENT vs PRICE{isFX ? "" : ` (${currency})`}</span>
               <div className="panel-controls">
-                {["GBP", "USD"].map(c => (
+                {!isFX && ["GBP", "USD"].map(c => (
                   <button key={c} onClick={() => setCurrency(c)} style={currencyCtrlStyle(c)}>{c}</button>
                 ))}
                 <div className="control-divider" />

@@ -20,6 +20,12 @@ COINGECKO_MAP = {
 
 USD_TICKERS = {}
 
+FX_TICKER_MAP = {
+    "EURUSD": "EURUSD=X",
+    "GBPUSD": "GBPUSD=X",
+    "USDJPY": "USDJPY=X",
+}
+
 def get_gbp_rate() -> float:
     data = yf.download("GBPUSD=X", period="2d", interval="1d", progress=False)
     if data.empty:
@@ -28,7 +34,8 @@ def get_gbp_rate() -> float:
 
 
 def fetch_prices(ticker: str) -> list:
-    yf_ticker = TICKER_MAP.get(ticker)
+    is_fx = ticker in FX_TICKER_MAP
+    yf_ticker = FX_TICKER_MAP.get(ticker) if is_fx else TICKER_MAP.get(ticker)
     if not yf_ticker:
         print(f"[PRICES] Unknown ticker: {ticker}")
         return []
@@ -44,10 +51,10 @@ def fetch_prices(ticker: str) -> list:
     for date, row in data.iterrows():
         try:
             close = float(row["Close"].iloc[0]) if hasattr(row["Close"], 'iloc') else float(row["Close"])
-            volume = float(row["Volume"].iloc[0]) if hasattr(row["Volume"], 'iloc') else float(row["Volume"])
+            volume = 0.0 if is_fx else (float(row["Volume"].iloc[0]) if hasattr(row["Volume"], 'iloc') else float(row["Volume"]))
             prices.append({
                 "ticker": ticker,
-                "close_price": round(close * gbp_rate, 8),
+                "close_price": round(close * gbp_rate, 6 if is_fx else 8),
                 "volume": round(volume, 2),
                 "date": date.to_pydatetime()
             })
@@ -60,7 +67,10 @@ def fetch_prices(ticker: str) -> list:
 
 
 def fetch_latest_prices_all() -> dict:
-    """Fetch latest prices for all tickers in a single CoinGecko call."""
+    """Fetch latest prices for all tickers (crypto via CoinGecko, FX via yfinance)."""
+    today = datetime.now(timezone.utc).date()
+    result = {}
+
     coin_ids = ",".join(COINGECKO_MAP.values())
     try:
         res = requests.get(
@@ -74,8 +84,6 @@ def fetch_latest_prices_all() -> dict:
         )
         print(f"[COINGECKO] batch response: {res.status_code}")
         data = res.json()
-        today = datetime.now(timezone.utc).date()
-        result = {}
         for ticker, coin_id in COINGECKO_MAP.items():
             if coin_id not in data:
                 print(f"[PRICES] {ticker}: missing from CoinGecko response")
@@ -89,14 +97,47 @@ def fetch_latest_prices_all() -> dict:
                 "date": today,
             }
             print(f"[PRICES] {ticker}: live={today} close={price}")
-        return result
     except Exception as e:
         print(f"[PRICES] CoinGecko batch error={e}")
-        return {}
+
+    for ticker, yf_ticker in FX_TICKER_MAP.items():
+        try:
+            data = yf.download(yf_ticker, period="5d", interval="1d", progress=False)
+            if data.empty:
+                print(f"[PRICES] {ticker}: no yfinance data")
+                continue
+            close_series = data["Close"]
+            close = float(close_series.iloc[-1].iloc[0]) if hasattr(close_series.iloc[-1], 'iloc') else float(close_series.iloc[-1])
+            result[ticker] = {
+                "ticker": ticker,
+                "close_price": round(close, 6),
+                "volume": 0.0,
+                "date": today,
+            }
+            print(f"[PRICES] {ticker}: live={today} close={close}")
+        except Exception as e:
+            print(f"[PRICES] {ticker}: yfinance error={e}")
+
+    return result
 
 
 def fetch_latest_price(ticker: str) -> dict | None:
-    coin_id = COINGECKO_MAP.get(ticker.upper())
+    t = ticker.upper()
+    if t in FX_TICKER_MAP:
+        try:
+            data = yf.download(FX_TICKER_MAP[t], period="5d", interval="1d", progress=False)
+            if data.empty:
+                return None
+            close_series = data["Close"]
+            close = float(close_series.iloc[-1].iloc[0]) if hasattr(close_series.iloc[-1], 'iloc') else float(close_series.iloc[-1])
+            today = datetime.now(timezone.utc).date()
+            print(f"[PRICES] {t}: live={today} close={close}")
+            return {"ticker": t, "close_price": round(close, 6), "volume": 0.0, "date": today}
+        except Exception as e:
+            print(f"[PRICES] {t}: yfinance error={e}")
+            return None
+
+    coin_id = COINGECKO_MAP.get(t)
     if not coin_id:
         print(f"[PRICES] Unknown ticker: {ticker}")
         return None

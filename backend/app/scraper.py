@@ -6,22 +6,28 @@ import os
 BASE_URL = "https://gnews.io/api/v4/search"
 
 TICKERS = {
-    "BTC":  "bitcoin BTC",
-    "ETH":  "ethereum ETH",
-    "SOL":  "solana SOL",
-    "XRP":  "ripple XRP",
-    "DOGE": "dogecoin DOGE",
+    "BTC":    "bitcoin BTC",
+    "ETH":    "ethereum ETH",
+    "SOL":    "solana SOL",
+    "XRP":    "ripple XRP",
+    "DOGE":   "dogecoin DOGE",
+    "EURUSD": '"EUR/USD" forex',
+    "GBPUSD": '"GBP/USD" pound dollar forex',
+    "USDJPY": '"USD/JPY" dollar yen forex',
 }
 
 # Keywords used to filter general RSS feeds (e.g. cryptoslate, decrypt) so that
 # articles are only saved under a ticker if the title actually mentions it.
 # Tag-specific feeds (e.g. cointelegraph.com/rss/tag/solana) are always included.
 TICKER_KEYWORDS = {
-    "BTC":  ["bitcoin", "btc"],
-    "ETH":  ["ethereum", "eth"],
-    "SOL":  ["solana", "sol"],
-    "XRP":  ["ripple", "xrp"],
-    "DOGE": ["dogecoin", "doge"],
+    "BTC":    ["bitcoin", "btc"],
+    "ETH":    ["ethereum", "eth"],
+    "SOL":    ["solana", "sol"],
+    "XRP":    ["ripple", "xrp"],
+    "DOGE":   ["dogecoin", "doge"],
+    "EURUSD": ["eur/usd", "eurusd", "euro dollar"],
+    "GBPUSD": ["gbp/usd", "gbpusd", "pound dollar"],
+    "USDJPY": ["usd/jpy", "usdjpy", "dollar yen"],
 }
 
 # Feeds that are general (not ticker-specific) and need keyword filtering
