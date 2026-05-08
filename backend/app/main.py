@@ -761,11 +761,9 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
     primary_ci = shift_ci
 
     # Signal strength label
-    if primary_ci and primary_ci[0] * primary_ci[1] <= 0:
-        strength = "inconclusive"
-    elif primary_p < 0.05 and abs(primary_r) >= 0.2:
+    if primary_p < 0.05 and abs(primary_r) >= 0.15:
         strength = "strong"
-    elif primary_p < 0.10 and abs(primary_r) >= 0.1:
+    elif primary_p < 0.10 and abs(primary_r) >= 0.08:
         strength = "weak"
     else:
         strength = "inconclusive"
@@ -1676,11 +1674,9 @@ def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db)
 
     shift_r, shift_p, shift_ci = safe_corr(shifts, returns)
 
-    if shift_ci and shift_ci[0] * shift_ci[1] <= 0:
-        strength = "inconclusive"
-    elif shift_p < 0.05 and abs(shift_r) >= 0.2:
+    if shift_p < 0.05 and abs(shift_r) >= 0.15:
         strength = "strong"
-    elif shift_p < 0.10 and abs(shift_r) >= 0.1:
+    elif shift_p < 0.10 and abs(shift_r) >= 0.08:
         strength = "weak"
     else:
         strength = "inconclusive"
