@@ -387,7 +387,7 @@ const res = await fetch(
   <span class="c-key">"interpretation"</span>: <span class="c-str">"Sentiment shifts show a weak positive (momentum) signal (r=0.241, p=0.0241, n=87)"</span>
 }</pre>
                                 <div class="notice" style="margin-top:12px;">
-                                    <strong>Methodology:</strong> Correlates daily sentiment <em>shifts</em> (deviation from 7-day rolling average) against next-day price returns over a 180-day window. Strength is <code>strong</code> (p&lt;0.05, |r|≥0.15), <code>weak</code> (p&lt;0.10, |r|≥0.08), or <code>inconclusive</code>. CI uses Fisher z-transform.
+                                    <strong>Methodology:</strong> Correlates daily sentiment <em>shifts</em> (deviation from 7-day rolling average) against next-day price returns over a 180-day window. Strength is classified on |r| magnitude: <code>strong</code> (|r|≥0.25), <code>weak</code> (|r|≥0.10), or <code>inconclusive</code> (|r|&lt;0.10). CI uses Fisher z-transform.
                                 </div>
                                 <div class="tester" id="tester-correlation">
                                     <div class="tester-title">▶ Try it</div>
@@ -482,12 +482,12 @@ const res = await fetch(
                         <table class="param-table">
                             <thead><tr><th>Label</th><th>Criteria</th><th>Meaning</th></tr></thead>
                             <tbody>
-                                <tr><td style="color:var(--positive)">Strong</td><td>|r| ≥ 0.15 and p &lt; 0.05</td><td>Meaningful effect with strong statistical evidence</td></tr>
-                                <tr><td style="color:var(--accent)">Weak</td><td>|r| ≥ 0.08 and p &lt; 0.10</td><td>Detectable effect but smaller or less certain</td></tr>
-                                <tr><td style="color:var(--muted)">Inconclusive</td><td>Neither above</td><td>Cannot rule out the result being due to chance</td></tr>
+                                <tr><td style="color:var(--positive)">Strong</td><td>|r| ≥ 0.25</td><td>Consistent relationship across the analysis window</td></tr>
+                                <tr><td style="color:var(--accent)">Weak</td><td>|r| ≥ 0.10</td><td>Detectable relationship but modest in magnitude</td></tr>
+                                <tr><td style="color:var(--muted)">Inconclusive</td><td>|r| &lt; 0.10</td><td>No meaningful directional relationship found</td></tr>
                             </tbody>
                         </table>
-                        <p>Tickers with fewer headlines (SOL, XRP, DOGE) are more likely to show inconclusive results simply because there is less data to work with. More data → narrower confidence intervals → stronger conclusions.</p>
+                        <p>Strength is based on correlation magnitude (|r|), consistent with how practitioners use rolling correlations in quantitative finance. The p-value is included in the response for reference. Tickers with fewer headlines (SOL, XRP, DOGE) tend to have noisier correlations and are more likely to be inconclusive.</p>
                         <div class="notice notice-warn" style="margin-top:16px;">Correlation is not causation. Signal strength tells you how consistent the historical relationship has been — it does not guarantee future price moves.</div>
                     </div>
 
