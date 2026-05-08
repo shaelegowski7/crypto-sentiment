@@ -1256,6 +1256,74 @@ const styles = `
     letter-spacing: 0.05em;
   }
 
+  .api-key-display {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 2px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    word-break: break-all;
+    gap: 12px;
+  }
+
+  .api-key-masked {
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .api-usage-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 8px 0 4px;
+  }
+
+  .api-usage-bar-fill {
+    height: 100%;
+    background: var(--accent2);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  .api-copy-btn {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: 2px;
+    color: var(--muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .api-copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .api-warn-box {
+    background: rgba(240,180,41,0.05);
+    border: 1px solid rgba(240,180,41,0.25);
+    border-radius: 2px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+  }
+
   @media (max-width: 768px) {
     .topbar { padding: 10px 16px; }
     .ticker-bar { padding: 10px 16px; }
@@ -1957,6 +2025,10 @@ export default function App() {
   const [alertLoading, setAlertLoading] = useState(false)
   const [signalData, setSignalData] = useState(null)
   const [divergenceData, setDivergenceData] = useState(null)
+  const [apiKeyInfo, setApiKeyInfo] = useState(null)
+  const [apiKeyFull, setApiKeyFull] = useState(null)
+  const [apiKeyLoading, setApiKeyLoading] = useState(false)
+  const [apiKeyCopied, setApiKeyCopied] = useState(false)
 
   const urlParams = new URLSearchParams(window.location.search)
   const checkoutSuccess = urlParams.get("success")
@@ -2063,8 +2135,63 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (isPro && session) fetchAlerts()
+    if (isPro && session) {
+      fetchAlerts()
+      fetchApiKeyInfo()
+    }
   }, [isPro, session])
+
+  const fetchApiKeyInfo = async () => {
+    if (!session) return
+    try {
+      const res = await fetch(`${API}/api/keys/me`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      })
+      if (res.ok) setApiKeyInfo(await res.json())
+    } catch (_) {}
+  }
+
+  const generateApiKey = async () => {
+    setApiKeyLoading(true)
+    try {
+      const res = await fetch(`${API}/api/keys/generate-linked`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setApiKeyFull(data.key)
+        await fetchApiKeyInfo()
+      }
+    } finally {
+      setApiKeyLoading(false)
+    }
+  }
+
+  const regenerateApiKey = async () => {
+    if (!window.confirm("This will immediately invalidate your current key. Continue?")) return
+    setApiKeyLoading(true)
+    try {
+      const res = await fetch(`${API}/api/keys/regenerate-linked`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setApiKeyFull(data.key)
+        await fetchApiKeyInfo()
+      }
+    } finally {
+      setApiKeyLoading(false)
+    }
+  }
+
+  const copyApiKey = async () => {
+    if (!apiKeyFull) return
+    await navigator.clipboard.writeText(apiKeyFull)
+    setApiKeyCopied(true)
+    setTimeout(() => setApiKeyCopied(false), 2000)
+  }
 
   const fetchAlerts = async () => {
     if (!isPro || !session) return
@@ -2904,6 +3031,119 @@ export default function App() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {isPro && (
+            <div className="panel">
+              <div className="panel-header">
+                <span className="panel-title">API ACCESS</span>
+                <a
+                  href="https://developers.sentimentfx.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--accent2)", letterSpacing: "0.08em", textDecoration: "none" }}
+                >
+                  DOCS →
+                </a>
+              </div>
+              <div className="panel-body">
+                {apiKeyFull ? (
+                  <div>
+                    <div className="api-warn-box">
+                      ⚠ Save your API key now — it will not be shown again.
+                    </div>
+                    <div className="api-key-display">
+                      <span style={{ wordBreak: "break-all" }}>{apiKeyFull}</span>
+                      <button className="api-copy-btn" onClick={copyApiKey}>
+                        {apiKeyCopied ? "COPIED" : "COPY"}
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setApiKeyFull(null)}
+                      style={{
+                        fontFamily: "var(--mono)", fontSize: "10px", padding: "6px 14px",
+                        background: "var(--surface2)", border: "1px solid var(--border2)",
+                        borderRadius: "2px", color: "var(--muted)", cursor: "pointer", letterSpacing: "0.08em"
+                      }}
+                    >
+                      I've saved it
+                    </button>
+                  </div>
+                ) : apiKeyInfo?.has_key ? (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.15em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+                          API KEY
+                        </div>
+                        <div className="api-key-masked">
+                          <span style={{ fontFamily: "var(--mono)", fontSize: "12px", color: "var(--accent)" }}>{apiKeyInfo.prefix}</span>
+                          <span style={{ fontFamily: "var(--mono)", fontSize: "12px", color: "var(--muted)" }}>••••••••••••••••••••••••••••</span>
+                        </div>
+                        <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "4px", letterSpacing: "0.05em" }}>
+                          Pass as <code style={{ color: "var(--accent2)" }}>X-API-Key</code> header
+                        </div>
+                      </div>
+                      <div style={{ flex: 1, minWidth: "160px" }}>
+                        <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.15em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+                          THIS MONTH
+                        </div>
+                        <div style={{ fontFamily: "var(--mono)", fontSize: "18px", fontWeight: 600, color: "var(--text)" }}>
+                          {apiKeyInfo.calls_this_month ?? 0}
+                          <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--muted)", marginLeft: "4px" }}>
+                            / {apiKeyInfo.total_monthly ?? (apiKeyInfo.free_calls + apiKeyInfo.monthly_allowance)} calls
+                          </span>
+                        </div>
+                        <div className="api-usage-bar">
+                          <div
+                            className="api-usage-bar-fill"
+                            style={{
+                              width: `${Math.min(100, ((apiKeyInfo.calls_this_month ?? 0) / Math.max(1, apiKeyInfo.total_monthly ?? 1)) * 100)}%`
+                            }}
+                          />
+                        </div>
+                        <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)" }}>
+                          {apiKeyInfo.monthly_allowance > 0 ? `${apiKeyInfo.free_calls} free + ${apiKeyInfo.monthly_allowance} plan` : `${apiKeyInfo.free_calls} free calls`} · resets monthly
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: "14px" }}>
+                      <button
+                        onClick={regenerateApiKey}
+                        disabled={apiKeyLoading}
+                        style={{
+                          fontFamily: "var(--mono)", fontSize: "10px", padding: "5px 12px",
+                          background: "transparent", border: "1px solid var(--negative)",
+                          borderRadius: "2px", color: "var(--negative)", cursor: "pointer",
+                          letterSpacing: "0.08em", opacity: apiKeyLoading ? 0.5 : 1
+                        }}
+                      >
+                        {apiKeyLoading ? "..." : "REGENERATE KEY"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)", marginBottom: "14px", letterSpacing: "0.04em", lineHeight: "1.6" }}>
+                      Generate an API key to access sentiment, price, and correlation data programmatically.
+                      Your {isData ? "5,000" : "1,000"} monthly calls are included with your plan.
+                    </p>
+                    <button
+                      onClick={generateApiKey}
+                      disabled={apiKeyLoading}
+                      style={{
+                        fontFamily: "var(--mono)", fontSize: "10px", fontWeight: 600,
+                        letterSpacing: "0.1em", padding: "8px 18px", background: "var(--accent2)",
+                        border: "none", borderRadius: "2px", color: "#080c10",
+                        cursor: "pointer", textTransform: "uppercase", opacity: apiKeyLoading ? 0.5 : 1
+                      }}
+                    >
+                      {apiKeyLoading ? "GENERATING..." : "GENERATE API KEY"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

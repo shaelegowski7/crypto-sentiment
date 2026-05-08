@@ -3,11 +3,9 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>SentimentFX — Developer API</title>
+        <title>SentimentFX — API Reference</title>
         <link rel="icon" type="image/x-icon" href="/favicon.ico">
-        <link
-            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
-            rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
         <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -41,25 +39,6 @@ h2{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);marg
 h2:first-of-type{margin-top:0;padding-top:0;border-top:none;}
 p{font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
 .page-subtitle{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.08em;margin-bottom:32px;}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px 24px;margin-bottom:16px;}
-.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
-.card-title{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;}
-.key-display{background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:12px 16px;font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:0.05em;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-.key-masked{color:var(--muted);}
-.copy-btn{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;padding:4px 10px;background:transparent;border:1px solid var(--border2);border-radius:2px;color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.15s;}
-.copy-btn:hover{color:var(--accent);border-color:var(--accent);}
-.form-row{display:flex;gap:8px;margin-bottom:16px;}
-.form-input{flex:1;font-family:var(--mono);font-size:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;color:var(--text);outline:none;transition:border-color 0.15s;}
-.form-input:focus{border-color:var(--accent);}
-.form-input::placeholder{color:var(--muted);}
-.btn-primary{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.1em;padding:10px 20px;background:var(--accent);border:none;border-radius:2px;color:#080c10;cursor:pointer;text-transform:uppercase;white-space:nowrap;transition:opacity 0.15s;}
-.btn-primary:hover{opacity:0.85;}
-.btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
-.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;}
-.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:16px;}
-.stat-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
-.stat-value{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);}
-.stat-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px;}
 .endpoint{background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:12px;overflow:hidden;transition:border-color 0.2s;}
 .endpoint.in-view{border-color:var(--accent2);}
 .endpoint-header{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);}
@@ -96,309 +75,105 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
 .tester-meta{font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:6px;display:flex;gap:16px;}
 .tester-status-ok{color:var(--positive);}
 .tester-status-err{color:var(--negative);}
-.tester-apikey-note{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;}
-.tester-apikey-note a{color:var(--accent);cursor:pointer;}
-
-/* PRICING */
-.pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
-.pricing-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:24px;}
-.pricing-card.featured{border-color:var(--accent);background:rgba(240,180,41,0.03);}
-.pricing-tier{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:12px;}
-.pricing-price{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--text);margin-bottom:4px;}
-.pricing-price span{font-size:13px;color:var(--muted);font-weight:400;}
-.pricing-desc{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;}
-.pricing-features{list-style:none;}
-.pricing-features li{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border);}
-.pricing-features li::before{content:'-> ';color:var(--accent);}
-.badge{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0.08em;padding:2px 8px;border-radius:2px;}
-.badge-free{background:rgba(139,148,158,0.12);color:var(--muted);border:1px solid rgba(139,148,158,0.3);}
-.badge-pro{background:rgba(240,180,41,0.12);color:var(--accent);border:1px solid rgba(240,180,41,0.3);}
 .notice{background:rgba(88,166,255,0.05);border:1px solid rgba(88,166,255,0.2);border-radius:2px;padding:12px 16px;font-family:var(--mono);font-size:11px;color:var(--accent2);line-height:1.6;margin-bottom:20px;}
 .notice-warn{background:rgba(240,180,41,0.05);border-color:rgba(240,180,41,0.2);color:var(--accent);}
-.msg{font-family:var(--mono);font-size:11px;padding:10px 14px;border-radius:2px;margin-top:8px;display:none;}
-.msg.success{background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);color:var(--positive);}
-.msg.error{background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);color:var(--negative);}
-.msg.show{display:block;}
+.badge{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0.08em;padding:2px 8px;border-radius:2px;}
+.badge-pro{background:rgba(240,180,41,0.12);color:var(--accent);border:1px solid rgba(240,180,41,0.3);}
+.badge-data{background:rgba(88,166,255,0.12);color:var(--accent2);border:1px solid rgba(88,166,255,0.3);}
+
+/* Key entry box */
+.key-bar{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:14px 18px;margin-bottom:28px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.key-bar-label{font-family:var(--mono);font-size:9px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;white-space:nowrap;}
+.key-bar-input{font-family:var(--mono);font-size:11px;padding:6px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;color:var(--accent);outline:none;flex:1;min-width:200px;}
+.key-bar-input:focus{border-color:var(--accent);}
+.key-bar-input::placeholder{color:var(--muted);}
+.key-bar-hint{font-family:var(--mono);font-size:10px;color:var(--muted);}
+.key-bar-hint a{color:var(--accent2);text-decoration:none;}
+.key-bar-hint a:hover{text-decoration:underline;}
+
 @media(max-width:768px){
   .sidebar{display:none;}
   .content{padding:24px 20px;}
-  .pricing-grid{grid-template-columns:1fr;}
-  .stats-row{grid-template-columns:1fr 1fr;}
-  .form-row{flex-direction:column;}
+  .key-bar{flex-direction:column;align-items:flex-start;}
+  .key-bar-input{width:100%;}
 }
-</style>
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-X4F1XSNKW3"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-X4F1XSNKW3');
-  </script>
+        </style>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-X4F1XSNKW3"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-X4F1XSNKW3');
+        </script>
     </head>
     <body>
 
         <header class="topbar">
             <a class="logo" href="#">SentimentFX <span>/ Developers</span></a>
             <nav class="topbar-links">
-                <a href="#" onclick="nav('dashboard');return false;"
-                    class="active" id="nav-dashboard">Dashboard</a>
-                <a href="#" onclick="nav('docs');return false;"
-                    id="nav-docs">Docs</a>
-                <a href="#" onclick="nav('methodology');return false;"
-                    id="nav-methodology">Methodology</a>
-                <a href="#" onclick="nav('pricing');return false;"
-                    id="nav-pricing">Pricing</a>
-                <a href="https://app.sentimentfx.org" class="topbar-cta">Live
-                    Dashboard</a>
+                <a href="#" onclick="nav('docs');return false;" class="active" id="nav-docs">API Reference</a>
+                <a href="#" onclick="nav('methodology');return false;" id="nav-methodology">Methodology</a>
+                <a href="https://app.sentimentfx.org" class="topbar-cta" target="_blank">Open Dashboard</a>
             </nav>
         </header>
 
         <div class="layout">
             <aside class="sidebar">
                 <div class="sidebar-section">
-                    <div class="sidebar-label">Overview</div>
-                    <a class="sidebar-link active" href="#"
-                        onclick="nav('dashboard');return false;"
-                        id="side-dashboard">Dashboard</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('pricing');return false;"
-                        id="side-pricing">Pricing</a>
-                </div>
-                <div class="sidebar-section">
                     <div class="sidebar-label">API Reference</div>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('docs');scrollToId('auth');return false;"
-                        id="side-docs" data-section="auth">Authentication</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('docs');scrollToId('sentiment');return false;"
-                        data-section="sentiment">Sentiment</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('docs');scrollToId('summary');return false;"
-                        data-section="summary">Summary</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('docs');scrollToId('prices');return false;"
-                        data-section="prices">Prices</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('docs');scrollToId('correlation');return false;"
-                        data-section="correlation">Correlation</a>
+                    <a class="sidebar-link active" href="#" onclick="nav('docs');scrollToId('auth');return false;" id="side-docs" data-section="auth">Authentication</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('sentiment');return false;" data-section="sentiment">Sentiment</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('summary');return false;" data-section="summary">Summary</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('prices');return false;" data-section="prices">Prices</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('correlation');return false;" data-section="correlation">Correlation</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('errors');return false;" data-section="errors">Error Codes</a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-label">Methodology</div>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('methodology');scrollToId('m-scoring');return false;"
-                        id="side-methodology" data-section="m-scoring">Sentiment Scoring</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('methodology');scrollToId('m-shift');return false;"
-                        data-section="m-shift">Sentiment Shift</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('methodology');scrollToId('m-correlation');return false;"
-                        data-section="m-correlation">Correlation Analysis</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('methodology');scrollToId('m-signal');return false;"
-                        data-section="m-signal">Signal Strength</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('methodology');scrollToId('m-percentile');return false;"
-                        data-section="m-percentile">Shift Percentile</a>
-                    <a class="sidebar-link" href="#"
-                        onclick="nav('methodology');scrollToId('m-direction');return false;"
-                        data-section="m-direction">Momentum vs Contrarian</a>
+                    <a class="sidebar-link" href="#" onclick="nav('methodology');scrollToId('m-scoring');return false;" id="side-methodology" data-section="m-scoring">Sentiment Scoring</a>
+                    <a class="sidebar-link" href="#" onclick="nav('methodology');scrollToId('m-shift');return false;" data-section="m-shift">Sentiment Shift</a>
+                    <a class="sidebar-link" href="#" onclick="nav('methodology');scrollToId('m-correlation');return false;" data-section="m-correlation">Correlation Analysis</a>
+                    <a class="sidebar-link" href="#" onclick="nav('methodology');scrollToId('m-signal');return false;" data-section="m-signal">Signal Strength</a>
+                    <a class="sidebar-link" href="#" onclick="nav('methodology');scrollToId('m-percentile');return false;" data-section="m-percentile">Shift Percentile</a>
+                    <a class="sidebar-link" href="#" onclick="nav('methodology');scrollToId('m-direction');return false;" data-section="m-direction">Momentum vs Contrarian</a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-label">Resources</div>
-                    <a class="sidebar-link" href="https://app.sentimentfx.org"
-                        target="_blank">Live Dashboard</a>
-                    <a class="sidebar-link"
-                        href="mailto:hello@sentimentfx.org">Support</a>
-                    <a class="sidebar-link"
-                        href="https://status.sentimentfx.org"
-                        target="_blank">Status</a>
+                    <a class="sidebar-link" href="https://app.sentimentfx.org" target="_blank">Live Dashboard</a>
+                    <a class="sidebar-link" href="mailto:hello@sentimentfx.org">Support</a>
+                    <a class="sidebar-link" href="https://status.sentimentfx.org" target="_blank">Status</a>
                 </div>
             </aside>
 
             <main class="content">
 
-                <!-- DASHBOARD -->
-                <div class="section active" id="section-dashboard">
-                    <h1>API Dashboard</h1>
-                    <p class="page-subtitle">MANAGE YOUR API KEY AND MONITOR
-                        USAGE</p>
-
-                    <!-- Step 1: no key yet -->
-                    <div id="no-key-state">
-                        <div class="notice">Enter your email to generate a free
-                            API key. Your first 100 calls are free — no card
-                            required.</div>
-                        <div class="card">
-                            <div class="card-header">
-                                <span class="card-title">Generate API Key</span>
-                                <span class="badge badge-free">Free</span>
-                            </div>
-                            <div class="form-row">
-                                <input class="form-input" type="email"
-                                    id="email-input"
-                                    placeholder="your@email.com" />
-                                <button class="btn-primary"
-                                    onclick="generateKey()">Get API Key</button>
-                            </div>
-                            <div class="msg" id="gen-msg"></div>
-                            <p style="font-size:12px;margin:0;">By generating a
-                                key you agree to our terms of use. After 100
-                                free calls, usage is billed at £0.01/call via
-                                Stripe.</p>
-                        </div>
-                        <p style="margin-top:16px;font-size:12px;">Already have
-                            a key? <a href="#"
-                                onclick="showLookup();return false;"
-                                style="color:var(--accent);">Look up your usage
-                                by email →</a></p>
-                    </div>
-
-                    <!-- Step 2: shown once immediately after generate/regenerate -->
-                    <div id="reveal-state" style="display:none;">
-                        <div class="notice notice-warn"
-                            style="margin-bottom:16px;">
-                            ⚠ Save your API key now — it will
-                            <strong>not</strong> be shown again. If you lose it,
-                            regenerate a new one.
-                        </div>
-                        <div class="card">
-                            <div class="card-header">
-                                <span class="card-title">Your New API Key</span>
-                                <span class="badge badge-pro">Active</span>
-                            </div>
-                            <div class="key-display">
-                                <span id="reveal-key-value"
-                                    style="color:var(--accent);"></span>
-                                <button class="copy-btn"
-                                    onclick="copyRevealKey()">Copy</button>
-                            </div>
-                            <p
-                                style="font-size:12px;color:var(--muted);margin:0 0 12px;">Pass
-                                this as the <code
-                                    style="color:var(--accent2);">X-API-Key</code>
-                                header in all requests.</p>
-                            <button class="btn-primary"
-                                onclick="dismissReveal()"
-                                style="background:var(--surface2);color:var(--muted);border:1px solid var(--border2);">I've
-                                saved it — continue</button>
-                        </div>
-                    </div>
-
-                    <!-- Step 3: ongoing dashboard — prefix + usage only -->
-                    <div id="key-state" style="display:none;">
-                        <div class="stats-row">
-                            <div class="stat-card">
-                                <div class="stat-label">Calls Used</div>
-                                <div class="stat-value" id="calls-used">—</div>
-                                <div class="stat-sub">Total lifetime</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">Free Remaining</div>
-                                <div class="stat-value" id="calls-free"
-                                    style="color:var(--positive);">—</div>
-                                <div class="stat-sub">Of 100 free calls</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">Status</div>
-                                <div class="stat-value"
-                                    style="font-size:14px;color:var(--positive);">ACTIVE</div>
-                                <div class="stat-sub">Key is valid</div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header">
-                                <span class="card-title">Your API Key</span>
-                                <span class="badge badge-pro">Active</span>
-                            </div>
-                            <div class="key-display">
-                                <span id="key-prefix" class="key-masked"></span>
-                                <span class="key-masked"
-                                    style="margin-left:4px;">••••••••••••••••••••••••••••••••</span>
-                            </div>
-                            <p
-                                style="font-size:12px;color:var(--muted);margin:0 0 12px;">Your
-                                full key was shown once when generated. Pass it
-                                as the <code
-                                    style="color:var(--accent2);">X-API-Key</code>
-                                header.</p>
-                            <button class="btn-primary"
-                                onclick="showRegenerate()"
-                                style="background:transparent;color:var(--negative);border:1px solid var(--negative);font-size:10px;">Regenerate
-                                Key</button>
-                        </div>
-                        <div class="notice notice-warn">After 100 free calls,
-                            usage is billed at £0.01 per call via Stripe. <a
-                                href="#" onclick="nav('pricing');return false;"
-                                style="color:var(--accent);">View pricing
-                                →</a></div>
-                    </div>
-
-                    <!-- Lookup by email — usage only, no key revealed -->
-                    <div id="lookup-state"
-                        style="display:none;margin-top:24px;">
-                        <div class="card">
-                            <div class="card-header"><span
-                                    class="card-title">Look Up Key
-                                    Info</span></div>
-                            <p
-                                style="font-size:12px;color:var(--muted);margin:0 0 12px;">Enter
-                                your email to see your key prefix and usage.
-                                Your full key is never retrievable — regenerate
-                                if lost.</p>
-                            <div class="form-row">
-                                <input class="form-input" type="email"
-                                    id="lookup-email"
-                                    placeholder="your@email.com" />
-                                <button class="btn-primary"
-                                    onclick="lookupKey()">Look Up</button>
-                            </div>
-                            <div class="msg" id="lookup-msg"></div>
-                        </div>
-                    </div>
-
-                    <!-- Regenerate confirm -->
-                    <div id="regen-state" style="display:none;margin-top:24px;">
-                        <div class="card">
-                            <div class="card-header"><span
-                                    class="card-title">Regenerate API
-                                    Key</span></div>
-                            <div class="notice notice-warn"
-                                style="margin-bottom:16px;">⚠ A reset link will
-                                be sent to your email. Your current key stays
-                                active until you confirm.</div>
-                            <div class="form-row">
-                                <input class="form-input" type="email"
-                                    id="regen-email"
-                                    placeholder="Confirm your email" />
-                                <button class="btn-primary"
-                                    onclick="requestRegenerate()"
-                                    style="background:var(--negative);color:#fff;">Send
-                                    Reset Link</button>
-                            </div>
-                            <div class="msg" id="regen-msg"></div>
-                            <button onclick="hideRegenerate()"
-                                style="background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:10px;cursor:pointer;margin-top:8px;">Cancel</button>
-                        </div>
-                    </div>
-
-                </div>
-
                 <!-- DOCS -->
-                <div class="section" id="section-docs">
+                <div class="section active" id="section-docs">
                     <h1>API Reference</h1>
-                    <p class="page-subtitle">BASE URL:
-                        HTTPS://API.SENTIMENTFX.ORG</p>
+                    <p class="page-subtitle">BASE URL: HTTPS://API.SENTIMENTFX.ORG</p>
+
+                    <!-- API key entry for testers -->
+                    <div class="key-bar">
+                        <span class="key-bar-label">API Key</span>
+                        <input class="key-bar-input" type="password" id="tester-api-key" placeholder="sfx_••••••••••••••••••••••••••••••••••••••••••••••••" oninput="saveKey(this.value)" autocomplete="off" />
+                        <span class="key-bar-hint">
+                            Get your key from the <a href="https://app.sentimentfx.org" target="_blank">dashboard → API Access</a>. Required by Pro and Data plans.
+                        </span>
+                    </div>
 
                     <div id="auth" class="scroll-section">
                         <h2>Authentication</h2>
-                        <p>All API endpoints require an API key passed as a
-                            request header. Generate your key on the <a href="#"
-                                onclick="nav('dashboard');return false;"
-                                style="color:var(--accent);">dashboard</a>.</p>
-                        <div class="notice">Include your API key in every
-                            request using the <code
-                                style="color:var(--accent2);">X-API-Key</code>
-                            header.</div>
+                        <p>All API endpoints require an API key passed as the <code style="color:var(--accent2);">X-API-Key</code> request header. Keys are tied to your SentimentFX account and are available on Pro and Data plans.</p>
+                        <div class="notice">
+                            Generate your API key from the <strong><a href="https://app.sentimentfx.org" target="_blank" style="color:var(--accent2);text-decoration:none;">dashboard → API Access section</a></strong>. Sign in at app.sentimentfx.org, then scroll to the API Access panel at the bottom of the page.
+                        </div>
+                        <table class="param-table" style="margin-bottom:20px;">
+                            <thead><tr><th>Plan</th><th>Included Calls/mo</th><th>Overage</th></tr></thead>
+                            <tbody>
+                                <tr><td style="color:var(--accent);">Pro</td><td>1,000</td><td>£0.01 / call via Stripe</td></tr>
+                                <tr><td style="color:var(--accent2);">Data</td><td>5,000</td><td>£0.01 / call via Stripe</td></tr>
+                            </tbody>
+                        </table>
                         <div class="code-label">Example Request</div>
                         <pre><span class="c-comment"># Curl</span>
 curl https://api.sentimentfx.org/v1/sentiment/BTC \
@@ -423,21 +198,15 @@ const res = await fetch(
                         <div class="endpoint">
                             <div class="endpoint-header">
                                 <span class="method">GET</span>
-                                <span class="endpoint-path">/v1/sentiment/<span
-                                        style="color:var(--accent);">{ticker}</span></span>
+                                <span class="endpoint-path">/v1/sentiment/<span style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns
-                                    sentiment-scored headlines for the specified
-                                    ticker. Default 25 headlines = 1 call. Every
-                                    additional 25 = 1 more call.</p>
+                                <p class="endpoint-desc">Returns sentiment-scored headlines for the specified ticker. Default 25 headlines = 1 call. Every additional 25 = 1 more call.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
-                                                ETH, SOL, XRP, or DOGE</td></tr>
-                                        <tr><td>limit</td><td>integer</td><td>25</td><td>Number
-                                                of headlines to return</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
+                                        <tr><td>limit</td><td>integer</td><td>25</td><td>Number of headlines to return</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -457,35 +226,20 @@ const res = await fetch(
 }</pre>
                                 <div class="tester" id="tester-sentiment">
                                     <div class="tester-title">▶ Try it</div>
-                                    <div class="tester-apikey-note"
-                                        id="tester-sentiment-note">Requires an
-                                        API key. <a
-                                            onclick="nav('dashboard');return false;">Get
-                                            one here →</a></div>
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
-                                        <select class="tester-select"
-                                            id="t-sentiment-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        <select class="tester-select" id="t-sentiment-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
                                         </select>
-                                        <span class="tester-label"
-                                            style="margin-left:8px;">Limit</span>
-                                        <input class="tester-input"
-                                            type="number" id="t-sentiment-limit"
-                                            value="25" min="1" max="500"
-                                            style="width:80px;">
-                                        <button class="tester-btn"
-                                            onclick="runTester('sentiment')">Send</button>
+                                        <span class="tester-label" style="margin-left:8px;">Limit</span>
+                                        <input class="tester-input" type="number" id="t-sentiment-limit" value="25" min="1" max="500" style="width:80px;">
+                                        <button class="tester-btn" onclick="runTester('sentiment')">Send</button>
                                     </div>
-                                    <div class="tester-result"
-                                        id="tester-sentiment-result">
+                                    <div class="tester-result" id="tester-sentiment-result">
                                         <div class="tester-meta">
-                                            <span
-                                                id="tester-sentiment-status"></span>
-                                            <span
-                                                id="tester-sentiment-time"></span>
-                                            <span
-                                                id="tester-sentiment-calls"></span>
+                                            <span id="tester-sentiment-status"></span>
+                                            <span id="tester-sentiment-time"></span>
+                                            <span id="tester-sentiment-calls"></span>
                                         </div>
                                         <pre id="tester-sentiment-output"></pre>
                                     </div>
@@ -499,20 +253,15 @@ const res = await fetch(
                         <div class="endpoint">
                             <div class="endpoint-header">
                                 <span class="method">GET</span>
-                                <span class="endpoint-path">/v1/summary/<span
-                                        style="color:var(--accent);">{ticker}</span></span>
+                                <span class="endpoint-path">/v1/summary/<span style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns daily averaged
-                                    sentiment scores. Default 30 days = 30
-                                    calls.</p>
+                                <p class="endpoint-desc">Returns daily averaged sentiment scores. Default 30 days = 30 calls.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
-                                                ETH, SOL, XRP, or DOGE</td></tr>
-                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number
-                                                of days of history</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
+                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number of days of history</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -531,35 +280,20 @@ const res = await fetch(
 }</pre>
                                 <div class="tester" id="tester-summary">
                                     <div class="tester-title">▶ Try it</div>
-                                    <div class="tester-apikey-note"
-                                        id="tester-summary-note">Requires an API
-                                        key. <a
-                                            onclick="nav('dashboard');return false;">Get
-                                            one here →</a></div>
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
-                                        <select class="tester-select"
-                                            id="t-summary-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        <select class="tester-select" id="t-summary-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
                                         </select>
-                                        <span class="tester-label"
-                                            style="margin-left:8px;">Days</span>
-                                        <input class="tester-input"
-                                            type="number" id="t-summary-days"
-                                            value="7" min="1" max="880"
-                                            style="width:80px;">
-                                        <button class="tester-btn"
-                                            onclick="runTester('summary')">Send</button>
+                                        <span class="tester-label" style="margin-left:8px;">Days</span>
+                                        <input class="tester-input" type="number" id="t-summary-days" value="7" min="1" max="880" style="width:80px;">
+                                        <button class="tester-btn" onclick="runTester('summary')">Send</button>
                                     </div>
-                                    <div class="tester-result"
-                                        id="tester-summary-result">
+                                    <div class="tester-result" id="tester-summary-result">
                                         <div class="tester-meta">
-                                            <span
-                                                id="tester-summary-status"></span>
-                                            <span
-                                                id="tester-summary-time"></span>
-                                            <span
-                                                id="tester-summary-calls"></span>
+                                            <span id="tester-summary-status"></span>
+                                            <span id="tester-summary-time"></span>
+                                            <span id="tester-summary-calls"></span>
                                         </div>
                                         <pre id="tester-summary-output"></pre>
                                     </div>
@@ -573,20 +307,15 @@ const res = await fetch(
                         <div class="endpoint">
                             <div class="endpoint-header">
                                 <span class="method">GET</span>
-                                <span class="endpoint-path">/v1/prices/<span
-                                        style="color:var(--accent);">{ticker}</span></span>
+                                <span class="endpoint-path">/v1/prices/<span style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns daily closing
-                                    prices in GBP. Default 30 days = 30
-                                    calls.</p>
+                                <p class="endpoint-desc">Returns daily closing prices in GBP (crypto) or exchange rate (FX pairs). Default 30 days = 30 calls.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
-                                                ETH, SOL, XRP, or DOGE</td></tr>
-                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number
-                                                of days of history</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
+                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number of days of history</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -604,35 +333,20 @@ const res = await fetch(
 }</pre>
                                 <div class="tester" id="tester-prices">
                                     <div class="tester-title">▶ Try it</div>
-                                    <div class="tester-apikey-note"
-                                        id="tester-prices-note">Requires an API
-                                        key. <a
-                                            onclick="nav('dashboard');return false;">Get
-                                            one here →</a></div>
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
-                                        <select class="tester-select"
-                                            id="t-prices-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        <select class="tester-select" id="t-prices-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
                                         </select>
-                                        <span class="tester-label"
-                                            style="margin-left:8px;">Days</span>
-                                        <input class="tester-input"
-                                            type="number" id="t-prices-days"
-                                            value="7" min="1" max="880"
-                                            style="width:80px;">
-                                        <button class="tester-btn"
-                                            onclick="runTester('prices')">Send</button>
+                                        <span class="tester-label" style="margin-left:8px;">Days</span>
+                                        <input class="tester-input" type="number" id="t-prices-days" value="7" min="1" max="880" style="width:80px;">
+                                        <button class="tester-btn" onclick="runTester('prices')">Send</button>
                                     </div>
-                                    <div class="tester-result"
-                                        id="tester-prices-result">
+                                    <div class="tester-result" id="tester-prices-result">
                                         <div class="tester-meta">
-                                            <span
-                                                id="tester-prices-status"></span>
-                                            <span
-                                                id="tester-prices-time"></span>
-                                            <span
-                                                id="tester-prices-calls"></span>
+                                            <span id="tester-prices-status"></span>
+                                            <span id="tester-prices-time"></span>
+                                            <span id="tester-prices-calls"></span>
                                         </div>
                                         <pre id="tester-prices-output"></pre>
                                     </div>
@@ -646,21 +360,14 @@ const res = await fetch(
                         <div class="endpoint">
                             <div class="endpoint-header">
                                 <span class="method">GET</span>
-                                <span
-                                    class="endpoint-path">/v1/correlation/<span
-                                        style="color:var(--accent);">{ticker}</span></span>
+                                <span class="endpoint-path">/v1/correlation/<span style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns the Pearson
-                                    correlation between sentiment shifts and
-                                    next-day price returns, with a 95%
-                                    confidence interval and signal strength
-                                    rating. Always 1 call.</p>
+                                <p class="endpoint-desc">Returns the Pearson correlation between sentiment shifts and next-day price returns, with a 95% confidence interval and signal strength rating. Always 1 call.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC,
-                                                ETH, SOL, XRP, or DOGE</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -680,62 +387,43 @@ const res = await fetch(
   <span class="c-key">"interpretation"</span>: <span class="c-str">"Sentiment shifts show a weak positive (momentum) signal (r=0.241, p=0.0241, n=87)"</span>
 }</pre>
                                 <div class="notice" style="margin-top:12px;">
-                                    <strong>Methodology:</strong> Correlates
-                                    daily sentiment <em>shifts</em> (deviation
-                                    from 7-day rolling average) against next-day
-                                    price returns over a 180-day window.
-                                    Strength is <code>strong</code> (p&lt;0.05,
-                                    |r|≥0.2), <code>weak</code> (p&lt;0.10,
-                                    |r|≥0.1), or <code>inconclusive</code>. CI
-                                    uses Fisher z-transform.
+                                    <strong>Methodology:</strong> Correlates daily sentiment <em>shifts</em> (deviation from 7-day rolling average) against next-day price returns over a 180-day window. Strength is <code>strong</code> (p&lt;0.05, |r|≥0.15), <code>weak</code> (p&lt;0.10, |r|≥0.08), or <code>inconclusive</code>. CI uses Fisher z-transform.
                                 </div>
                                 <div class="tester" id="tester-correlation">
                                     <div class="tester-title">▶ Try it</div>
-                                    <div class="tester-apikey-note"
-                                        id="tester-correlation-note">Requires an
-                                        API key. <a
-                                            onclick="nav('dashboard');return false;">Get
-                                            one here →</a></div>
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
-                                        <select class="tester-select"
-                                            id="t-correlation-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option>
+                                        <select class="tester-select" id="t-correlation-ticker">
+                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
                                         </select>
-                                        <button class="tester-btn"
-                                            style="margin-left:8px;"
-                                            onclick="runTester('correlation')">Send</button>
+                                        <button class="tester-btn" style="margin-left:8px;" onclick="runTester('correlation')">Send</button>
                                     </div>
-                                    <div class="tester-result"
-                                        id="tester-correlation-result">
+                                    <div class="tester-result" id="tester-correlation-result">
                                         <div class="tester-meta">
-                                            <span
-                                                id="tester-correlation-status"></span>
-                                            <span
-                                                id="tester-correlation-time"></span>
-                                            <span
-                                                id="tester-correlation-calls"></span>
+                                            <span id="tester-correlation-status"></span>
+                                            <span id="tester-correlation-time"></span>
+                                            <span id="tester-correlation-calls"></span>
                                         </div>
-                                        <pre
-                                            id="tester-correlation-output"></pre>
+                                        <pre id="tester-correlation-output"></pre>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <h2>Error Codes</h2>
-                    <table class="param-table">
-                        <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
-                        <tbody>
-                            <tr><td>401</td><td>Missing or invalid API
-                                    key</td></tr>
-                            <tr><td>404</td><td>No data found for
-                                    ticker</td></tr>
-                            <tr><td>429</td><td>Rate limit exceeded</td></tr>
-                            <tr><td>500</td><td>Server error</td></tr>
-                        </tbody>
-                    </table>
+                    <div id="errors" class="scroll-section">
+                        <h2>Error Codes</h2>
+                        <table class="param-table">
+                            <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+                            <tbody>
+                                <tr><td>401</td><td>Missing or invalid API key</td></tr>
+                                <tr><td>403</td><td>Plan does not include API access</td></tr>
+                                <tr><td>404</td><td>No data found for ticker</td></tr>
+                                <tr><td>429</td><td>Rate limit exceeded</td></tr>
+                                <tr><td>500</td><td>Server error</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- METHODOLOGY -->
@@ -794,8 +482,8 @@ const res = await fetch(
                         <table class="param-table">
                             <thead><tr><th>Label</th><th>Criteria</th><th>Meaning</th></tr></thead>
                             <tbody>
-                                <tr><td style="color:var(--positive)">Strong</td><td>|r| ≥ 0.3 and p &lt; 0.05</td><td>Meaningful effect with strong statistical evidence</td></tr>
-                                <tr><td style="color:var(--accent)">Weak</td><td>|r| ≥ 0.15 and p &lt; 0.1</td><td>Detectable effect but smaller or less certain</td></tr>
+                                <tr><td style="color:var(--positive)">Strong</td><td>|r| ≥ 0.15 and p &lt; 0.05</td><td>Meaningful effect with strong statistical evidence</td></tr>
+                                <tr><td style="color:var(--accent)">Weak</td><td>|r| ≥ 0.08 and p &lt; 0.10</td><td>Detectable effect but smaller or less certain</td></tr>
                                 <tr><td style="color:var(--muted)">Inconclusive</td><td>Neither above</td><td>Cannot rule out the result being due to chance</td></tr>
                             </tbody>
                         </table>
@@ -832,230 +520,24 @@ const res = await fetch(
                     </div>
                 </div>
 
-                <!-- PRICING -->
-                <div class="section" id="section-pricing">
-                    <h1>Pricing</h1>
-                    <p class="page-subtitle">SIMPLE, TRANSPARENT API PRICING</p>
-                    <div class="pricing-grid">
-                        <div class="pricing-card">
-                            <div class="pricing-tier">Free</div>
-                            <div class="pricing-price">£0 <span>/
-                                    month</span></div>
-                            <p class="pricing-desc">Get started with no card
-                                required. Perfect for prototyping and
-                                exploration.</p>
-                            <ul class="pricing-features">
-                                <li>100 free API calls</li>
-                                <li>All 5 tickers</li>
-                                <li>All endpoints</li>
-                                <li>No expiry on free calls</li>
-                            </ul>
-                        </div>
-                        <div class="pricing-card featured">
-                            <div class="pricing-tier"
-                                style="color:var(--accent);">Pay As You Go</div>
-                            <div class="pricing-price"
-                                style="color:var(--accent);">£0.01 <span>/
-                                    call</span></div>
-                            <p class="pricing-desc">After your 100 free calls,
-                                usage is billed per call at the end of each
-                                month via Stripe.</p>
-                            <ul class="pricing-features">
-                                <li>£0.01 per API call</li>
-                                <li>Billed monthly via Stripe</li>
-                                <li>No monthly minimum</li>
-                                <li>Cancel anytime</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="notice">
-                        1,000 calls/month = £10 · 10,000 calls/month = £100 · No
-                        setup fees or hidden charges.
-                    </div>
-                    <h2>How calls are counted</h2>
-                    <table class="param-table">
-                        <thead><tr><th>Endpoint</th><th>Calls
-                                    Used</th></tr></thead>
-                        <tbody>
-                            <tr><td>/v1/sentiment/{ticker}</td><td>ceil(limit /
-                                    25) — default 1 call for 25
-                                    headlines</td></tr>
-                            <tr><td>/v1/summary/{ticker}</td><td>1 call per day
-                                    returned — default 30 calls</td></tr>
-                            <tr><td>/v1/prices/{ticker}</td><td>1 call per day
-                                    returned — default 30 calls</td></tr>
-                            <tr><td>/v1/correlation/{ticker}</td><td>Always 1
-                                    call</td></tr>
-                        </tbody>
-                    </table>
-                    <h2>Supported Tickers</h2>
-                    <table class="param-table">
-                        <thead><tr><th>Ticker</th><th>Asset</th><th>Available
-                                    Endpoints</th></tr></thead>
-                        <tbody>
-                            <tr><td>BTC</td><td>Bitcoin</td><td>sentiment,
-                                    summary, prices, correlation</td></tr>
-                            <tr><td>ETH</td><td>Ethereum</td><td>sentiment,
-                                    summary, prices, correlation</td></tr>
-                            <tr><td>SOL</td><td>Solana</td><td>sentiment,
-                                    summary, prices, correlation</td></tr>
-                            <tr><td>XRP</td><td>XRP</td><td>sentiment, summary,
-                                    prices, correlation</td></tr>
-                            <tr><td>DOGE</td><td>Dogecoin</td><td>sentiment,
-                                    summary, prices, correlation</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
             </main>
         </div>
 
         <script>
-const API = 'https://api.sentimentfx.org'
-let currentKey = null  // only set during reveal window, cleared on dismiss
+const API_BASE = 'https://api.sentimentfx.org'
+let currentKey = sessionStorage.getItem('sfx_tester_key') || ''
 
-function showMsg(id, text, type) {
-    const el = document.getElementById(id)
-    el.textContent = text
-    el.className = 'msg ' + type + ' show'
+// Restore key from session
+window.addEventListener('DOMContentLoaded', () => {
+    if (currentKey) document.getElementById('tester-api-key').value = currentKey
+    initScrollSpy()
+})
+
+function saveKey(val) {
+    currentKey = val.trim()
+    sessionStorage.setItem('sfx_tester_key', currentKey)
 }
 
-function hideAll() {
-    ['no-key-state','reveal-state','key-state','lookup-state','regen-state'].forEach(id => {
-        document.getElementById(id).style.display = 'none'
-    })
-}
-
-function showReveal(key) {
-    hideAll()
-    currentKey = key
-    document.getElementById('reveal-key-value').textContent = key
-    document.getElementById('reveal-state').style.display = 'block'
-}
-
-function dismissReveal() {
-    currentKey = null
-    hideAll()
-    document.getElementById('no-key-state').style.display = 'block'
-}
-
-function showKeyState(prefix, callsUsed) {
-    hideAll()
-    document.getElementById('key-state').style.display = 'block'
-    document.getElementById('key-prefix').textContent = prefix
-    document.getElementById('calls-used').textContent = callsUsed ?? 0
-    const free = Math.max(0, 100 - (callsUsed ?? 0))
-    document.getElementById('calls-free').textContent = free
-    document.getElementById('calls-free').style.color = free > 0 ? 'var(--positive)' : 'var(--negative)'
-}
-
-function showLookup() {
-    document.getElementById('lookup-state').style.display = 'block'
-}
-
-function showRegenerate() {
-    document.getElementById('regen-state').style.display = 'block'
-}
-
-function hideRegenerate() {
-    document.getElementById('regen-state').style.display = 'none'
-}
-
-async function generateKey() {
-    const email = document.getElementById('email-input').value.trim()
-    if (!email) return showMsg('gen-msg', 'Please enter your email.', 'error')
-    const btn = event.target
-    btn.disabled = true; btn.textContent = '...'
-    try {
-        const res = await fetch(API + '/api/keys/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        })
-        const data = await res.json()
-        if (res.status === 409) {
-            showMsg('gen-msg', 'A key already exists for this email. Use the lookup below to see your usage, or regenerate.', 'error')
-        } else if (data.key) {
-            showReveal(data.key)
-        } else {
-            showMsg('gen-msg', data.detail || 'Something went wrong.', 'error')
-        }
-    } catch (e) {
-        showMsg('gen-msg', 'Failed to connect to API.', 'error')
-    }
-    btn.disabled = false; btn.textContent = 'Get API Key'
-}
-
-async function lookupKey() {
-    const email = document.getElementById('lookup-email').value.trim()
-    if (!email) return showMsg('lookup-msg', 'Please enter your email.', 'error')
-    const btn = event.target
-    btn.disabled = true; btn.textContent = '...'
-    try {
-        const res = await fetch(API + '/api/keys/info?email=' + encodeURIComponent(email))
-        const data = await res.json()
-        if (res.ok) {
-            showKeyState(data.prefix, data.calls_used)
-        } else {
-            showMsg('lookup-msg', data.detail || 'No key found for this email.', 'error')
-        }
-    } catch (e) {
-        showMsg('lookup-msg', 'Failed to connect to API.', 'error')
-    }
-    btn.disabled = false; btn.textContent = 'Look Up'
-}
-
-async function requestRegenerate() {
-    const email = document.getElementById('regen-email').value.trim()
-    if (!email) return showMsg('regen-msg', 'Please enter your email.', 'error')
-    const btn = event.target
-    btn.disabled = true; btn.textContent = '...'
-    try {
-        const res = await fetch(API + '/api/keys/regenerate/request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        })
-        const data = await res.json()
-        showMsg('regen-msg', data.message || 'Reset link sent. Check your email.', 'success')
-    } catch (e) {
-        showMsg('regen-msg', 'Failed to connect to API.', 'error')
-    }
-    btn.disabled = false; btn.textContent = 'Send Reset Link'
-}
-
-async function handleResetToken(token) {
-    try {
-        const res = await fetch(API + '/api/keys/regenerate/confirm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
-        })
-        const data = await res.json()
-        if (data.key) {
-            showReveal(data.key)
-        } else {
-            hideAll()
-            document.getElementById('no-key-state').style.display = 'block'
-            showMsg('gen-msg', data.detail || 'Invalid or expired reset link.', 'error')
-        }
-    } catch (e) {
-        console.error('Reset confirm error:', e)
-    }
-    // Clean URL
-    window.history.replaceState({}, '', window.location.pathname)
-}
-
-function copyRevealKey() {
-    if (!currentKey) return
-    navigator.clipboard.writeText(currentKey).then(() => {
-        const btn = document.querySelector('#reveal-state .copy-btn')
-        btn.textContent = 'Copied!'
-        setTimeout(() => btn.textContent = 'Copy', 1500)
-    })
-}
-
-// NAV
 function nav(section) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
     document.getElementById('section-' + section).classList.add('active')
@@ -1065,7 +547,7 @@ function nav(section) {
     document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('active'))
     const sideEl = document.getElementById('side-' + section)
     if (sideEl) sideEl.classList.add('active')
-    if (section === 'docs' || section === 'methodology') initScrollSpy()
+    initScrollSpy()
 }
 
 function scrollToId(id) {
@@ -1092,10 +574,11 @@ function initScrollSpy() {
     sections.forEach(s => observer.observe(s))
 }
 
-// TESTER
 async function runTester(endpoint) {
     if (!currentKey) {
-        alert('Generate an API key on the Dashboard first.')
+        document.getElementById('tester-api-key').focus()
+        document.getElementById('tester-api-key').style.borderColor = 'var(--negative)'
+        setTimeout(() => document.getElementById('tester-api-key').style.borderColor = '', 2000)
         return
     }
     const resultEl = document.getElementById('tester-' + endpoint + '-result')
@@ -1107,7 +590,7 @@ async function runTester(endpoint) {
     btn.disabled = true; btn.textContent = '...'
 
     const ticker = document.getElementById('t-' + endpoint + '-ticker').value
-    let url = API + '/v1/' + endpoint + '/' + ticker
+    let url = API_BASE + '/v1/' + endpoint + '/' + ticker
 
     if (endpoint === 'sentiment') url += '?limit=' + document.getElementById('t-sentiment-limit').value
     else if (endpoint === 'summary') url += '?days=' + document.getElementById('t-summary-days').value
@@ -1131,12 +614,6 @@ async function runTester(endpoint) {
         resultEl.classList.add('show')
     }
     btn.disabled = false; btn.textContent = 'Send'
-}
-// Handle reset token from email link
-const params = new URLSearchParams(window.location.search)
-const resetToken = params.get('reset')
-if (resetToken) {
-    handleResetToken(resetToken)
 }
         </script>
     </body>

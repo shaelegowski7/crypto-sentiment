@@ -1470,6 +1470,102 @@ async def get_key_info(request: Request, db: Session = Depends(get_db)):
     }
 
 
+@app.post("/api/keys/generate-linked")
+async def generate_linked_api_key(db: Session = Depends(get_db), user=Depends(require_pro)):
+    """Generate an API key linked to the authenticated Supabase user."""
+    email = user.email
+    if not email:
+        raise HTTPException(status_code=400, detail="No email on account")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="A key already exists for this account."
+        )
+
+    try:
+        from supabase import create_client
+        supabase_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+        profile = supabase_client.table("profiles").select("tier").eq("id", user.id).single().execute()
+        tier = profile.data.get("tier", "free")
+    except Exception:
+        tier = "pro"
+
+    allowance_map = {"pro": 1000, "data": 5000}
+    monthly_allowance = allowance_map.get(tier, 1000)
+
+    stripe_customer_id, stripe_subscription_id = _create_stripe_customer(email)
+
+    key = _make_key()
+    api_key = models.APIKey(
+        key=key,
+        key_hash=_hash_key(key),
+        key_prefix=key[:12],
+        email=email,
+        stripe_customer_id=stripe_customer_id,
+        stripe_subscription_id=stripe_subscription_id,
+        monthly_allowance=monthly_allowance,
+    )
+    db.add(api_key)
+    db.commit()
+
+    return {
+        "key": key,
+        "prefix": key[:12],
+        "message": "API key generated. Save this key — it will not be shown again."
+    }
+
+
+@app.get("/api/keys/me")
+async def get_my_key_info(db: Session = Depends(get_db), user=Depends(require_pro)):
+    """Return API key info for the authenticated user (no full key)."""
+    email = user.email
+    if not email:
+        raise HTTPException(status_code=400, detail="No email on account")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+    if not existing:
+        return {"has_key": False}
+
+    total_allowance = existing.free_calls + existing.monthly_allowance
+    return {
+        "has_key": True,
+        "prefix": existing.key_prefix,
+        "calls_used": existing.calls_used,
+        "calls_this_month": existing.calls_this_month,
+        "free_calls": existing.free_calls,
+        "monthly_allowance": existing.monthly_allowance,
+        "total_monthly": total_allowance,
+        "active": existing.active,
+    }
+
+
+@app.post("/api/keys/regenerate-linked")
+async def regenerate_linked_api_key(db: Session = Depends(get_db), user=Depends(require_pro)):
+    """Regenerate the API key for the authenticated user."""
+    email = user.email
+    if not email:
+        raise HTTPException(status_code=400, detail="No email on account")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="No key found. Generate one first.")
+
+    new_key = _make_key()
+    existing.key = new_key
+    existing.key_hash = _hash_key(new_key)
+    existing.key_prefix = new_key[:12]
+    existing.active = True
+    db.commit()
+
+    return {
+        "key": new_key,
+        "prefix": new_key[:12],
+        "message": "Key regenerated. Your old key is now invalid. Save this key — it will not be shown again."
+    }
+
+
 # ---------------------------------------------------------------------------
 # Usage tracking
 # ---------------------------------------------------------------------------
