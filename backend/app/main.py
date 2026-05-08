@@ -151,6 +151,14 @@ app.add_middleware(
 
 TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY"]
 
+# Stripe price IDs for Data tier — replace with real IDs after creating in Stripe
+DATA_PRICE_IDS = {
+    "price_1TUqVG2NzVdYK0wrKrPTE28e",
+    "price_1TUqVx2NzVdYK0wryheortJg",
+}
+PRO_MONTHLY_ALLOWANCE = 1000
+DATA_MONTHLY_ALLOWANCE = 5000
+
 
 # ---------------------------------------------------------------------------
 # API key helpers
@@ -426,8 +434,21 @@ scheduler.add_job(
     id="morning_brief",
     replace_existing=True,
 )
+def reset_monthly_api_usage():
+    db = SessionLocal()
+    try:
+        db.query(models.APIKey).update({"calls_this_month": 0})
+        db.commit()
+        print("[SCHEDULER] Monthly API usage reset complete")
+    except Exception as e:
+        print(f"[SCHEDULER] Monthly reset error: {e}")
+    finally:
+        db.close()
+
+
 scheduler.add_job(scrape_all, CronTrigger(minute=0))
-scheduler.add_job(refresh_subscription_gauge, CronTrigger(minute=30))  # refresh sub gauge every hour at :30
+scheduler.add_job(refresh_subscription_gauge, CronTrigger(minute=30))
+scheduler.add_job(reset_monthly_api_usage, CronTrigger(day=1, hour=0, minute=0, timezone="UTC"))
 scheduler.start()
 
 
@@ -1224,12 +1245,14 @@ def delete_alert(alert_id: int, db: Session = Depends(get_db), user=Depends(requ
 
 @app.post("/create-checkout-session")
 def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
+    tier = "data" if price_id in DATA_PRICE_IDS else "pro"
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
             allow_promotion_codes=True,
+            metadata={"tier": tier},
             success_url="https://app.sentimentfx.org?success=true",
             cancel_url="https://app.sentimentfx.org?cancelled=true",
         )
@@ -1274,8 +1297,18 @@ async def stripe_webhook(request: Request):
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         customer_email = session["customer_details"]["email"]
+        tier = session.get("metadata", {}).get("tier", "pro")
         if customer_email:
-            supabase_client.table("profiles").update({"tier": "pro"}).eq("email", customer_email).execute()
+            supabase_client.table("profiles").update({"tier": tier}).eq("email", customer_email).execute()
+            allowance = DATA_MONTHLY_ALLOWANCE if tier == "data" else PRO_MONTHLY_ALLOWANCE
+            webhook_db = SessionLocal()
+            try:
+                api_key = webhook_db.query(models.APIKey).filter(models.APIKey.email == customer_email).first()
+                if api_key:
+                    api_key.monthly_allowance = allowance
+                    webhook_db.commit()
+            finally:
+                webhook_db.close()
         refresh_subscription_gauge()
 
     elif event["type"] == "customer.subscription.deleted":
@@ -1445,9 +1478,11 @@ async def get_key_info(request: Request, db: Session = Depends(get_db)):
 
 def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: str = "unknown"):
     api_key.calls_used += count
+    api_key.calls_this_month += count
     API_CALLS.labels(endpoint=endpoint).inc(count)
 
-    if api_key.calls_used > api_key.free_calls and api_key.stripe_customer_id:
+    total_allowance = api_key.free_calls + api_key.monthly_allowance
+    if api_key.calls_this_month > total_allowance and api_key.stripe_customer_id:
         try:
             stripe.billing.MeterEvent.create(
                 event_name="api_call",

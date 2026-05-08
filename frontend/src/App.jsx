@@ -2364,7 +2364,7 @@ export default function App() {
           {isLoggedIn && !isPro && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all tickers including EUR/USD, GBP/USD and USD/JPY, full history, API access and alerts.
+                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all tickers including EUR/USD, GBP/USD and USD/JPY, full history, 1,000 API calls/mo, alerts and morning brief.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw")}>
@@ -2372,6 +2372,22 @@ export default function App() {
                 </button>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0K2NzVdYK0wrcGf1mz1s")}>
                   £99.99 / yr
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isPro && !isData && (
+            <div className="upgrade-banner" style={{ borderColor: "rgba(88,166,255,0.3)", background: "rgba(88,166,255,0.04)" }}>
+              <span className="upgrade-text">
+                <strong style={{ color: "var(--accent2)" }}>Pro plan active.</strong> Upgrade to Data for 5,000 API calls/mo included.
+              </span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TUqVG2NzVdYK0wrKrPTE28e")}>
+                  £49.99 / mo
+                </button>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TUqVx2NzVdYK0wryheortJg")}>
+                  £499.99 / yr
                 </button>
               </div>
             </div>

@@ -57,7 +57,9 @@ class APIKey(Base):
     stripe_customer_id = Column(String, nullable=True)
     stripe_subscription_id = Column(String, nullable=True)
     calls_used = Column(Integer, default=0)
+    calls_this_month = Column(Integer, default=0)
     free_calls = Column(Integer, default=100)
+    monthly_allowance = Column(Integer, default=0)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
