@@ -52,13 +52,16 @@ def fetch_ticker_data(db_session, ticker: str) -> dict:
     if current_price and prev_price and prev_price != 0:
         price_change_pct = round((current_price - prev_price) / prev_price * 100, 2)
 
-    # Top headline: highest absolute sentiment score in last 24h
+    # Top headline: highest absolute sentiment score in last 24h, fall back to 7d
+    since_7d = now - timedelta(days=7)
     headline_result = db_session.execute(text("""
         SELECT title, url, sentiment_score FROM headlines
-        WHERE ticker = :ticker AND published_at >= :since
-        ORDER BY ABS(sentiment_score) DESC
+        WHERE ticker = :ticker AND published_at >= :since_7d
+        ORDER BY
+            CASE WHEN published_at >= :since THEN 0 ELSE 1 END,
+            ABS(sentiment_score) DESC
         LIMIT 1
-    """), {"ticker": ticker, "since": since}).fetchone()
+    """), {"ticker": ticker, "since": since, "since_7d": since_7d}).fetchone()
 
     top_headline = None
     if headline_result:
