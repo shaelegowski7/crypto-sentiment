@@ -137,6 +137,8 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     class="active" id="nav-dashboard">Dashboard</a>
                 <a href="#" onclick="nav('docs');return false;"
                     id="nav-docs">Docs</a>
+                <a href="#" onclick="nav('methodology');return false;"
+                    id="nav-methodology">Methodology</a>
                 <a href="#" onclick="nav('pricing');return false;"
                     id="nav-pricing">Pricing</a>
                 <a href="https://app.sentimentfx.org" class="topbar-cta">Live
@@ -172,6 +174,27 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     <a class="sidebar-link" href="#"
                         onclick="nav('docs');scrollToId('correlation');return false;"
                         data-section="correlation">Correlation</a>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Methodology</div>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('methodology');scrollToId('m-scoring');return false;"
+                        id="side-methodology" data-section="m-scoring">Sentiment Scoring</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('methodology');scrollToId('m-shift');return false;"
+                        data-section="m-shift">Sentiment Shift</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('methodology');scrollToId('m-correlation');return false;"
+                        data-section="m-correlation">Correlation Analysis</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('methodology');scrollToId('m-signal');return false;"
+                        data-section="m-signal">Signal Strength</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('methodology');scrollToId('m-percentile');return false;"
+                        data-section="m-percentile">Shift Percentile</a>
+                    <a class="sidebar-link" href="#"
+                        onclick="nav('methodology');scrollToId('m-direction');return false;"
+                        data-section="m-direction">Momentum vs Contrarian</a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-label">Resources</div>
@@ -708,6 +731,100 @@ const res = await fetch(
                     </table>
                 </div>
 
+                <!-- METHODOLOGY -->
+                <div class="section" id="section-methodology">
+                    <h1>Methodology</h1>
+                    <p class="page-subtitle">HOW SENTIMENTFX SCORES, ANALYSES, AND SIGNALS</p>
+
+                    <div id="m-scoring" class="scroll-section">
+                        <h2>Sentiment Scoring</h2>
+                        <p>Every headline is scored using <strong style="color:var(--text)">FinBERT</strong>, a BERT-based transformer model fine-tuned on financial news. The model outputs three probabilities: positive, negative, and neutral.</p>
+                        <p>We compute the score as:</p>
+                        <pre>score = positive_probability − negative_probability</pre>
+                        <p>This gives a value in the range <span style="color:var(--positive)">−1.0</span> to <span style="color:var(--positive)">+1.0</span>, where +1 is maximally positive, −1 is maximally negative, and 0 is neutral. We deliberately exclude the neutral label from the score — only the relative weight of positive vs negative drives it.</p>
+                        <p>The daily sentiment figure shown on the dashboard is the mean score across all headlines published for that ticker on that day.</p>
+                        <table class="param-table" style="margin-top:16px;">
+                            <thead><tr><th>Score Range</th><th>Label</th></tr></thead>
+                            <tbody>
+                                <tr><td>&gt; +0.3</td><td>Strongly Bullish</td></tr>
+                                <tr><td>+0.1 to +0.3</td><td>Bullish</td></tr>
+                                <tr><td>−0.1 to +0.1</td><td>Neutral</td></tr>
+                                <tr><td>−0.3 to −0.1</td><td>Bearish</td></tr>
+                                <tr><td>&lt; −0.3</td><td>Strongly Bearish</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="m-shift" class="scroll-section">
+                        <h2>Sentiment Shift</h2>
+                        <p>Raw sentiment level is a lagging, noisy signal — markets tend to price in known information quickly. What is more useful is the <strong style="color:var(--text)">change</strong> in sentiment relative to recent baseline.</p>
+                        <p>We define the daily sentiment shift as:</p>
+                        <pre>shift = today's sentiment − 7-day rolling average</pre>
+                        <p>A positive shift means today's news is meaningfully more positive than the recent norm. A negative shift means the tone has deteriorated relative to baseline. This is the primary input to the correlation and signal models.</p>
+                        <p>The <strong style="color:var(--text)">7-Day Trend</strong> shown on the dashboard compares the average sentiment of the last 7 days to the 7 days before that — a broader directional indicator separate from the daily shift.</p>
+                    </div>
+
+                    <div id="m-correlation" class="scroll-section">
+                        <h2>Correlation Analysis</h2>
+                        <p>We compute a <strong style="color:var(--text)">Pearson correlation</strong> between daily sentiment shifts and the <em>next-day</em> price return (close-to-close in GBP) over a rolling 180-day window. A minimum of 30 overlapping data points is required to return a result.</p>
+                        <pre>r = corr(sentiment_shift[d], price_return[d+1])</pre>
+                        <p>The result includes:</p>
+                        <table class="param-table">
+                            <thead><tr><th>Field</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td>correlation (r)</td><td>Pearson r. Range −1 to +1. Closer to ±1 = stronger relationship.</td></tr>
+                                <tr><td>p_value</td><td>Probability the result is due to chance. &lt;0.05 = statistically significant.</td></tr>
+                                <tr><td>ci_95</td><td>95% confidence interval via Fisher z-transform. Narrower = more reliable.</td></tr>
+                                <tr><td>sample_size (n)</td><td>Number of overlapping trading days used in the calculation.</td></tr>
+                            </tbody>
+                        </table>
+                        <p>We also compute a momentum baseline (autocorrelation of price returns) to test whether the sentiment signal adds value beyond simple price momentum. <code style="color:var(--accent2)">primary_beats_momentum: true</code> means it does.</p>
+                    </div>
+
+                    <div id="m-signal" class="scroll-section">
+                        <h2>Signal Strength</h2>
+                        <p>Signal strength reflects the statistical reliability of the historical sentiment-price correlation model for a given ticker — not the size of today's specific shift.</p>
+                        <table class="param-table">
+                            <thead><tr><th>Label</th><th>Criteria</th><th>Meaning</th></tr></thead>
+                            <tbody>
+                                <tr><td style="color:var(--positive)">Strong</td><td>|r| ≥ 0.3 and p &lt; 0.05</td><td>Meaningful effect with strong statistical evidence</td></tr>
+                                <tr><td style="color:var(--accent)">Weak</td><td>|r| ≥ 0.15 and p &lt; 0.1</td><td>Detectable effect but smaller or less certain</td></tr>
+                                <tr><td style="color:var(--muted)">Inconclusive</td><td>Neither above</td><td>Cannot rule out the result being due to chance</td></tr>
+                            </tbody>
+                        </table>
+                        <p>Tickers with fewer headlines (SOL, XRP, DOGE) are more likely to show inconclusive results simply because there is less data to work with. More data → narrower confidence intervals → stronger conclusions.</p>
+                        <div class="notice notice-warn" style="margin-top:16px;">Correlation is not causation. Signal strength tells you how consistent the historical relationship has been — it does not guarantee future price moves.</div>
+                    </div>
+
+                    <div id="m-percentile" class="scroll-section">
+                        <h2>Shift Percentile</h2>
+                        <p>The shift percentile ranks today's sentiment shift against all historical daily shifts for that ticker over the last 180 days.</p>
+                        <table class="param-table">
+                            <thead><tr><th>Percentile</th><th>Label</th><th>Meaning</th></tr></thead>
+                            <tbody>
+                                <tr><td>≥ 90th</td><td>Extreme</td><td>Larger than 90% of all recorded shifts — rare</td></tr>
+                                <tr><td>75th – 89th</td><td>Significant</td><td>Top quartile of historical shifts</td></tr>
+                                <tr><td>50th – 74th</td><td>Moderate</td><td>Above-median shift</td></tr>
+                                <tr><td>&lt; 50th</td><td>Minor</td><td>Below-median — normal day-to-day noise</td></tr>
+                            </tbody>
+                        </table>
+                        <p>A high shift percentile means today's sentiment move is unusually large relative to history — which, combined with a reliable signal model, increases confidence in the direction. A minor shift in isolation has limited predictive value even if the historical correlation is strong.</p>
+                    </div>
+
+                    <div id="m-direction" class="scroll-section">
+                        <h2>Momentum vs Contrarian</h2>
+                        <p>The direction label describes how sentiment shifts have historically related to price moves for a given ticker.</p>
+                        <table class="param-table">
+                            <thead><tr><th>Label</th><th>r sign</th><th>Meaning</th></tr></thead>
+                            <tbody>
+                                <tr><td style="color:var(--positive)">Momentum</td><td>Positive (+)</td><td>Positive sentiment shifts tend to be followed by price rises. Negative shifts tend to be followed by drops.</td></tr>
+                                <tr><td style="color:var(--negative)">Contrarian</td><td>Negative (−)</td><td>Positive sentiment shifts tend to be followed by price drops — the market may already have priced in the optimism. Negative shifts may precede rebounds.</td></tr>
+                            </tbody>
+                        </table>
+                        <p>Neither direction is inherently better — both can be traded if the correlation is strong enough. The direction is determined purely by the sign of the Pearson r value over the analysis window.</p>
+                    </div>
+                </div>
+
                 <!-- PRICING -->
                 <div class="section" id="section-pricing">
                     <h1>Pricing</h1>
@@ -941,7 +1058,7 @@ function nav(section) {
     document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('active'))
     const sideEl = document.getElementById('side-' + section)
     if (sideEl) sideEl.classList.add('active')
-    if (section === 'docs') initScrollSpy()
+    if (section === 'docs' || section === 'methodology') initScrollSpy()
 }
 
 function scrollToId(id) {

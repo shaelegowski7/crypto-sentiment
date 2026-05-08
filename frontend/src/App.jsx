@@ -270,6 +270,41 @@ function DivergenceCard({ data, loading }) {
   )
 }
 
+// ─── Info tooltip ──────────────────────────────────────────────────────────
+
+function InfoTip({ text }) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", marginLeft: "4px" }}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+    >
+      <span style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: "12px", height: "12px", borderRadius: "50%",
+        border: "1px solid var(--border2)", color: "var(--muted)",
+        fontFamily: "var(--mono)", fontSize: "8px", cursor: "help",
+        lineHeight: 1, userSelect: "none", flexShrink: 0,
+      }}>?</span>
+      {visible && (
+        <span style={{
+          position: "absolute", bottom: "calc(100% + 8px)", left: "50%",
+          transform: "translateX(-50%)",
+          background: "var(--surface2)", border: "1px solid var(--border)",
+          borderRadius: "4px", padding: "10px 12px",
+          fontSize: "12px", fontFamily: "var(--sans)", color: "var(--text)",
+          lineHeight: "1.55", width: "230px",
+          zIndex: 300, pointerEvents: "none",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+        }}>
+          {text}
+        </span>
+      )}
+    </span>
+  )
+}
+
 // ─── Strength meter bar ────────────────────────────────────────────────────
 
 function StrengthMeter({ strength }) {
@@ -394,23 +429,31 @@ function TodaysSignalCard({ signal, trend, loading }) {
             {signal.direction}
           </span>
           {signal.isMomentum !== null && signal.strength !== "inconclusive" && (
-            <span style={{
-              fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
-              padding: "2px 8px", borderRadius: "2px",
-              background: "var(--surface2)", color: "var(--muted)",
-              border: "1px solid var(--border2)",
-            }}>
-              {signal.isMomentum ? "MOMENTUM" : "CONTRARIAN"}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span style={{
+                fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
+                padding: "2px 8px", borderRadius: "2px",
+                background: "var(--surface2)", color: "var(--muted)",
+                border: "1px solid var(--border2)",
+              }}>
+                {signal.isMomentum ? "MOMENTUM" : "CONTRARIAN"}
+              </span>
+              <InfoTip text={signal.isMomentum
+                ? "Positive sentiment shifts have historically preceded price rises for this ticker."
+                : "Positive sentiment shifts have historically preceded price drops — the market may have already priced the news in."} />
             </span>
           )}
           {signal.beatsMomentum === true && signal.strength !== "inconclusive" && (
-            <span style={{
-              fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
-              padding: "2px 8px", borderRadius: "2px",
-              background: "rgba(63,185,80,0.1)", color: "var(--positive)",
-              border: "1px solid rgba(63,185,80,0.3)",
-            }}>
-              BEATS BASELINE
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span style={{
+                fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
+                padding: "2px 8px", borderRadius: "2px",
+                background: "rgba(63,185,80,0.1)", color: "var(--positive)",
+                border: "1px solid rgba(63,185,80,0.3)",
+              }}>
+                BEATS BASELINE
+              </span>
+              <InfoTip text="The sentiment signal has historically outperformed a simple price momentum strategy over the last 180 days." />
             </span>
           )}
         </div>
@@ -428,8 +471,9 @@ function TodaysSignalCard({ signal, trend, loading }) {
       {/* Bottom row: score + trend + correlation */}
       <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start", borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
         <div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
             Sentiment Score
+            <InfoTip text="Average FinBERT score across today's headlines. Ranges from -1 (very negative) to +1 (very positive). Scored using a financial-domain AI model." />
           </div>
           <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: dc.text, lineHeight: 1 }}>
             {signal.score > 0 ? "+" : ""}{signal.score}
@@ -442,8 +486,9 @@ function TodaysSignalCard({ signal, trend, loading }) {
         <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
 
         <div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
             7-Day Trend
+            <InfoTip text="Average sentiment over the last 7 days vs the 7 days before that. Shows whether the overall news tone is improving or deteriorating." />
           </div>
           <TrendArrow trend={trend} />
         </div>
@@ -452,8 +497,9 @@ function TodaysSignalCard({ signal, trend, loading }) {
           <>
             <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
             <div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
                 Correlation (r)
+                <InfoTip text="Pearson correlation between daily sentiment shifts and next-day price returns over the last 180 days. +1 = perfect positive link, -1 = perfect inverse link, 0 = no relationship." />
               </div>
               <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: "var(--accent2)", lineHeight: 1 }}>
                 {signal.correlation > 0 ? "+" : ""}{signal.correlation}
@@ -469,8 +515,9 @@ function TodaysSignalCard({ signal, trend, loading }) {
           <>
             <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
             <div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px" }}>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
                 Shift Percentile
+                <InfoTip text="How large today's sentiment shift is compared to all historical daily shifts. 90th percentile = larger move than 90% of recorded days. Higher = rarer, potentially more significant." />
               </div>
               <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: signal.shiftPercentile >= 75 ? "var(--accent)" : "var(--muted)", lineHeight: 1 }}>
                 {signal.shiftPercentile}th
