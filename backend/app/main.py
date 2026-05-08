@@ -1081,59 +1081,70 @@ def run_backfill(ticker: str, days: int, offset: int):
     query = TICKER_QUERIES.get(ticker.upper())
     if not query:
         print(f"Backfill: unknown ticker {ticker}")
+        db.close()
         return
 
     saved = 0
     start_date = datetime.utcnow() - timedelta(days=offset + days)
 
-    for i in range(days):
-        from_date = (start_date + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        to_date = (start_date + timedelta(days=i+1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        for i in range(days):
+            from_date = (start_date + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            to_date = (start_date + timedelta(days=i+1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        params = {
-            "q": query,
-            "lang": "en",
-            "max": 25,
-            "from": from_date,
-            "to": to_date,
-            "sortby": "publishedAt",
-            "apikey": os.getenv("GNEWS_API_KEY")
-        }
+            params = {
+                "q": query,
+                "lang": "en",
+                "max": 25,
+                "from": from_date,
+                "to": to_date,
+                "sortby": "publishedAt",
+                "apikey": os.getenv("GNEWS_API_KEY")
+            }
 
-        try:
-            response = requests.get("https://gnews.io/api/v4/search", params=params)
-            print(f"Backfill {ticker} day {i}: {response.status_code}")
-            articles = response.json().get("articles", [])
+            try:
+                response = requests.get("https://gnews.io/api/v4/search", params=params)
+                print(f"Backfill {ticker} day {i}: {response.status_code}")
 
-            for article in articles:
-                exists = db.query(models.Headline).filter(
-                    models.Headline.url == article["url"]
-                ).first()
-                if exists:
+                if response.status_code != 200:
+                    print(f"Backfill {ticker} day {i}: error={response.text}")
+                    time.sleep(2)
                     continue
 
-                t0 = time.time()
-                sentiment = analyse_sentiment(article["title"])
-                FINBERT_LATENCY.observe(time.time() - t0)
-                headline = models.Headline(
-                    ticker=ticker.upper(),
-                    title=article["title"],
-                    source=article["source"]["name"],
-                    url=article["url"],
-                    sentiment_score=sentiment["score"],
-                    sentiment_label=sentiment["label"],
-                    published_at=datetime.strptime(article["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
-                )
-                db.add(headline)
-                saved += 1
-                HEADLINES_INGESTED.labels(source=article["source"]["name"], ticker=ticker.upper()).inc()
+                articles = response.json().get("articles", [])
 
-            db.commit()
+                for article in articles:
+                    exists = db.query(models.Headline).filter(
+                        models.Headline.url == article["url"]
+                    ).first()
+                    if exists:
+                        continue
 
-        except Exception as e:
-            print(f"Backfill error for {ticker} day {i}: {e}")
+                    t0 = time.time()
+                    sentiment = analyse_sentiment(article["title"])
+                    FINBERT_LATENCY.observe(time.time() - t0)
+                    headline = models.Headline(
+                        ticker=ticker.upper(),
+                        title=article["title"],
+                        source=article["source"]["name"],
+                        url=article["url"],
+                        sentiment_score=sentiment["score"],
+                        sentiment_label=sentiment["label"],
+                        published_at=datetime.strptime(article["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
+                    )
+                    db.add(headline)
+                    saved += 1
+                    HEADLINES_INGESTED.labels(source=article["source"]["name"], ticker=ticker.upper()).inc()
 
-    db.close()
+                db.commit()
+
+            except Exception as e:
+                print(f"Backfill error for {ticker} day {i}: {e}")
+
+            time.sleep(1)
+    finally:
+        db.close()
+
     print(f"Backfill complete for {ticker}: {saved} headlines saved")
 
 
