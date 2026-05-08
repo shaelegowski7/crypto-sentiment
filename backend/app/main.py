@@ -1506,6 +1506,7 @@ async def generate_linked_api_key(db: Session = Depends(get_db), user=Depends(re
         stripe_customer_id=stripe_customer_id,
         stripe_subscription_id=stripe_subscription_id,
         monthly_allowance=monthly_allowance,
+        free_calls=0,
     )
     db.add(api_key)
     db.commit()
@@ -1527,6 +1528,20 @@ async def get_my_key_info(db: Session = Depends(get_db), user=Depends(require_pr
     existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
     if not existing:
         return {"has_key": False}
+
+    # Sync monthly_allowance with current Supabase tier — handles keys created before this column existed
+    try:
+        from supabase import create_client
+        _sc = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+        _profile = _sc.table("profiles").select("tier").eq("id", user.id).single().execute()
+        _tier = _profile.data.get("tier", "free")
+        _expected = {"pro": 1000, "data": 5000}.get(_tier, 0)
+        if existing.monthly_allowance != _expected or existing.free_calls != 0:
+            existing.monthly_allowance = _expected
+            existing.free_calls = 0
+            db.commit()
+    except Exception:
+        pass
 
     total_allowance = existing.free_calls + existing.monthly_allowance
     return {
