@@ -240,9 +240,16 @@ def send_morning_briefs(db_session):
 
     # Fetch ticker data once for all users
     ticker_data = []
+    seen_headline_urls = set()
     for ticker in TICKERS:
         try:
             data = fetch_ticker_data(db_session, ticker)
+            if data.get("top_headline"):
+                url = data["top_headline"]["url"]
+                if url in seen_headline_urls:
+                    data["top_headline"] = None
+                else:
+                    seen_headline_urls.add(url)
             ticker_data.append(data)
         except Exception as e:
             logger.error(f"Failed to fetch data for {ticker}: {e}")
