@@ -912,11 +912,13 @@ def get_signal(ticker: str, db: Session = Depends(get_db)):
     }
 
 @app.get("/export/sentiment/{ticker}")
-async def export_sentiment(ticker: str, days: int = 0, db: Session = Depends(get_db), user=Depends(require_pro)):
-    query = db.query(models.Headline).filter(models.Headline.ticker == ticker.upper())
-    if days > 0:
-        since = datetime.utcnow() - timedelta(days=days)
-        query = query.filter(models.Headline.published_at >= since)
+async def export_sentiment(ticker: str, days: int = 90, db: Session = Depends(get_db), user=Depends(require_pro)):
+    days = min(days, 90)
+    since = datetime.utcnow() - timedelta(days=days)
+    query = db.query(models.Headline).filter(
+        models.Headline.ticker == ticker.upper(),
+        models.Headline.published_at >= since
+    )
     headlines = query.order_by(models.Headline.published_at).all()
 
     if not headlines:
@@ -946,11 +948,13 @@ async def export_sentiment(ticker: str, days: int = 0, db: Session = Depends(get
 
 
 @app.get("/export/prices/{ticker}")
-async def export_prices(ticker: str, days: int = 0, db: Session = Depends(get_db), user=Depends(require_pro)):
-    query = db.query(models.Price).filter(models.Price.ticker == ticker.upper())
-    if days > 0:
-        since = datetime.utcnow() - timedelta(days=days)
-        query = query.filter(models.Price.date >= since)
+async def export_prices(ticker: str, days: int = 90, db: Session = Depends(get_db), user=Depends(require_pro)):
+    days = min(days, 90)
+    since = datetime.utcnow() - timedelta(days=days)
+    query = db.query(models.Price).filter(
+        models.Price.ticker == ticker.upper(),
+        models.Price.date >= since
+    )
     prices = query.order_by(models.Price.date).all()
 
     if not prices:

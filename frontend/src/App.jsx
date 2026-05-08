@@ -2458,7 +2458,7 @@ export default function App() {
           {isPro && (
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
               <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }}>EXPORT</span>
-              {[7, 30, 90, 0].map(d => (
+              {[7, 30, 90].map(d => (
                 <button
                   key={d}
                   onClick={() => {
@@ -2474,7 +2474,7 @@ export default function App() {
                   onMouseOver={e => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent)" }}
                   onMouseOut={e => { e.currentTarget.style.color = "var(--muted)"; e.currentTarget.style.borderColor = "var(--border2)" }}
                 >
-                  {d === 0 ? "ALL" : `${d}D`}
+                  {`${d}D`}
                 </button>
               ))}
             </div>
