@@ -1089,8 +1089,20 @@ def run_backfill(ticker: str, days: int, offset: int):
 
     try:
         for i in range(days):
-            from_date = (start_date + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            to_date = (start_date + timedelta(days=i+1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            from_dt = start_date + timedelta(days=i)
+            to_dt = start_date + timedelta(days=i + 1)
+
+            already = db.query(models.Headline).filter(
+                models.Headline.ticker == ticker.upper(),
+                models.Headline.published_at >= from_dt,
+                models.Headline.published_at < to_dt,
+            ).count()
+            if already > 0:
+                print(f"Backfill {ticker} day {i}: skipping, already have {already} articles")
+                continue
+
+            from_date = from_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            to_date = to_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
             params = {
                 "q": query,
