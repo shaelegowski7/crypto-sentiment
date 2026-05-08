@@ -440,6 +440,12 @@ def root():
     return {"message": "Crypto Sentiment API"}
 
 
+@app.post("/scrape/all")
+def scrape_all_endpoint(admin=Depends(require_admin)):
+    scrape_all()
+    return {"message": "Scrape complete", "last_scrape": last_scrape_time, "duration_seconds": last_scrape_duration}
+
+
 @app.post("/scrape/{ticker}")
 def scrape(ticker: str, db: Session = Depends(get_db), admin=Depends(require_admin)):
     headlines = fetch_headlines(ticker.upper()) + fetch_rss_headlines(ticker.upper())
