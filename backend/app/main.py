@@ -1150,9 +1150,9 @@ def run_backfill(ticker: str, days: int, offset: int):
                     db.add(headline)
                     saved += 1
                     day_saved += 1
+                    HEADLINES_INGESTED.labels(source=article["source"]["name"], ticker=ticker.upper()).inc()
 
                 print(f"Backfill {ticker} day {i} ({from_dt.strftime('%Y-%m-%d')}): saved {day_saved}/{len(articles)} articles")
-                    HEADLINES_INGESTED.labels(source=article["source"]["name"], ticker=ticker.upper()).inc()
 
                 db.commit()
 
