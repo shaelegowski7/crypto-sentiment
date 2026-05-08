@@ -403,7 +403,7 @@ function TodaysSignalCard({ signal, trend, loading }) {
               {signal.isMomentum ? "MOMENTUM" : "CONTRARIAN"}
             </span>
           )}
-          {signal.beatsMomentum === true && (
+          {signal.beatsMomentum === true && signal.strength !== "inconclusive" && (
             <span style={{
               fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
               padding: "2px 8px", borderRadius: "2px",
