@@ -1934,9 +1934,7 @@ export default function App() {
       : "NEUTRAL",
     sentimentLabel: signalData.today.sentiment_label,
     score: signalData.today.sentiment,
-    strength: signalData.today.shift_magnitude === "extreme" ? "strong"
-      : signalData.today.shift_magnitude === "significant" ? "weak"
-      : "inconclusive",
+    strength: getPrimary(correlation)?.strength ?? "inconclusive",
     isMomentum: getPrimary(correlation)?.direction?.includes("momentum") ?? null,
     correlation: getPrimary(correlation)?.correlation ?? null,
     beatsMomentum: correlation?.baseline?.primary_beats_momentum ?? null,
