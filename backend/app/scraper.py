@@ -25,9 +25,9 @@ TICKER_KEYWORDS = {
     "SOL":    ["solana", "sol"],
     "XRP":    ["ripple", "xrp"],
     "DOGE":   ["dogecoin", "doge"],
-    "EURUSD": ["eur/usd", "eurusd", "euro dollar"],
-    "GBPUSD": ["gbp/usd", "gbpusd", "pound dollar"],
-    "USDJPY": ["usd/jpy", "usdjpy", "dollar yen"],
+    "EURUSD": ["eur/usd", "eurusd", "euro dollar", "euro ", "ecb", "european central bank"],
+    "GBPUSD": ["gbp/usd", "gbpusd", "pound dollar", "british pound", "pound sterling", "sterling", "bank of england"],
+    "USDJPY": ["usd/jpy", "usdjpy", "dollar yen", "japanese yen", " yen ", "bank of japan", "boj"],
 }
 
 # Feeds that are general (not ticker-specific) and need keyword filtering
@@ -36,6 +36,8 @@ GENERAL_FEEDS = {
     "https://decrypt.co/feed",
     "https://www.theblock.co/rss.xml",
     "https://cryptoslate.com/feed/",
+    "https://www.fxstreet.com/rss/news",
+    "https://www.forexlive.com/feed/",
 }
 
 RSS_FEEDS = {
@@ -63,6 +65,18 @@ RSS_FEEDS = {
     "DOGE": [
         "https://cointelegraph.com/rss/tag/dogecoin",
         "https://cryptoslate.com/feed/",
+    ],
+    "EURUSD": [
+        "https://www.fxstreet.com/rss/news",
+        "https://www.forexlive.com/feed/",
+    ],
+    "GBPUSD": [
+        "https://www.fxstreet.com/rss/news",
+        "https://www.forexlive.com/feed/",
+    ],
+    "USDJPY": [
+        "https://www.fxstreet.com/rss/news",
+        "https://www.forexlive.com/feed/",
     ],
 }
 
