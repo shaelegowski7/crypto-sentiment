@@ -1096,9 +1096,9 @@ TICKER_QUERIES = {
     "SOL":    "solana crypto",
     "XRP":    "ripple XRP crypto",
     "DOGE":   "dogecoin crypto",
-    "EURUSD": "EUR/USD euro dollar forex",
-    "GBPUSD": "GBP/USD pound dollar forex",
-    "USDJPY": "USD/JPY dollar yen forex",
+    "EURUSD": "euro dollar EUR USD forex",
+    "GBPUSD": "pound dollar GBP USD forex",
+    "USDJPY": "dollar yen USD JPY forex",
 }
 
 
