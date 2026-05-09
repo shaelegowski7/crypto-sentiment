@@ -38,6 +38,7 @@ GENERAL_FEEDS = {
     "https://cryptoslate.com/feed/",
     "https://www.fxstreet.com/rss/news",
     "https://www.forexlive.com/feed/",
+    "https://www.reddit.com/r/Forex/new/.rss",
 }
 
 RSS_FEEDS = {
@@ -48,35 +49,43 @@ RSS_FEEDS = {
         "https://decrypt.co/feed",
         "https://www.theblock.co/rss.xml",
         "https://cryptoslate.com/feed/",
+        "https://www.reddit.com/r/Bitcoin/new/.rss",
     ],
     "ETH": [
         "https://cointelegraph.com/rss/tag/ethereum",
         "https://decrypt.co/feed",
         "https://cryptoslate.com/feed/",
+        "https://www.reddit.com/r/ethereum/new/.rss",
     ],
     "SOL": [
         "https://cointelegraph.com/rss/tag/solana",
         "https://cryptoslate.com/feed/",
+        "https://www.reddit.com/r/solana/new/.rss",
     ],
     "XRP": [
         "https://cointelegraph.com/rss/tag/xrp",
         "https://cryptoslate.com/feed/",
+        "https://www.reddit.com/r/XRP/new/.rss",
     ],
     "DOGE": [
         "https://cointelegraph.com/rss/tag/dogecoin",
         "https://cryptoslate.com/feed/",
+        "https://www.reddit.com/r/dogecoin/new/.rss",
     ],
     "EURUSD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
+        "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "GBPUSD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
+        "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "USDJPY": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
+        "https://www.reddit.com/r/Forex/new/.rss",
     ],
 }
 
@@ -135,7 +144,8 @@ def fetch_rss_headlines(ticker: str) -> list:
 
     for url in feeds:
         try:
-            feed = feedparser.parse(url)
+            headers = {"User-Agent": "SentimentFX/1.0"} if "reddit.com" in url else {}
+            feed = feedparser.parse(url, request_headers=headers)
             is_general = url in GENERAL_FEEDS
             print(f"[RSS] {ticker}: {url} entries={len(feed.entries)} general={is_general}")
 
