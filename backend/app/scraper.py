@@ -206,8 +206,9 @@ def fetch_rss_headlines(ticker: str) -> list:
 
     for url in feeds:
         try:
-            headers = {"User-Agent": "SentimentFX/1.0"} if "reddit.com" in url else {}
-            feed = feedparser.parse(url, request_headers=headers)
+            browser_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ua = browser_ua if "fxstreet.com" in url or "dailyfx.com" in url else "SentimentFX/1.0"
+            feed = feedparser.parse(url, request_headers={"User-Agent": ua})
             is_general = url in GENERAL_FEEDS
             print(f"[RSS] {ticker}: {url} entries={len(feed.entries)} general={is_general}")
 
