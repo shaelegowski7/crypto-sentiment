@@ -14,6 +14,10 @@ TICKERS = {
     "EURUSD": "euro dollar EUR USD forex",
     "GBPUSD": "pound dollar GBP USD forex",
     "USDJPY": "dollar yen USD JPY forex",
+    "AUDUSD": "australian dollar AUD USD forex",
+    "USDCAD": "canadian dollar CAD USD forex",
+    "USDCHF": "swiss franc CHF USD forex",
+    "NZDUSD": "new zealand dollar NZD USD forex",
 }
 
 # Keywords used to filter general RSS feeds (e.g. cryptoslate, decrypt) so that
@@ -28,6 +32,10 @@ TICKER_KEYWORDS = {
     "EURUSD": ["eur/usd", "eurusd", "euro dollar", "euro ", "ecb", "european central bank"],
     "GBPUSD": ["gbp/usd", "gbpusd", "pound dollar", "british pound", "pound sterling", "sterling", "bank of england"],
     "USDJPY": ["usd/jpy", "usdjpy", "dollar yen", "japanese yen", " yen ", "bank of japan", "boj"],
+    "AUDUSD": ["aud/usd", "audusd", "australian dollar", "aussie dollar", "reserve bank of australia", "rba"],
+    "USDCAD": ["usd/cad", "usdcad", "canadian dollar", "loonie", "bank of canada"],
+    "USDCHF": ["usd/chf", "usdchf", "swiss franc", "swissie", "swiss national bank", "snb"],
+    "NZDUSD": ["nzd/usd", "nzdusd", "new zealand dollar", "kiwi dollar", "reserve bank of new zealand", "rbnz"],
 }
 
 # Feeds that are general (not ticker-specific) and need keyword filtering
@@ -107,6 +115,34 @@ RSS_FEEDS = {
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "USDJPY": [
+        "https://www.fxstreet.com/rss/news",
+        "https://www.forexlive.com/feed/",
+        "https://www.dailyfx.com/feeds/market-news",
+        "https://www.actionforex.com/feed/",
+        "https://www.reddit.com/r/Forex/new/.rss",
+    ],
+    "AUDUSD": [
+        "https://www.fxstreet.com/rss/news",
+        "https://www.forexlive.com/feed/",
+        "https://www.dailyfx.com/feeds/market-news",
+        "https://www.actionforex.com/feed/",
+        "https://www.reddit.com/r/Forex/new/.rss",
+    ],
+    "USDCAD": [
+        "https://www.fxstreet.com/rss/news",
+        "https://www.forexlive.com/feed/",
+        "https://www.dailyfx.com/feeds/market-news",
+        "https://www.actionforex.com/feed/",
+        "https://www.reddit.com/r/Forex/new/.rss",
+    ],
+    "USDCHF": [
+        "https://www.fxstreet.com/rss/news",
+        "https://www.forexlive.com/feed/",
+        "https://www.dailyfx.com/feeds/market-news",
+        "https://www.actionforex.com/feed/",
+        "https://www.reddit.com/r/Forex/new/.rss",
+    ],
+    "NZDUSD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
         "https://www.dailyfx.com/feeds/market-news",

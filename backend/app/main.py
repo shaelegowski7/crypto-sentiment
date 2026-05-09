@@ -149,7 +149,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY"]
+TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
 
 # Stripe price IDs for Data tier — replace with real IDs after creating in Stripe
 DATA_PRICE_IDS = {
@@ -1101,6 +1101,10 @@ TICKER_QUERIES = {
     "EURUSD": "euro dollar EUR USD forex",
     "GBPUSD": "pound dollar GBP USD forex",
     "USDJPY": "dollar yen USD JPY forex",
+    "AUDUSD": "australian dollar AUD USD forex",
+    "USDCAD": "canadian dollar CAD USD forex",
+    "USDCHF": "swiss franc CHF USD forex",
+    "NZDUSD": "new zealand dollar NZD USD forex",
 }
 
 
