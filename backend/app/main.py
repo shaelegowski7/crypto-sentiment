@@ -363,6 +363,7 @@ def scrape_all():
         try:
             headlines = fetch_headlines(ticker) + fetch_rss_headlines(ticker)
 
+            saved_count = 0
             for h in headlines:
                 exists = db.query(models.Headline).filter(
                     models.Headline.url == h["url"]
@@ -385,6 +386,7 @@ def scrape_all():
                 )
                 db.add(headline)
                 HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
+                saved_count += 1
 
             prices = latest_prices.get(ticker)
             if prices:
@@ -405,7 +407,7 @@ def scrape_all():
                     db.add(price)
 
             db.commit()
-            print(f"[SCHEDULER] {ticker} committed")
+            print(f"[SCHEDULER] {ticker} committed: {saved_count} new / {len(headlines)} fetched")
         except Exception as e:
             any_failure = True
             db.rollback()
