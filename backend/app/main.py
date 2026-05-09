@@ -151,7 +151,7 @@ app.add_middleware(
 
 TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
 
-# Stripe price IDs for Data tier — replace with real IDs after creating in Stripe
+# Stripe price IDs for Data tier 
 DATA_PRICE_IDS = {
     "price_1TUqVG2NzVdYK0wrKrPTE28e",
     "price_1TUqVx2NzVdYK0wryheortJg",
