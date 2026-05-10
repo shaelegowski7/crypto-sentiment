@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SentimentFX | Crypto & FX Sentiment Intelligence</title>
     <meta name="description"
-      content="SentimentFX scores crypto and FX news with FinBERT AI — giving you quantified sentiment for BTC, ETH, SOL, XRP, DOGE, EUR/USD, GBP/USD and USD/JPY." />
+      content="SentimentFX scores market news with FinBERT AI — giving you quantified sentiment across 42 tickers in crypto, FX, stocks, ETFs and commodities." />
     <meta property="og:title"
       content="SentimentFX | Crypto & FX Sentiment Intelligence" />
     <meta property="og:description"
@@ -762,14 +762,14 @@
     </nav>
 
     <section class="hero">
-      <div class="hero-tag">AI-Powered Crypto & FX Intelligence</div>
+      <div class="hero-tag">AI-Powered Market Sentiment Intelligence</div>
       <h1 class="hero-title">
         Know what the market<br><span>is reading right now</span>
       </h1>
       <p class="hero-sub">
-        SentimentFX scores every crypto and FX headline with FinBERT AI —
-        giving you quantified sentiment context for BTC, ETH, SOL, XRP, DOGE,
-        EUR/USD, GBP/USD and USD/JPY, updated hourly.
+        SentimentFX scores every market headline with FinBERT AI —
+        giving you quantified sentiment context across 42 tickers in crypto, FX, stocks,
+        ETFs and commodities, updated hourly.
       </p>
 
       <div
@@ -835,7 +835,7 @@
         <div class="feature-card">
           <div class="feature-icon">03 — Real-time Data</div>
           <div class="feature-title">Hourly scraping pipeline</div>
-          <div class="feature-desc">News scraped every hour across 8 assets — BTC, ETH, SOL, XRP, DOGE plus EUR/USD, GBP/USD and USD/JPY. Prices pulled from live feeds and stored for historical analysis.</div>
+          <div class="feature-desc">News scraped every hour across 42 assets spanning crypto, FX, stocks, ETFs and commodities. Prices pulled from live feeds and stored for historical analysis.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">04 — API Access</div>
@@ -890,7 +890,7 @@
           <div class="step">
             <div class="step-num">STEP 01</div>
             <div class="step-title">News scraping</div>
-            <div class="step-desc">Every hour, our pipeline scrapes the latest headlines across BTC, ETH, SOL, XRP, DOGE, EUR/USD, GBP/USD and USD/JPY.</div>
+            <div class="step-desc">Every hour, our pipeline scrapes the latest headlines across 42 tickers in crypto, FX, stocks, ETFs and commodities.</div>
           </div>
           <div class="step">
             <div class="step-num">STEP 02</div>
@@ -930,7 +930,7 @@
             <li class="included">BTC sentiment dashboard</li>
             <li class="included">30-day history</li>
             <li class="included">Correlation signal</li>
-            <li>All 8 tickers</li>
+            <li>All 42 tickers (crypto, FX, stocks, ETFs, commodities)</li>
             <li>Full history</li>
             <li>API access</li>
             <li>Alerts &amp; morning brief</li>
@@ -946,7 +946,7 @@
           <div class="price-period">per month · or £99.99/yr</div>
           <div class="price-saving">Annual saves £43.89</div>
           <ul class="price-features">
-            <li class="included">All 8 tickers (crypto + EUR/USD, GBP/USD, USD/JPY)</li>
+            <li class="included">All 42 tickers (crypto, FX, stocks, ETFs, commodities)</li>
             <li class="included">Full price history</li>
             <li class="included">1,000 API calls / month included</li>
             <li class="included">Email sentiment alerts</li>
@@ -968,7 +968,7 @@
             <li class="included">Everything in Pro</li>
             <li class="included">5,000 API calls / month included</li>
             <li class="included">£0.01 / call after allowance</li>
-            <li class="included">All 8 tickers via API</li>
+            <li class="included">All 42 tickers via API</li>
             <li class="included">Sentiment, prices &amp; correlation endpoints</li>
           </ul>
           <a href="https://app.sentimentfx.org?auth=signup"
@@ -1015,8 +1015,8 @@
     <script>
       const API = "https://api.sentimentfx.org";
       const CRYPTO = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'];
-      const FX = ['EURUSD', 'GBPUSD', 'USDJPY'];
-      const FX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY' };
+      const FX = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD'];
+      const FX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', AUDUSD: 'AUD/USD', USDCAD: 'USD/CAD', USDCHF: 'USD/CHF', NZDUSD: 'NZD/USD' };
       const TICKERS = [...CRYPTO, ...FX];
 
       const FALLBACK = {

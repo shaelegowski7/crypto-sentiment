@@ -2545,7 +2545,7 @@ export default function App() {
           {!isLoggedIn && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Sign in to unlock all tickers including EUR/USD, GBP/USD and USD/JPY, full history, API access and alerts.
+                <strong>Free tier:</strong> BTC only · 30 day history · Sign in to unlock 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, API access and alerts.
               </span>
               <button className="upgrade-btn" onClick={() => { setAuthMode("signup"); setShowAuth(true) }}>
                 Sign In / Sign Up
@@ -2556,7 +2556,7 @@ export default function App() {
           {isLoggedIn && !isPro && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for all tickers including EUR/USD, GBP/USD and USD/JPY, full history, 1,000 API calls/mo, alerts and morning brief.
+                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, 1,000 API calls/mo, alerts and morning brief.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw")}>

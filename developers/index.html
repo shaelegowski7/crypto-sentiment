@@ -205,7 +205,7 @@ const res = await fetch(
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
                                         <tr><td>limit</td><td>integer</td><td>25</td><td>Number of headlines to return</td></tr>
                                     </tbody>
                                 </table>
@@ -229,7 +229,7 @@ const res = await fetch(
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
                                         <select class="tester-select" id="t-sentiment-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
+                                            <optgroup label="Crypto"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option></optgroup><optgroup label="FX"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>AUDUSD</option><option>USDCAD</option><option>USDCHF</option><option>NZDUSD</option></optgroup><optgroup label="Stocks"><option>AAPL</option><option>MSFT</option><option>GOOGL</option><option>AMZN</option><option>META</option><option>NVDA</option><option>TSLA</option><option>JPM</option><option>BAC</option><option>GS</option><option>V</option><option>MA</option><option>XOM</option><option>JNJ</option><option>AMD</option><option>NFLX</option><option>WMT</option><option>UBER</option><option>CRM</option><option>PLTR</option></optgroup><optgroup label="ETFs"><option>SPY</option><option>QQQ</option><option>GLD</option><option>SLV</option><option>USO</option><option>ARKK</option></optgroup><optgroup label="Commodities"><option value="GC=F">Gold (GC=F)</option><option value="SI=F">Silver (SI=F)</option><option value="CL=F">Oil (CL=F)</option><option value="NG=F">Nat Gas (NG=F)</option></optgroup>
                                         </select>
                                         <span class="tester-label" style="margin-left:8px;">Limit</span>
                                         <input class="tester-input" type="number" id="t-sentiment-limit" value="25" min="1" max="500" style="width:80px;">
@@ -260,7 +260,7 @@ const res = await fetch(
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
                                         <tr><td>days</td><td>integer</td><td>30</td><td>Number of days of history</td></tr>
                                     </tbody>
                                 </table>
@@ -283,7 +283,7 @@ const res = await fetch(
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
                                         <select class="tester-select" id="t-summary-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
+                                            <optgroup label="Crypto"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option></optgroup><optgroup label="FX"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>AUDUSD</option><option>USDCAD</option><option>USDCHF</option><option>NZDUSD</option></optgroup><optgroup label="Stocks"><option>AAPL</option><option>MSFT</option><option>GOOGL</option><option>AMZN</option><option>META</option><option>NVDA</option><option>TSLA</option><option>JPM</option><option>BAC</option><option>GS</option><option>V</option><option>MA</option><option>XOM</option><option>JNJ</option><option>AMD</option><option>NFLX</option><option>WMT</option><option>UBER</option><option>CRM</option><option>PLTR</option></optgroup><optgroup label="ETFs"><option>SPY</option><option>QQQ</option><option>GLD</option><option>SLV</option><option>USO</option><option>ARKK</option></optgroup><optgroup label="Commodities"><option value="GC=F">Gold (GC=F)</option><option value="SI=F">Silver (SI=F)</option><option value="CL=F">Oil (CL=F)</option><option value="NG=F">Nat Gas (NG=F)</option></optgroup>
                                         </select>
                                         <span class="tester-label" style="margin-left:8px;">Days</span>
                                         <input class="tester-input" type="number" id="t-summary-days" value="7" min="1" max="880" style="width:80px;">
@@ -314,7 +314,7 @@ const res = await fetch(
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
                                         <tr><td>days</td><td>integer</td><td>30</td><td>Number of days of history</td></tr>
                                     </tbody>
                                 </table>
@@ -336,7 +336,7 @@ const res = await fetch(
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
                                         <select class="tester-select" id="t-prices-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
+                                            <optgroup label="Crypto"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option></optgroup><optgroup label="FX"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>AUDUSD</option><option>USDCAD</option><option>USDCHF</option><option>NZDUSD</option></optgroup><optgroup label="Stocks"><option>AAPL</option><option>MSFT</option><option>GOOGL</option><option>AMZN</option><option>META</option><option>NVDA</option><option>TSLA</option><option>JPM</option><option>BAC</option><option>GS</option><option>V</option><option>MA</option><option>XOM</option><option>JNJ</option><option>AMD</option><option>NFLX</option><option>WMT</option><option>UBER</option><option>CRM</option><option>PLTR</option></optgroup><optgroup label="ETFs"><option>SPY</option><option>QQQ</option><option>GLD</option><option>SLV</option><option>USO</option><option>ARKK</option></optgroup><optgroup label="Commodities"><option value="GC=F">Gold (GC=F)</option><option value="SI=F">Silver (SI=F)</option><option value="CL=F">Oil (CL=F)</option><option value="NG=F">Nat Gas (NG=F)</option></optgroup>
                                         </select>
                                         <span class="tester-label" style="margin-left:8px;">Days</span>
                                         <input class="tester-input" type="number" id="t-prices-days" value="7" min="1" max="880" style="width:80px;">
@@ -367,7 +367,7 @@ const res = await fetch(
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
-                                        <tr><td>ticker</td><td>string</td><td>—</td><td>BTC, ETH, SOL, XRP, DOGE, EURUSD, GBPUSD, USDJPY</td></tr>
+                                        <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -394,7 +394,7 @@ const res = await fetch(
                                     <div class="tester-row">
                                         <span class="tester-label">Ticker</span>
                                         <select class="tester-select" id="t-correlation-ticker">
-                                            <option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
+                                            <optgroup label="Crypto"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option></optgroup><optgroup label="FX"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>AUDUSD</option><option>USDCAD</option><option>USDCHF</option><option>NZDUSD</option></optgroup><optgroup label="Stocks"><option>AAPL</option><option>MSFT</option><option>GOOGL</option><option>AMZN</option><option>META</option><option>NVDA</option><option>TSLA</option><option>JPM</option><option>BAC</option><option>GS</option><option>V</option><option>MA</option><option>XOM</option><option>JNJ</option><option>AMD</option><option>NFLX</option><option>WMT</option><option>UBER</option><option>CRM</option><option>PLTR</option></optgroup><optgroup label="ETFs"><option>SPY</option><option>QQQ</option><option>GLD</option><option>SLV</option><option>USO</option><option>ARKK</option></optgroup><optgroup label="Commodities"><option value="GC=F">Gold (GC=F)</option><option value="SI=F">Silver (SI=F)</option><option value="CL=F">Oil (CL=F)</option><option value="NG=F">Nat Gas (NG=F)</option></optgroup>
                                         </select>
                                         <button class="tester-btn" style="margin-left:8px;" onclick="runTester('correlation')">Send</button>
                                     </div>
