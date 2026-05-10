@@ -8,10 +8,18 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
 
-const TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
+const CATEGORIES = {
+  Crypto: ["BTC", "ETH", "SOL", "XRP", "DOGE"],
+  FX: ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"],
+  Stocks: ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "JPM", "BAC", "GS", "V", "MA", "XOM", "JNJ", "AMD", "NFLX", "WMT", "UBER", "CRM", "PLTR"],
+  ETFs: ["SPY", "QQQ", "GLD", "SLV", "USO", "ARKK"],
+  Commodities: ["GC=F", "SI=F", "CL=F", "NG=F"],
+}
+const TICKERS = Object.values(CATEGORIES).flat()
 const FREE_TICKERS = ["BTC"]
 const FX_TICKERS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
 const FX_LABELS = { EURUSD: "EUR/USD", GBPUSD: "GBP/USD", USDJPY: "USD/JPY", AUDUSD: "AUD/USD", USDCAD: "USD/CAD", USDCHF: "USD/CHF", NZDUSD: "NZD/USD" }
+const COMMODITY_LABELS = { "GC=F": "Gold", "SI=F": "Silver", "CL=F": "Oil", "NG=F": "Nat Gas" }
 const API = "https://api.sentimentfx.org"
 const HEADLINES_PER_PAGE = 10
 
@@ -638,6 +646,45 @@ const styles = `
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
+  }
+
+  .category-bar {
+    display: flex;
+    gap: 4px;
+    padding: 10px 24px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .category-bar::-webkit-scrollbar { display: none; }
+
+  .category-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--muted);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .category-btn:hover {
+    color: var(--text);
+    border-color: var(--border2);
+  }
+
+  .category-btn.active {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
   }
 
   .ticker-bar {
@@ -1999,6 +2046,7 @@ function BacktestPanel({ ticker }) {
 
 export default function App() {
   const [ticker, setTicker] = useState("BTC")
+  const [category, setCategory] = useState("Crypto")
   const [allData, setAllData] = useState([])
   const [headlines, setHeadlines] = useState([])
   const [loading, setLoading] = useState(false)
@@ -2460,8 +2508,25 @@ export default function App() {
           </div>
         </header>
 
+        <nav className="category-bar">
+          {Object.keys(CATEGORIES).map(cat => (
+            <button
+              key={cat}
+              className={`category-btn ${category === cat ? "active" : ""}`}
+              onClick={() => {
+                setCategory(cat)
+                if (!CATEGORIES[cat].includes(ticker)) {
+                  handleTickerClick(CATEGORIES[cat][0])
+                }
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </nav>
+
         <nav className="ticker-bar">
-          {TICKERS.map(t => {
+          {CATEGORIES[category].map(t => {
             const locked = !profileLoading && !FREE_TICKERS.includes(t) && !isPro
             return (
               <button
@@ -2469,7 +2534,7 @@ export default function App() {
                 className={`ticker-btn ${ticker === t ? "active" : ""} ${locked ? "locked" : ""}`}
                 onClick={() => handleTickerClick(t)}
               >
-                {FX_LABELS[t] ?? t}
+                {FX_LABELS[t] ?? COMMODITY_LABELS[t] ?? t}
               </button>
             )
           })}
