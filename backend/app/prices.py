@@ -20,6 +20,17 @@ COINGECKO_MAP = {
 
 USD_TICKERS = {}
 
+STOCK_TICKER_MAP = {
+    "AAPL": "AAPL", "MSFT": "MSFT", "GOOGL": "GOOGL", "AMZN": "AMZN",
+    "META": "META", "NVDA": "NVDA", "TSLA": "TSLA",
+    "JPM": "JPM", "BAC": "BAC", "GS": "GS", "V": "V", "MA": "MA",
+    "XOM": "XOM", "JNJ": "JNJ", "AMD": "AMD", "NFLX": "NFLX",
+    "WMT": "WMT", "UBER": "UBER", "CRM": "CRM", "PLTR": "PLTR",
+    "SPY": "SPY", "QQQ": "QQQ", "GLD": "GLD", "SLV": "SLV",
+    "USO": "USO", "ARKK": "ARKK",
+    "GC=F": "GC=F", "SI=F": "SI=F", "CL=F": "CL=F", "NG=F": "NG=F",
+}
+
 FX_TICKER_MAP = {
     "EURUSD": "EURUSD=X",
     "GBPUSD": "GBPUSD=X",
@@ -123,6 +134,24 @@ def fetch_latest_prices_all() -> dict:
             print(f"[PRICES] {ticker}: yfinance error={e}")
 
     return result
+
+
+def fetch_latest_stock_price(ticker: str) -> dict | None:
+    yf_ticker = STOCK_TICKER_MAP.get(ticker.upper())
+    if not yf_ticker:
+        return None
+    try:
+        data = yf.download(yf_ticker, period="5d", interval="1d", progress=False)
+        if data.empty:
+            return None
+        close_series = data["Close"]
+        close = float(close_series.iloc[-1].iloc[0]) if hasattr(close_series.iloc[-1], 'iloc') else float(close_series.iloc[-1])
+        today = datetime.now(timezone.utc).date()
+        print(f"[PRICES] {ticker}: live={today} close={round(close, 4)}")
+        return {"ticker": ticker.upper(), "close_price": round(close, 4), "volume": 0.0, "date": today}
+    except Exception as e:
+        print(f"[PRICES] {ticker}: yfinance error={e}")
+        return None
 
 
 def fetch_latest_price(ticker: str) -> dict | None:

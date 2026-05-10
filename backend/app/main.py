@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines, fetch_rss_headlines
+from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines
 from .sentiment import analyse_sentiment
-from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all
+from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -412,6 +412,50 @@ def scrape_all():
             any_failure = True
             db.rollback()
             print(f"[SCHEDULER] {ticker} error: {e}")
+
+    for ticker in BACKGROUND_TICKERS:
+        try:
+            headlines = fetch_background_headlines(ticker)
+            saved_count = 0
+            for h in headlines:
+                exists = db.query(models.Headline).filter(
+                    models.Headline.url == h["url"]
+                ).first()
+                if exists:
+                    continue
+                t0 = time.time()
+                sentiment = analyse_sentiment(h["title"])
+                FINBERT_LATENCY.observe(time.time() - t0)
+                headline = models.Headline(
+                    ticker=h["ticker"],
+                    title=h["title"],
+                    source=h["source"],
+                    url=h["url"],
+                    sentiment_score=sentiment["score"],
+                    sentiment_label=sentiment["label"],
+                    published_at=h["published_at"],
+                )
+                db.add(headline)
+                HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
+                saved_count += 1
+
+            price_data = fetch_latest_stock_price(ticker)
+            if price_data:
+                existing_price = db.query(models.Price).filter(
+                    models.Price.ticker == price_data["ticker"],
+                    models.Price.date == price_data["date"]
+                ).first()
+                if existing_price:
+                    existing_price.close_price = price_data["close_price"]
+                else:
+                    db.add(models.Price(**price_data))
+
+            db.commit()
+            print(f"[BACKGROUND] {ticker} committed: {saved_count} new / {len(headlines)} fetched")
+        except Exception as e:
+            any_failure = True
+            db.rollback()
+            print(f"[BACKGROUND] {ticker} error: {e}")
 
     try:
         check_alerts(db)

@@ -151,6 +151,44 @@ RSS_FEEDS = {
     ],
 }
 
+BACKGROUND_TICKERS = [
+    # Stocks
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
+    "JPM", "BAC", "GS", "V", "MA",
+    "XOM", "JNJ", "AMD", "NFLX", "WMT", "UBER", "CRM", "PLTR",
+    # ETFs
+    "SPY", "QQQ", "GLD", "SLV", "USO", "ARKK",
+    # Commodities (futures)
+    "GC=F", "SI=F", "CL=F", "NG=F",
+]
+
+
+def fetch_background_headlines(ticker: str) -> list:
+    from urllib.parse import quote
+    url = f"https://finance.yahoo.com/rss/headline?s={quote(ticker, safe='')}"
+    headlines = []
+    try:
+        feed = feedparser.parse(url, request_headers={"User-Agent": "SentimentFX/1.0"})
+        print(f"[BACKGROUND] {ticker}: {len(feed.entries)} entries")
+        for entry in feed.entries[:25]:
+            try:
+                published = entry.get("published_parsed") or entry.get("updated_parsed")
+                pub_date = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
+                headlines.append({
+                    "ticker": ticker.upper(),
+                    "title": entry.title,
+                    "source": feed.feed.get("title", "Yahoo Finance"),
+                    "url": entry.link,
+                    "published_at": pub_date,
+                })
+            except Exception as e:
+                print(f"[BACKGROUND] {ticker}: entry parse error={e}")
+                continue
+    except Exception as e:
+        print(f"[BACKGROUND] {ticker}: feed error={e}")
+    return headlines
+
+
 def fetch_headlines(ticker: str) -> list:
     query = TICKERS.get(ticker)
     if not query:
