@@ -1149,14 +1149,51 @@ TICKER_QUERIES = {
     "USDCAD": "canadian dollar CAD USD forex",
     "USDCHF": "swiss franc CHF USD forex",
     "NZDUSD": "new zealand dollar NZD USD forex",
+    # Stocks
+    "AAPL":  "Apple AAPL stock",
+    "MSFT":  "Microsoft MSFT stock",
+    "GOOGL": "Google Alphabet GOOGL stock",
+    "AMZN":  "Amazon AMZN stock",
+    "META":  "Meta Facebook META stock",
+    "NVDA":  "Nvidia NVDA stock",
+    "TSLA":  "Tesla TSLA stock",
+    "JPM":   "JPMorgan Chase JPM stock",
+    "BAC":   "Bank of America BAC stock",
+    "GS":    "Goldman Sachs GS stock",
+    "V":     "Visa payments stock",
+    "MA":    "Mastercard payments stock",
+    "XOM":   "Exxon Mobil XOM stock",
+    "JNJ":   "Johnson Johnson JNJ stock",
+    "AMD":   "AMD Advanced Micro Devices stock",
+    "NFLX":  "Netflix NFLX stock",
+    "WMT":   "Walmart WMT stock",
+    "UBER":  "Uber UBER stock",
+    "CRM":   "Salesforce CRM stock",
+    "PLTR":  "Palantir PLTR stock",
+    # ETFs
+    "SPY":   "SPY S&P 500 ETF",
+    "QQQ":   "QQQ Nasdaq 100 ETF",
+    "GLD":   "GLD gold ETF",
+    "SLV":   "SLV silver ETF",
+    "USO":   "USO oil ETF",
+    "ARKK":  "ARKK ARK Innovation ETF",
+    # Commodities (futures)
+    "GC=F":  "gold futures commodity",
+    "SI=F":  "silver futures commodity",
+    "CL=F":  "crude oil WTI futures",
+    "NG=F":  "natural gas futures",
 }
 
 
 def run_backfill(ticker: str, days: int, offset: int):
     db = SessionLocal()
-    query = TICKER_QUERIES.get(ticker.upper())
-    if not query:
+    if ticker.upper() not in TICKER_QUERIES:
         print(f"Backfill: unknown ticker {ticker}")
+        db.close()
+        return
+    query = TICKER_QUERIES[ticker.upper()]
+    if not query:
+        print(f"Backfill: no GNews query configured for {ticker} - skipping")
         db.close()
         return
 
@@ -1239,12 +1276,24 @@ def run_backfill(ticker: str, days: int, offset: int):
     print(f"Backfill complete for {ticker}: {saved} headlines saved")
 
 
-@app.post("/backfill/{ticker}")
-def backfill(ticker: str, background_tasks: BackgroundTasks, days: int = 30, offset: int = 0, admin=Depends(require_admin)):
-    if ticker.upper() not in TICKER_QUERIES:
-        raise HTTPException(status_code=404, detail="Unknown ticker")
-    background_tasks.add_task(run_backfill, ticker, days, offset)
-    return {"message": f"Backfill started for {ticker} ({days} days, offset {offset}) - check Railway logs for progress"}
+@app.post("/backfill")
+def backfill(background_tasks: BackgroundTasks, tickers: str, days: int = 30, offset: int = 0, admin=Depends(require_admin)):
+    if tickers.lower() == "all":
+        ticker_list = [t for t, q in TICKER_QUERIES.items() if q]
+    else:
+        ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+
+    unknown = [t for t in ticker_list if t not in TICKER_QUERIES]
+    if unknown:
+        raise HTTPException(status_code=404, detail=f"Unknown tickers: {','.join(unknown)}")
+
+    missing_query = [t for t in ticker_list if not TICKER_QUERIES[t]]
+    if missing_query:
+        raise HTTPException(status_code=400, detail=f"No GNews query configured for: {','.join(missing_query)}")
+
+    for ticker in ticker_list:
+        background_tasks.add_task(run_backfill, ticker, days, offset)
+    return {"message": f"Backfill started for {len(ticker_list)} ticker(s): {','.join(ticker_list)} ({days} days, offset {offset}) - check Railway logs for progress"}
 
 
 @app.post("/alerts")
