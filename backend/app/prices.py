@@ -50,7 +50,13 @@ def get_gbp_rate() -> float:
 
 def fetch_prices(ticker: str) -> list:
     is_fx = ticker in FX_TICKER_MAP
-    yf_ticker = FX_TICKER_MAP.get(ticker) if is_fx else TICKER_MAP.get(ticker)
+    is_stock = ticker in STOCK_TICKER_MAP
+    if is_fx:
+        yf_ticker = FX_TICKER_MAP[ticker]
+    elif is_stock:
+        yf_ticker = STOCK_TICKER_MAP[ticker]
+    else:
+        yf_ticker = TICKER_MAP.get(ticker)
     if not yf_ticker:
         print(f"[PRICES] Unknown ticker: {ticker}")
         return []
@@ -169,6 +175,9 @@ def fetch_latest_price(ticker: str) -> dict | None:
         except Exception as e:
             print(f"[PRICES] {t}: yfinance error={e}")
             return None
+
+    if t in STOCK_TICKER_MAP:
+        return fetch_latest_stock_price(t)
 
     coin_id = COINGECKO_MAP.get(t)
     if not coin_id:
