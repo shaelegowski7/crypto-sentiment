@@ -310,7 +310,7 @@ const res = await fetch(
                                 <span class="endpoint-path">/v1/prices/<span style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns daily closing prices in GBP (crypto) or exchange rate (FX pairs). Default 30 days = 30 calls.</p>
+                                <p class="endpoint-desc">Returns daily closing prices in the asset's native currency: GBP for crypto, exchange rates for FX pairs, USD for stocks, ETFs and commodity futures. Default 30 days = 30 calls.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
