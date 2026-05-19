@@ -353,6 +353,22 @@
 
     .ticker-table td.muted { color: var(--muted); }
 
+    .ticker-table tr.category-row td {
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 8px 16px;
+      font-weight: 600;
+    }
+    .ticker-table tr.category-row:hover td { background: var(--surface2); }
+    .ticker-table tr.category-row td .category-count {
+      color: var(--accent);
+      margin-left: 8px;
+      font-weight: 400;
+    }
+
     footer {
       border-top: 1px solid var(--border);
       padding: 20px 40px;
@@ -654,16 +670,41 @@
           setStatus('svc-pipeline', 'err', 'No recent data')
         }
 
-        // ticker table
+        // ticker table — grouped by category
+        const CATEGORY_ORDER = ['crypto', 'fx', 'stocks', 'etfs', 'commodities', 'other']
+        const CATEGORY_LABELS = {
+          crypto: 'Crypto',
+          fx: 'Foreign Exchange',
+          stocks: 'Stocks',
+          etfs: 'ETFs',
+          commodities: 'Commodities',
+          other: 'Other',
+        }
+
+        const grouped = {}
+        for (const [ticker, stats] of Object.entries(data.tickers)) {
+          const cat = stats.category || 'other'
+          if (!grouped[cat]) grouped[cat] = []
+          grouped[cat].push([ticker, stats])
+        }
+
         const tbody = document.getElementById('ticker-tbody')
-        tbody.innerHTML = Object.entries(data.tickers).map(([ticker, stats]) => `
-          <tr>
-            <td>${ticker}</td>
-            <td>${stats.headlines?.toLocaleString() ?? '—'}</td>
-            <td>${stats.prices?.toLocaleString() ?? '—'}</td>
-            <td class="muted">${stats.latest_headline ? fmtRelative(stats.latest_headline) : '—'}</td>
-          </tr>
-        `).join('')
+        tbody.innerHTML = CATEGORY_ORDER
+          .filter(cat => grouped[cat]?.length)
+          .map(cat => {
+            const rows = grouped[cat].map(([ticker, stats]) => `
+              <tr>
+                <td>${ticker}</td>
+                <td>${stats.headlines?.toLocaleString() ?? '—'}</td>
+                <td>${stats.prices?.toLocaleString() ?? '—'}</td>
+                <td class="muted">${stats.latest_headline ? fmtRelative(stats.latest_headline) : '—'}</td>
+              </tr>
+            `).join('')
+            return `
+              <tr class="category-row"><td colspan="4">${CATEGORY_LABELS[cat]}<span class="category-count">${grouped[cat].length}</span></td></tr>
+              ${rows}
+            `
+          }).join('')
 
         // overall banner
         const apiOk = document.getElementById('svc-api').classList.contains('ok')

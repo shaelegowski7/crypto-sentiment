@@ -151,6 +151,23 @@ app.add_middleware(
 
 TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
 
+TICKER_CATEGORIES = {
+    "crypto":      {"BTC", "ETH", "SOL", "XRP", "DOGE"},
+    "fx":          {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"},
+    "stocks":      {"AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
+                    "JPM", "BAC", "GS", "V", "MA",
+                    "XOM", "JNJ", "AMD", "NFLX", "WMT", "UBER", "CRM", "PLTR"},
+    "etfs":        {"SPY", "QQQ", "GLD", "SLV", "USO", "ARKK"},
+    "commodities": {"GC=F", "SI=F", "CL=F", "NG=F"},
+}
+
+
+def _category_for(ticker: str) -> str:
+    for cat, members in TICKER_CATEGORIES.items():
+        if ticker in members:
+            return cat
+    return "other"
+
 # Stripe price IDs for Data tier 
 DATA_PRICE_IDS = {
     "price_1TUqVG2NzVdYK0wrKrPTE28e",
@@ -1915,7 +1932,8 @@ def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db)
 @app.get("/status")
 def get_status(db: Session = Depends(get_db)):
     ticker_stats = {}
-    for t in TICKERS:
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    for t in all_tickers:
         headline_count = db.query(models.Headline).filter(models.Headline.ticker == t).count()
         price_count = db.query(models.Price).filter(models.Price.ticker == t).count()
         latest_headline = db.query(models.Headline).filter(
@@ -1925,6 +1943,7 @@ def get_status(db: Session = Depends(get_db)):
             models.Price.ticker == t
         ).order_by(models.Price.date.desc()).first()
         ticker_stats[t] = {
+            "category": _category_for(t),
             "headlines": headline_count,
             "prices": price_count,
             "latest_headline": latest_headline.published_at.isoformat() if latest_headline else None,
