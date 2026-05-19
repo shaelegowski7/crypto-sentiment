@@ -120,6 +120,39 @@ async def protect_metrics(request: Request, call_next):
                 return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     return await call_next(request)
 
+
+# ---------------------------------------------------------------------------
+# Cache-Control middleware — allows CDN intermediaries and client browsers to
+# cache hot read-only endpoints (public API, status, dashboard data) for short
+# windows.  Writes and authed/personal endpoints get explicit no-store so they
+# never leak between users.
+# ---------------------------------------------------------------------------
+
+_PUBLIC_GET_PREFIXES = ("/v1/",)
+_PUBLIC_GET_PATHS = {"/", "/status", "/health"}
+_PUBLIC_GET_DATA_PREFIXES = ("/dashboard/", "/correlation/", "/headlines/", "/prices/", "/summary/")
+
+@app.middleware("http")
+async def cache_control(request: Request, call_next):
+    response = await call_next(request)
+    if request.method != "GET" or response.status_code >= 400:
+        return response
+    path = request.url.path
+    # Skip if endpoint already set Cache-Control explicitly
+    if "cache-control" in (k.lower() for k in response.headers.keys()):
+        return response
+    if any(path.startswith(p) for p in _PUBLIC_GET_PREFIXES):
+        # Developer API — 60s browser, 5min CDN, 10min stale-while-revalidate
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+        response.headers["Vary"] = "Accept-Encoding, X-API-Key"
+    elif path in _PUBLIC_GET_PATHS:
+        response.headers["Cache-Control"] = "public, max-age=30, s-maxage=60, stale-while-revalidate=300"
+        response.headers["Vary"] = "Accept-Encoding"
+    elif any(path.startswith(p) for p in _PUBLIC_GET_DATA_PREFIXES):
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+        response.headers["Vary"] = "Accept-Encoding"
+    return response
+
 # ---------------------------------------------------------------------------
 
 app.state.limiter = limiter

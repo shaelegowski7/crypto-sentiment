@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node generate-ticker-pages.js)",
+      "Bash(node *)"
+    ]
+  }
+}

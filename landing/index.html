@@ -530,7 +530,10 @@
         color: var(--muted);
         transition: all 0.15s;
         white-space: nowrap;
+        text-decoration: none;
+        display: inline-block;
       }
+      a.cov-chip:hover { color: var(--accent); border-color: var(--accent); }
 
       .coverage-row:hover .cov-chip { color: var(--text); }
 
@@ -965,72 +968,72 @@
           <div class="coverage-label">Crypto</div>
           <div class="coverage-num">5</div>
           <div class="coverage-chips">
-            <span class="cov-chip">BTC</span>
-            <span class="cov-chip">ETH</span>
-            <span class="cov-chip">SOL</span>
-            <span class="cov-chip">XRP</span>
-            <span class="cov-chip">DOGE</span>
+            <a class="cov-chip" href="/sentiment/btc">BTC</a>
+            <a class="cov-chip" href="/sentiment/eth">ETH</a>
+            <a class="cov-chip" href="/sentiment/sol">SOL</a>
+            <a class="cov-chip" href="/sentiment/xrp">XRP</a>
+            <a class="cov-chip" href="/sentiment/doge">DOGE</a>
           </div>
         </div>
         <div class="coverage-row">
           <div class="coverage-label">FX</div>
           <div class="coverage-num">7</div>
           <div class="coverage-chips">
-            <span class="cov-chip">EUR/USD</span>
-            <span class="cov-chip">GBP/USD</span>
-            <span class="cov-chip">USD/JPY</span>
-            <span class="cov-chip">AUD/USD</span>
-            <span class="cov-chip">USD/CAD</span>
-            <span class="cov-chip">USD/CHF</span>
-            <span class="cov-chip">NZD/USD</span>
+            <a class="cov-chip" href="/sentiment/eurusd">EUR/USD</a>
+            <a class="cov-chip" href="/sentiment/gbpusd">GBP/USD</a>
+            <a class="cov-chip" href="/sentiment/usdjpy">USD/JPY</a>
+            <a class="cov-chip" href="/sentiment/audusd">AUD/USD</a>
+            <a class="cov-chip" href="/sentiment/usdcad">USD/CAD</a>
+            <a class="cov-chip" href="/sentiment/usdchf">USD/CHF</a>
+            <a class="cov-chip" href="/sentiment/nzdusd">NZD/USD</a>
           </div>
         </div>
         <div class="coverage-row">
           <div class="coverage-label">Stocks</div>
           <div class="coverage-num">20</div>
           <div class="coverage-chips">
-            <span class="cov-chip">AAPL</span>
-            <span class="cov-chip">MSFT</span>
-            <span class="cov-chip">GOOGL</span>
-            <span class="cov-chip">AMZN</span>
-            <span class="cov-chip">META</span>
-            <span class="cov-chip">NVDA</span>
-            <span class="cov-chip">TSLA</span>
-            <span class="cov-chip">JPM</span>
-            <span class="cov-chip">BAC</span>
-            <span class="cov-chip">GS</span>
-            <span class="cov-chip">V</span>
-            <span class="cov-chip">MA</span>
-            <span class="cov-chip">XOM</span>
-            <span class="cov-chip">JNJ</span>
-            <span class="cov-chip">AMD</span>
-            <span class="cov-chip">NFLX</span>
-            <span class="cov-chip">WMT</span>
-            <span class="cov-chip">UBER</span>
-            <span class="cov-chip">CRM</span>
-            <span class="cov-chip">PLTR</span>
+            <a class="cov-chip" href="/sentiment/aapl">AAPL</a>
+            <a class="cov-chip" href="/sentiment/msft">MSFT</a>
+            <a class="cov-chip" href="/sentiment/googl">GOOGL</a>
+            <a class="cov-chip" href="/sentiment/amzn">AMZN</a>
+            <a class="cov-chip" href="/sentiment/meta">META</a>
+            <a class="cov-chip" href="/sentiment/nvda">NVDA</a>
+            <a class="cov-chip" href="/sentiment/tsla">TSLA</a>
+            <a class="cov-chip" href="/sentiment/jpm">JPM</a>
+            <a class="cov-chip" href="/sentiment/bac">BAC</a>
+            <a class="cov-chip" href="/sentiment/gs">GS</a>
+            <a class="cov-chip" href="/sentiment/v">V</a>
+            <a class="cov-chip" href="/sentiment/ma">MA</a>
+            <a class="cov-chip" href="/sentiment/xom">XOM</a>
+            <a class="cov-chip" href="/sentiment/jnj">JNJ</a>
+            <a class="cov-chip" href="/sentiment/amd">AMD</a>
+            <a class="cov-chip" href="/sentiment/nflx">NFLX</a>
+            <a class="cov-chip" href="/sentiment/wmt">WMT</a>
+            <a class="cov-chip" href="/sentiment/uber">UBER</a>
+            <a class="cov-chip" href="/sentiment/crm">CRM</a>
+            <a class="cov-chip" href="/sentiment/pltr">PLTR</a>
           </div>
         </div>
         <div class="coverage-row">
           <div class="coverage-label">ETFs</div>
           <div class="coverage-num">6</div>
           <div class="coverage-chips">
-            <span class="cov-chip">SPY</span>
-            <span class="cov-chip">QQQ</span>
-            <span class="cov-chip">GLD</span>
-            <span class="cov-chip">SLV</span>
-            <span class="cov-chip">USO</span>
-            <span class="cov-chip">ARKK</span>
+            <a class="cov-chip" href="/sentiment/spy">SPY</a>
+            <a class="cov-chip" href="/sentiment/qqq">QQQ</a>
+            <a class="cov-chip" href="/sentiment/gld">GLD</a>
+            <a class="cov-chip" href="/sentiment/slv">SLV</a>
+            <a class="cov-chip" href="/sentiment/uso">USO</a>
+            <a class="cov-chip" href="/sentiment/arkk">ARKK</a>
           </div>
         </div>
         <div class="coverage-row">
           <div class="coverage-label">Commodities</div>
           <div class="coverage-num">4</div>
           <div class="coverage-chips">
-            <span class="cov-chip">Gold</span>
-            <span class="cov-chip">Silver</span>
-            <span class="cov-chip">Crude Oil</span>
-            <span class="cov-chip">Nat Gas</span>
+            <a class="cov-chip" href="/sentiment/gold-futures">Gold</a>
+            <a class="cov-chip" href="/sentiment/silver-futures">Silver</a>
+            <a class="cov-chip" href="/sentiment/crude-oil-futures">Crude Oil</a>
+            <a class="cov-chip" href="/sentiment/natural-gas-futures">Nat Gas</a>
           </div>
         </div>
       </div>

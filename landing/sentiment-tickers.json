@@ -1,0 +1,170 @@
+[
+  {
+    "slug": "btc",
+    "id": "BTC"
+  },
+  {
+    "slug": "eth",
+    "id": "ETH"
+  },
+  {
+    "slug": "sol",
+    "id": "SOL"
+  },
+  {
+    "slug": "xrp",
+    "id": "XRP"
+  },
+  {
+    "slug": "doge",
+    "id": "DOGE"
+  },
+  {
+    "slug": "eurusd",
+    "id": "EURUSD"
+  },
+  {
+    "slug": "gbpusd",
+    "id": "GBPUSD"
+  },
+  {
+    "slug": "usdjpy",
+    "id": "USDJPY"
+  },
+  {
+    "slug": "audusd",
+    "id": "AUDUSD"
+  },
+  {
+    "slug": "usdcad",
+    "id": "USDCAD"
+  },
+  {
+    "slug": "usdchf",
+    "id": "USDCHF"
+  },
+  {
+    "slug": "nzdusd",
+    "id": "NZDUSD"
+  },
+  {
+    "slug": "aapl",
+    "id": "AAPL"
+  },
+  {
+    "slug": "msft",
+    "id": "MSFT"
+  },
+  {
+    "slug": "googl",
+    "id": "GOOGL"
+  },
+  {
+    "slug": "amzn",
+    "id": "AMZN"
+  },
+  {
+    "slug": "meta",
+    "id": "META"
+  },
+  {
+    "slug": "nvda",
+    "id": "NVDA"
+  },
+  {
+    "slug": "tsla",
+    "id": "TSLA"
+  },
+  {
+    "slug": "jpm",
+    "id": "JPM"
+  },
+  {
+    "slug": "bac",
+    "id": "BAC"
+  },
+  {
+    "slug": "gs",
+    "id": "GS"
+  },
+  {
+    "slug": "v",
+    "id": "V"
+  },
+  {
+    "slug": "ma",
+    "id": "MA"
+  },
+  {
+    "slug": "xom",
+    "id": "XOM"
+  },
+  {
+    "slug": "jnj",
+    "id": "JNJ"
+  },
+  {
+    "slug": "amd",
+    "id": "AMD"
+  },
+  {
+    "slug": "nflx",
+    "id": "NFLX"
+  },
+  {
+    "slug": "wmt",
+    "id": "WMT"
+  },
+  {
+    "slug": "uber",
+    "id": "UBER"
+  },
+  {
+    "slug": "crm",
+    "id": "CRM"
+  },
+  {
+    "slug": "pltr",
+    "id": "PLTR"
+  },
+  {
+    "slug": "spy",
+    "id": "SPY"
+  },
+  {
+    "slug": "qqq",
+    "id": "QQQ"
+  },
+  {
+    "slug": "gld",
+    "id": "GLD"
+  },
+  {
+    "slug": "slv",
+    "id": "SLV"
+  },
+  {
+    "slug": "uso",
+    "id": "USO"
+  },
+  {
+    "slug": "arkk",
+    "id": "ARKK"
+  },
+  {
+    "slug": "gold-futures",
+    "id": "GC=F"
+  },
+  {
+    "slug": "silver-futures",
+    "id": "SI=F"
+  },
+  {
+    "slug": "crude-oil-futures",
+    "id": "CL=F"
+  },
+  {
+    "slug": "natural-gas-futures",
+    "id": "NG=F"
+  }
+]

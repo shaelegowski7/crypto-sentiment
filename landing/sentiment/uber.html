@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uber (UBER) Sentiment Analysis — News Sentiment vs Price | SentimentFX</title>
+  <meta name="description" content="Live UBER news sentiment analysis from SentimentFX. FinBERT-scored headlines, sentiment vs price chart, and correlation analytics for Uber — updated hourly.">
+  <meta name="keywords" content="UBER sentiment, Uber sentiment analysis, UBER news sentiment, UBER FinBERT, UBER market sentiment, UBER sentiment API">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#080c10">
+  <link rel="canonical" href="https://sentimentfx.org/sentiment/uber">
+
+  <meta property="og:site_name" content="SentimentFX">
+  <meta property="og:title" content="Uber (UBER) Sentiment Analysis — News Sentiment vs Price | SentimentFX">
+  <meta property="og:description" content="Live UBER news sentiment analysis from SentimentFX. FinBERT-scored headlines, sentiment vs price chart, and correlation analytics for Uber — updated hourly.">
+  <meta property="og:url" content="https://sentimentfx.org/sentiment/uber">
+  <meta property="og:type" content="article">
+  <meta property="og:image" content="https://sentimentfx.org/dashboard.jpeg">
+  <meta property="og:locale" content="en_GB">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Uber (UBER) Sentiment Analysis — News Sentiment vs Price | SentimentFX">
+  <meta name="twitter:description" content="Live UBER news sentiment analysis from SentimentFX. FinBERT-scored headlines, sentiment vs price chart, and correlation analytics for Uber — updated hourly.">
+  <meta name="twitter:image" content="https://sentimentfx.org/dashboard.jpeg">
+
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Stocks Sentiment","item":"https://sentimentfx.org/#coverage"},{"@type":"ListItem","position":3,"name":"Uber (UBER)","item":"https://sentimentfx.org/sentiment/uber"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is UBER sentiment calculated?","acceptedAnswer":{"@type":"Answer","text":"SentimentFX scrapes Uber news headlines from major financial outlets every hour and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus negative probability, giving a value between -1 (very bearish) and +1 (very bullish)."}},{"@type":"Question","name":"How often is UBER sentiment data updated?","acceptedAnswer":{"@type":"Answer","text":"The scraper runs every hour, pulling new UBER headlines from GNews and Yahoo Finance RSS feeds. New sentiment scores are usually live within 1–2 minutes of scrape completion."}},{"@type":"Question","name":"Can I correlate UBER sentiment with its price?","acceptedAnswer":{"@type":"Answer","text":"Yes — the SentimentFX dashboard plots UBER sentiment against price on the same chart, and the correlation endpoint returns a Pearson r value, 95% confidence interval and strength label over a rolling 180-day window. You can also pull this via the public REST API at developers.sentimentfx.org."}},{"@type":"Question","name":"Is UBER sentiment data available via API?","acceptedAnswer":{"@type":"Answer","text":"Yes. The SentimentFX public API exposes /v1/sentiment/UBER, /v1/summary/UBER, /v1/prices/UBER and /v1/correlation/UBER endpoints. Authentication is via X-API-Key header. See the developer portal for full reference."}}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Uber (UBER) News Sentiment Dataset","description":"Hourly FinBERT-scored news sentiment headlines for Uber (UBER), with matched daily price data in GBP. Maintained by SentimentFX.","url":"https://sentimentfx.org/sentiment/uber","keywords":["UBER sentiment","Uber sentiment analysis","FinBERT","financial NLP","news sentiment"],"creator":{"@type":"Organization","name":"SentimentFX","url":"https://sentimentfx.org/"},"license":"https://sentimentfx.org/terms.html"}</script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
+      --border:#21262d;--border2:#30363d;
+      --text:#e6edf3;--muted:#7d8590;
+      --accent:#f0b429;--accent2:#58a6ff;
+      --positive:#3fb950;--negative:#f85149;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
+    a{color:var(--accent);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    nav{display:flex;align-items:center;justify-content:space-between;padding:14px 40px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+    .nav-logo{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;}
+    .nav-logo span{color:var(--muted);font-weight:400;}
+    .nav-links{display:flex;gap:24px;list-style:none;}
+    .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
+    .nav-links a:hover{color:var(--text);text-decoration:none;}
+    .nav-cta{background:var(--accent);color:#080c10!important;padding:6px 14px;border-radius:2px;font-weight:600;}
+
+    main{max-width:880px;margin:0 auto;padding:48px 24px;}
+    .breadcrumb{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);margin-bottom:24px;text-transform:uppercase;}
+    .breadcrumb a{color:var(--muted);}
+    .breadcrumb a:hover{color:var(--text);text-decoration:none;}
+    .breadcrumb span{margin:0 8px;color:var(--border2);}
+
+    .ticker-label{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;}
+    h1{font-family:var(--mono);font-size:30px;font-weight:600;line-height:1.2;margin-bottom:14px;}
+    h1 .sub{color:var(--muted);font-weight:400;}
+    .lede{font-size:17px;color:var(--text);max-width:680px;margin-bottom:28px;line-height:1.6;}
+
+    .live-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:24px;margin-bottom:32px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:18px;}
+    .live-cell .live-label{font-family:var(--mono);font-size:9px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+    .live-cell .live-value{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--text);}
+    .live-cell.pos .live-value{color:var(--positive);}
+    .live-cell.neg .live-value{color:var(--negative);}
+
+    .cta{display:inline-block;background:var(--accent);color:#080c10!important;padding:12px 24px;border-radius:2px;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-right:10px;}
+    .cta-secondary{background:transparent;color:var(--text)!important;border:1px solid var(--border2);}
+    .cta:hover{text-decoration:none;}
+
+    h2{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:48px;margin-bottom:14px;}
+    p{margin-bottom:14px;color:#c9d1d9;}
+
+    .related{margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
+    .related-title{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;}
+    .related-chips{display:flex;flex-wrap:wrap;gap:8px;}
+    .chip{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:2px;}
+    .chip:hover{border-color:var(--accent);text-decoration:none;}
+
+    .faq{margin-top:48px;}
+    .faq-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px 22px;margin-bottom:10px;}
+    .faq-q{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;}
+    .faq-a{font-size:14px;color:#c9d1d9;line-height:1.6;}
+
+    footer{border-top:1px solid var(--border);padding:24px 40px;margin-top:64px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+    footer a{color:var(--muted);}
+    footer a:hover{color:var(--accent);text-decoration:none;}
+
+    @media(max-width:600px){
+      nav{padding:12px 16px;}
+      .nav-links{display:none;}
+      main{padding:32px 16px;}
+      h1{font-size:24px;}
+      footer{padding:16px;flex-direction:column;}
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">SentimentFX <span>/ UBER</span></a>
+  <ul class="nav-links">
+    <li><a href="/">Home</a></li>
+    <li><a href="/#coverage">Coverage</a></li>
+    <li><a href="/#pricing">Pricing</a></li>
+    <li><a href="https://developers.sentimentfx.org">Developers</a></li>
+    <li><a href="https://app.sentimentfx.org?auth=signup" class="nav-cta">Create Account</a></li>
+  </ul>
+</nav>
+
+<main>
+  <div class="breadcrumb">
+    <a href="/">SentimentFX</a><span>/</span><a href="/#coverage">Stocks</a><span>/</span>UBER
+  </div>
+
+  <div class="ticker-label">Stocks · UBER</div>
+  <h1>Uber <span class="sub">(UBER)</span> Sentiment Analysis</h1>
+
+  <p class="lede">
+    Live news sentiment for Uber — rideshare and delivery platform; regulation and unit economics move sentiment. SentimentFX scores every UBER
+    headline with FinBERT and tracks how sentiment moves alongside price, updated hourly.
+  </p>
+
+  <div class="live-card" id="live-card">
+    <div class="live-cell">
+      <div class="live-label">Avg sentiment (7d)</div>
+      <div class="live-value" id="live-sentiment">—</div>
+    </div>
+    <div class="live-cell">
+      <div class="live-label">Headlines (30d)</div>
+      <div class="live-value" id="live-headlines">—</div>
+    </div>
+    <div class="live-cell">
+      <div class="live-label">Latest price</div>
+      <div class="live-value" id="live-price">—</div>
+    </div>
+    <div class="live-cell">
+      <div class="live-label">Sentiment trend</div>
+      <div class="live-value" id="live-trend">—</div>
+    </div>
+  </div>
+
+  <div>
+    <a href="https://app.sentimentfx.org?ticker=UBER" class="cta">View live chart</a>
+    <a href="https://developers.sentimentfx.org#sentiment" class="cta cta-secondary">Get via API</a>
+  </div>
+
+  <h2>What we track for UBER</h2>
+  <p>
+    Every hour, SentimentFX collects the latest Uber news from major financial publishers
+    and RSS feeds, then scores each headline using FinBERT — a transformer model fine-tuned
+    on financial text. The output is a sentiment score between -1 (very bearish) and +1
+    (very bullish), and we plot the daily average against UBER price so you can
+    see how news flow moves with the market.
+  </p>
+  <p>
+    Uber is rideshare and delivery platform; regulation and unit economics move sentiment, which makes UBER an especially useful ticker for
+    sentiment-driven analysis. Our pipeline pulls from Yahoo Finance and other major financial newswires, deduplicates by URL, and only stores headlines whose title actually mentions UBER or a recognised alias.
+  </p>
+
+  <h2>Sentiment vs price correlation</h2>
+  <p>
+    The dashboard plots UBER sentiment against price on a single chart, with a
+    rolling 180-day correlation analysis that reports Pearson r, p-value, a 95% confidence
+    interval and a plain-English strength label (strong / weak / inconclusive). You can also
+    pull the raw correlation via the public API endpoint <a href="https://developers.sentimentfx.org">/v1/correlation/UBER</a>.
+  </p>
+
+  <h2>Developer access</h2>
+  <p>
+    All UBER sentiment, price and correlation data is available via the SentimentFX
+    REST API. Generate a key on the
+    <a href="https://developers.sentimentfx.org">developer portal</a>, then call
+    <code style="font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:2px;font-size:13px;">GET /v1/sentiment/UBER</code>
+    with an <code style="font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:2px;font-size:13px;">X-API-Key</code>
+    header. Free tier included, metered billing beyond that.
+  </p>
+
+  <div class="related">
+    <div class="related-title">Related Stocks tickers</div>
+    <div class="related-chips">
+      <a class="chip" href="/sentiment/aapl">AAPL</a>
+      <a class="chip" href="/sentiment/msft">MSFT</a>
+      <a class="chip" href="/sentiment/googl">GOOGL</a>
+      <a class="chip" href="/sentiment/amzn">AMZN</a>
+      <a class="chip" href="/sentiment/meta">META</a>
+      <a class="chip" href="/sentiment/nvda">NVDA</a>
+      <a class="chip" href="/sentiment/tsla">TSLA</a>
+    </div>
+  </div>
+
+  <div class="faq">
+    <h2 style="margin-top:0;">UBER sentiment FAQ</h2>
+    
+    <div class="faq-item">
+      <div class="faq-q">How is UBER sentiment calculated?</div>
+      <div class="faq-a">SentimentFX scrapes Uber news headlines from major financial outlets every hour and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus negative probability, giving a value between -1 (very bearish) and +1 (very bullish).</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How often is UBER sentiment data updated?</div>
+      <div class="faq-a">The scraper runs every hour, pulling new UBER headlines from GNews and Yahoo Finance RSS feeds. New sentiment scores are usually live within 1–2 minutes of scrape completion.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Can I correlate UBER sentiment with its price?</div>
+      <div class="faq-a">Yes — the SentimentFX dashboard plots UBER sentiment against price on the same chart, and the correlation endpoint returns a Pearson r value, 95% confidence interval and strength label over a rolling 180-day window. You can also pull this via the public REST API at developers.sentimentfx.org.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Is UBER sentiment data available via API?</div>
+      <div class="faq-a">Yes. The SentimentFX public API exposes /v1/sentiment/UBER, /v1/summary/UBER, /v1/prices/UBER and /v1/correlation/UBER endpoints. Authentication is via X-API-Key header. See the developer portal for full reference.</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>SentimentFX — News sentiment intelligence for 42 tickers across crypto, FX, stocks, ETFs and commodities.</span>
+  <span>
+    <a href="/">Home</a> ·
+    <a href="https://app.sentimentfx.org">Dashboard</a> ·
+    <a href="https://developers.sentimentfx.org">API</a> ·
+    <a href="https://status.sentimentfx.org">Status</a> ·
+    <a href="/privacy">Privacy</a> ·
+    <a href="/terms">Terms</a>
+  </span>
+</footer>
+
+<script>
+  const API = 'https://api.sentimentfx.org';
+  const TICKER = "UBER";
+  const CATEGORY = "stocks";
+
+  function fmtPrice(n) {
+    if (n == null || isNaN(n)) return '—';
+    if (n > 1000) return n.toLocaleString(undefined, {maximumFractionDigits: 0});
+    if (n > 1) return n.toFixed(2);
+    return n.toFixed(4);
+  }
+
+  function fmtSent(n) {
+    if (n == null || isNaN(n)) return '—';
+    return (n >= 0 ? '+' : '') + n.toFixed(3);
+  }
+
+  fetch(API + '/dashboard/' + encodeURIComponent(TICKER))
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !Array.isArray(data)) return;
+      const recent = data.slice(-7).filter(d => d.sentiment != null);
+      if (recent.length) {
+        const avg = recent.reduce((s,d) => s + d.sentiment, 0) / recent.length;
+        const el = document.getElementById('live-sentiment');
+        el.textContent = fmtSent(avg);
+        el.parentElement.classList.add(avg >= 0 ? 'pos' : 'neg');
+      }
+      const last30 = data.slice(-30);
+      const headlineCount = last30.reduce((s,d) => s + (d.article_count || 0), 0);
+      document.getElementById('live-headlines').textContent = headlineCount.toLocaleString();
+
+      const latestPrice = [...data].reverse().find(d => d.price != null);
+      if (latestPrice) {
+        const prefix = CATEGORY === 'crypto' || CATEGORY === 'stocks' || CATEGORY === 'etfs' ? '£' : '';
+        document.getElementById('live-price').textContent = prefix + fmtPrice(latestPrice.price);
+      }
+
+      if (recent.length >= 4) {
+        const half = Math.floor(recent.length / 2);
+        const early = recent.slice(0, half).reduce((s,d) => s + d.sentiment, 0) / half;
+        const late = recent.slice(half).reduce((s,d) => s + d.sentiment, 0) / (recent.length - half);
+        const delta = late - early;
+        const trendEl = document.getElementById('live-trend');
+        trendEl.textContent = delta > 0.02 ? 'Rising' : delta < -0.02 ? 'Falling' : 'Flat';
+        trendEl.parentElement.classList.add(delta > 0.02 ? 'pos' : delta < -0.02 ? 'neg' : '');
+      }
+    })
+    .catch(() => {});
+</script>
+
+</body>
+</html>

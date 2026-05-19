@@ -2,32 +2,290 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://sentimentfx.org/</loc>
+    <lastmod>2026-05-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://sentimentfx.org/privacy.html</loc>
+    <lastmod>2026-05-19</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://sentimentfx.org/terms.html</loc>
+    <lastmod>2026-05-19</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://app.sentimentfx.org/</loc>
+    <lastmod>2026-05-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://developers.sentimentfx.org/</loc>
+    <lastmod>2026-05-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://status.sentimentfx.org/</loc>
+    <lastmod>2026-05-19</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/btc</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/eth</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/sol</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/xrp</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/doge</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/eurusd</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/gbpusd</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/usdjpy</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/audusd</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/usdcad</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/usdchf</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/nzdusd</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/aapl</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/msft</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/googl</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/amzn</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/meta</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/nvda</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/tsla</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/jpm</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/bac</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/gs</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/v</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/ma</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/xom</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/jnj</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/amd</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/nflx</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/wmt</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/uber</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/crm</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/pltr</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/spy</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/qqq</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/gld</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/slv</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/uso</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/arkk</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/gold-futures</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/silver-futures</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/crude-oil-futures</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sentimentfx.org/sentiment/natural-gas-futures</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
   </url>
 </urlset>
