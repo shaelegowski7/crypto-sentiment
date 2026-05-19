@@ -15,6 +15,25 @@ if (GA_ID) {
   window.gtag('config', GA_ID)
 }
 
+// Strip GA cross-domain linker params from the visible URL after gtag has had a
+// chance to read them for session stitching. Without the delay, we'd break
+// cross-domain attribution from sentimentfx.org → app.sentimentfx.org.
+setTimeout(() => {
+  const url = new URL(window.location.href)
+  const junk = ['_gl', '_ga', '_gid', '_gat']
+  let changed = false
+  for (const k of junk) {
+    if (url.searchParams.has(k)) {
+      url.searchParams.delete(k)
+      changed = true
+    }
+  }
+  if (changed) {
+    const qs = url.searchParams.toString()
+    window.history.replaceState(null, '', url.pathname + (qs ? '?' + qs : '') + url.hash)
+  }
+}, 800)
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
