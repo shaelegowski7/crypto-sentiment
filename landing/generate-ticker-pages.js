@@ -356,35 +356,49 @@ function pageHtml(t) {
     return (n >= 0 ? '+' : '') + n.toFixed(3);
   }
 
-  fetch(API + '/dashboard/' + encodeURIComponent(TICKER))
+  fetch(API + '/dashboard/' + encodeURIComponent(TICKER) + '?days=30&limit=200')
     .then(r => r.ok ? r.json() : null)
     .then(data => {
-      if (!data || !Array.isArray(data)) return;
-      const recent = data.slice(-7).filter(d => d.sentiment != null);
+      if (!data || typeof data !== 'object') return;
+      const headlines = Array.isArray(data.sentiment) ? data.sentiment : [];
+      const prices = Array.isArray(data.prices) ? data.prices : [];
+      const totalIn30d = data.pagination && data.pagination.total != null ? data.pagination.total : headlines.length;
+
+      // Latest sentiment — average score over the most recent 7 days
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const recent = headlines.filter(h => {
+        const t = new Date(h.date.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(h.date) ? h.date : h.date + 'Z').getTime();
+        return t >= sevenDaysAgo && typeof h.score === 'number';
+      });
       if (recent.length) {
-        const avg = recent.reduce((s,d) => s + d.sentiment, 0) / recent.length;
+        const avg = recent.reduce((s,h) => s + h.score, 0) / recent.length;
         const el = document.getElementById('live-sentiment');
         el.textContent = fmtSent(avg);
         el.parentElement.classList.add(avg >= 0 ? 'pos' : 'neg');
       }
-      const last30 = data.slice(-30);
-      const headlineCount = last30.reduce((s,d) => s + (d.article_count || 0), 0);
-      document.getElementById('live-headlines').textContent = headlineCount.toLocaleString();
 
-      const latestPrice = [...data].reverse().find(d => d.price != null);
-      if (latestPrice) {
-        const prefix = CATEGORY === 'crypto' || CATEGORY === 'stocks' || CATEGORY === 'etfs' ? '£' : '';
-        document.getElementById('live-price').textContent = prefix + fmtPrice(latestPrice.price);
+      // Headline count over the 30-day window — use server-provided total
+      document.getElementById('live-headlines').textContent = totalIn30d.toLocaleString();
+
+      // Latest price — /dashboard returns prices ordered desc, so first is latest
+      if (prices.length && prices[0].close_price != null) {
+        const isGbp = CATEGORY === 'crypto';   // crypto tickers are -GBP on yfinance
+        const isUsd = CATEGORY === 'stocks' || CATEGORY === 'etfs' || CATEGORY === 'commodities';
+        const prefix = isGbp ? '£' : isUsd ? '$' : '';
+        document.getElementById('live-price').textContent = prefix + fmtPrice(prices[0].close_price);
       }
 
+      // Trend — compare first half vs second half of the last 7 days
       if (recent.length >= 4) {
-        const half = Math.floor(recent.length / 2);
-        const early = recent.slice(0, half).reduce((s,d) => s + d.sentiment, 0) / half;
-        const late = recent.slice(half).reduce((s,d) => s + d.sentiment, 0) / (recent.length - half);
+        const sorted = [...recent].sort((a,b) => new Date(a.date) - new Date(b.date));
+        const half = Math.floor(sorted.length / 2);
+        const early = sorted.slice(0, half).reduce((s,h) => s + h.score, 0) / half;
+        const late = sorted.slice(half).reduce((s,h) => s + h.score, 0) / (sorted.length - half);
         const delta = late - early;
         const trendEl = document.getElementById('live-trend');
         trendEl.textContent = delta > 0.02 ? 'Rising' : delta < -0.02 ? 'Falling' : 'Flat';
-        trendEl.parentElement.classList.add(delta > 0.02 ? 'pos' : delta < -0.02 ? 'neg' : '');
+        if (delta > 0.02) trendEl.parentElement.classList.add('pos');
+        else if (delta < -0.02) trendEl.parentElement.classList.add('neg');
       }
     })
     .catch(() => {});
