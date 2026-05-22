@@ -6,7 +6,7 @@ from .database import engine, get_db
 from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines
 from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -518,7 +518,7 @@ def scrape_all():
     status = "failure" if any_failure else "success"
     SCRAPER_RUNS.labels(status=status).inc()
     SCRAPER_DURATION.observe(elapsed)
-    last_scrape_time = datetime.utcnow().isoformat()
+    last_scrape_time = datetime.now(timezone.utc).isoformat()
     last_scrape_duration = elapsed
     print(f"Scheduled scrape complete in {elapsed}s (status={status})")
 
@@ -1996,7 +1996,7 @@ def get_status(db: Session = Depends(get_db)):
         "tickers": ticker_stats,
         "total_headlines": db.query(models.Headline).count(),
         "total_prices": db.query(models.Price).count(),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 @app.get("/health")

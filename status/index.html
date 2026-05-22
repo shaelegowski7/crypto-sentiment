@@ -577,15 +577,36 @@
         <script>
     const API = 'https://api.sentimentfx.org'
 
+    // The backend returns naive ISO timestamps (no Z / no offset). They are
+    // always UTC, but the JS Date constructor parses naive strings as *local*
+    // time — so we explicitly append Z when no timezone marker is present.
+    function parseUtc(iso) {
+      if (!iso) return null
+      const hasTz = /[zZ]$|[+\-]\d{2}:?\d{2}$/.test(iso)
+      return new Date(hasTz ? iso : iso + 'Z')
+    }
+
     function fmtDate(iso) {
-      if (!iso) return '—'
-      const d = new Date(iso)
-      return d.toUTCString().replace(' GMT', ' UTC')
+      const d = parseUtc(iso)
+      if (!d) return '—'
+      return d.toLocaleString(undefined, {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZoneName: 'short',
+      })
     }
 
     function fmtRelative(iso) {
-      if (!iso) return null
-      const diff = (Date.now() - new Date(iso).getTime()) / 1000 / 60
+      const d = parseUtc(iso)
+      if (!d) return null
+      const diff = (Date.now() - d.getTime()) / 1000 / 60
+      if (diff < 1) return 'just now'
       if (diff < 60) return `${Math.round(diff)}m ago`
       if (diff < 1440) return `${Math.round(diff / 60)}h ago`
       return `${Math.round(diff / 1440)}d ago`
