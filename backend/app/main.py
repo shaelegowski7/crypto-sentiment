@@ -666,6 +666,64 @@ def save_all_prices(background_tasks: BackgroundTasks, admin=Depends(require_adm
     }
 
 
+# Forward-fills any missing date between a ticker's earliest and latest record
+# with the prior day's close (volume=0 so imputed rows are distinguishable from
+# real ones).  This produces a continuous daily series — weekends and market
+# holidays are filled with the most recent trading day's close.
+def _forward_fill_gaps(db: Session, ticker: str) -> int:
+    rows = db.query(models.Price).filter(
+        models.Price.ticker == ticker
+    ).order_by(models.Price.date.asc()).all()
+    if len(rows) < 2:
+        return 0
+    inserted = 0
+    prev = rows[0]
+    for curr in rows[1:]:
+        gap_days = (curr.date - prev.date).days
+        if gap_days > 1:
+            for i in range(1, gap_days):
+                db.add(models.Price(
+                    ticker=ticker,
+                    close_price=prev.close_price,
+                    volume=0.0,
+                    date=prev.date + timedelta(days=i),
+                ))
+                inserted += 1
+        prev = curr
+    db.commit()
+    return inserted
+
+
+def _run_fill_gaps():
+    db = SessionLocal()
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    summary = {}
+    try:
+        for ticker in all_tickers:
+            try:
+                inserted = _forward_fill_gaps(db, ticker)
+                summary[ticker] = inserted
+                print(f"[FILL-GAPS] {ticker}: +{inserted} forward-filled")
+            except Exception as e:
+                db.rollback()
+                summary[ticker] = f"error: {e}"
+                print(f"[FILL-GAPS] {ticker} error: {e}")
+    finally:
+        db.close()
+    total = sum(v for v in summary.values() if isinstance(v, int))
+    print(f"[FILL-GAPS] done — {total} rows inserted across {len(summary)} tickers")
+
+
+@app.post("/prices/fill-gaps")
+def fill_price_gaps(background_tasks: BackgroundTasks, admin=Depends(require_admin)):
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    background_tasks.add_task(_run_fill_gaps)
+    return {
+        "message": f"Queued gap fill for {len(all_tickers)} tickers — check logs",
+        "tickers": all_tickers,
+    }
+
+
 @app.post("/prices/{ticker}")
 def save_prices(ticker: str, db: Session = Depends(get_db), admin=Depends(require_admin)):
     prices = fetch_prices(ticker.upper())
