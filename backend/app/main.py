@@ -616,34 +616,6 @@ def scrape(ticker: str, db: Session = Depends(get_db), admin=Depends(require_adm
     return {"message": f"Saved {len(saved)} headlines for {ticker}"}
 
 
-@app.post("/prices/{ticker}")
-def save_prices(ticker: str, db: Session = Depends(get_db), admin=Depends(require_admin)):
-    prices = fetch_prices(ticker.upper())
-
-    if not prices:
-        raise HTTPException(status_code=404, detail="No price data found")
-
-    for p in prices:
-        exists = db.query(models.Price).filter(
-            models.Price.ticker == p["ticker"],
-            models.Price.date == p["date"]
-        ).first()
-
-        if exists:
-            continue
-
-        price = models.Price(
-            ticker=p["ticker"],
-            close_price=p["close_price"],
-            volume=p["volume"],
-            date=p["date"]
-        )
-        db.add(price)
-
-    db.commit()
-    return {"message": f"Saved prices for {ticker}"}
-
-
 def _backfill_prices_all():
     db = SessionLocal()
     all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
@@ -682,6 +654,8 @@ def _backfill_prices_all():
     print(f"[BACKFILL-PRICES] done — saved={sum(summary['saved'].values())} across {len(summary['saved'])} tickers, errors={len(summary['errors'])}")
 
 
+# Must be registered before /prices/{ticker} so FastAPI doesn't capture "all"
+# as a ticker name.
 @app.post("/prices/all")
 def save_all_prices(background_tasks: BackgroundTasks, admin=Depends(require_admin)):
     all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
@@ -690,6 +664,34 @@ def save_all_prices(background_tasks: BackgroundTasks, admin=Depends(require_adm
         "message": f"Queued price backfill for {len(all_tickers)} tickers — check logs for progress",
         "tickers": all_tickers,
     }
+
+
+@app.post("/prices/{ticker}")
+def save_prices(ticker: str, db: Session = Depends(get_db), admin=Depends(require_admin)):
+    prices = fetch_prices(ticker.upper())
+
+    if not prices:
+        raise HTTPException(status_code=404, detail="No price data found")
+
+    for p in prices:
+        exists = db.query(models.Price).filter(
+            models.Price.ticker == p["ticker"],
+            models.Price.date == p["date"]
+        ).first()
+
+        if exists:
+            continue
+
+        price = models.Price(
+            ticker=p["ticker"],
+            close_price=p["close_price"],
+            volume=p["volume"],
+            date=p["date"]
+        )
+        db.add(price)
+
+    db.commit()
+    return {"message": f"Saved prices for {ticker}"}
 
 
 @app.get("/sentiment/{ticker}", response_model=list[schemas.HeadlineResponse])
