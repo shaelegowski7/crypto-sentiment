@@ -644,6 +644,54 @@ def save_prices(ticker: str, db: Session = Depends(get_db), admin=Depends(requir
     return {"message": f"Saved prices for {ticker}"}
 
 
+def _backfill_prices_all():
+    db = SessionLocal()
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    summary = {"saved": {}, "errors": {}}
+    try:
+        for ticker in all_tickers:
+            try:
+                prices = fetch_prices(ticker)
+                if not prices:
+                    summary["errors"][ticker] = "no data"
+                    continue
+                new_count = 0
+                for p in prices:
+                    exists = db.query(models.Price).filter(
+                        models.Price.ticker == p["ticker"],
+                        models.Price.date == p["date"],
+                    ).first()
+                    if exists:
+                        continue
+                    db.add(models.Price(
+                        ticker=p["ticker"],
+                        close_price=p["close_price"],
+                        volume=p["volume"],
+                        date=p["date"],
+                    ))
+                    new_count += 1
+                db.commit()
+                summary["saved"][ticker] = new_count
+                print(f"[BACKFILL-PRICES] {ticker}: +{new_count} new / {len(prices)} fetched")
+            except Exception as e:
+                db.rollback()
+                summary["errors"][ticker] = str(e)
+                print(f"[BACKFILL-PRICES] {ticker} error: {e}")
+    finally:
+        db.close()
+    print(f"[BACKFILL-PRICES] done — saved={sum(summary['saved'].values())} across {len(summary['saved'])} tickers, errors={len(summary['errors'])}")
+
+
+@app.post("/prices/all")
+def save_all_prices(background_tasks: BackgroundTasks, admin=Depends(require_admin)):
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    background_tasks.add_task(_backfill_prices_all)
+    return {
+        "message": f"Queued price backfill for {len(all_tickers)} tickers — check logs for progress",
+        "tickers": all_tickers,
+    }
+
+
 @app.get("/sentiment/{ticker}", response_model=list[schemas.HeadlineResponse])
 def get_sentiment(ticker: str, db: Session = Depends(get_db)):
     headlines = db.query(models.Headline).filter(
