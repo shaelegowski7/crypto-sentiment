@@ -1454,13 +1454,13 @@ def backfill(background_tasks: BackgroundTasks, tickers: str, days: int = 30, of
     return {"message": f"Backfill started for {len(ticker_list)} ticker(s): {','.join(ticker_list)} ({days} days, offset {offset}) - check Railway logs for progress"}
 
 
-def _run_gdelt_backfill(ticker_list: list, days: int):
+def _run_gdelt_backfill(ticker_list: list, days: int, windows_per_day: int = 4):
     db = SessionLocal()
     summary = {}
     try:
         for ticker in ticker_list:
             try:
-                headlines = fetch_gdelt_headlines(ticker, days=days)
+                headlines = fetch_gdelt_headlines(ticker, days=days, windows_per_day=windows_per_day)
                 saved = 0
                 for h in headlines:
                     exists = db.query(models.Headline).filter(
@@ -1500,6 +1500,7 @@ def backfill_gdelt(
     background_tasks: BackgroundTasks,
     tickers: str = "all",
     days: int = 30,
+    windows_per_day: int = 4,
     admin=Depends(require_admin),
 ):
     if tickers.lower() == "all":
@@ -1511,11 +1512,14 @@ def backfill_gdelt(
     if unknown:
         raise HTTPException(status_code=404, detail=f"Unknown tickers: {','.join(unknown)}")
 
-    background_tasks.add_task(_run_gdelt_backfill, ticker_list, days)
+    windows_per_day = max(1, min(windows_per_day, 24))
+    background_tasks.add_task(_run_gdelt_backfill, ticker_list, days, windows_per_day)
     return {
-        "message": f"GDELT backfill queued for {len(ticker_list)} ticker(s) over {days} days — check Railway logs for progress",
+        "message": f"GDELT backfill queued for {len(ticker_list)} ticker(s) over {days} days "
+                   f"({windows_per_day} windows/day) — check Railway logs for progress",
         "tickers": ticker_list,
         "days": days,
+        "windows_per_day": windows_per_day,
     }
 
 

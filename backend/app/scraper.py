@@ -346,6 +346,7 @@ GDELT_QUERIES = {
 _GDELT_BASE_DELAY = 1.2          # seconds between successful calls
 _GDELT_MAX_RETRIES = 4           # per-day retry budget
 _GDELT_BACKOFF_BASE = 8          # first 429 sleeps 8s, then 16s, 32s, 64s
+_GDELT_MAXRECORDS = 250          # hard cap GDELT enforces on a single query
 
 
 def _gdelt_get(params: dict, label: str) -> dict | None:
@@ -386,73 +387,98 @@ def _gdelt_get(params: dict, label: str) -> dict | None:
     return None
 
 
-def fetch_gdelt_headlines(ticker: str, days: int = 30, max_per_day: int = 75) -> list:
-    """Pull historical headlines from GDELT 2.0 in 1-day chunks.
+def fetch_gdelt_headlines(
+    ticker: str,
+    days: int = 30,
+    windows_per_day: int = 4,
+    max_per_window: int = _GDELT_MAXRECORDS,
+) -> list:
+    """Pull historical headlines from GDELT 2.0 in sub-day windows.
 
-    GDELT caps a single query at 250 records, so we chunk by day to capture
-    high-volume tickers without truncation.  Headlines are returned in the
-    same shape as fetch_headlines() / fetch_rss_headlines() so they slot into
-    the existing ingestion pipeline.
+    GDELT caps a single query at 250 records, so one query per day truncates
+    high-volume tickers badly — BTC alone can see thousands of articles a day,
+    of which a single page captures only the most recent 250.  We split each
+    day into ``windows_per_day`` equal time windows and request up to
+    ``max_per_window`` records each, so a busy day can yield ~1,000+ titled
+    articles instead of one capped page.  Headlines come back in the same shape
+    as fetch_headlines() / fetch_rss_headlines() so they slot straight into the
+    existing ingestion pipeline.
     """
     query = GDELT_QUERIES.get(ticker.upper())
     if not query:
         print(f"[GDELT] no query configured for {ticker}")
         return []
 
+    windows_per_day = max(1, windows_per_day)
+    max_per_window = min(max_per_window, _GDELT_MAXRECORDS)
+    window_seconds = 86400 // windows_per_day
+
     headlines = []
     seen_urls = set()
     now = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0)
     consecutive_failures = 0
+    aborted = False
 
     for day_offset in range(days):
         day_end = now - timedelta(days=day_offset)
         day_start = day_end - timedelta(days=1, seconds=-1)
-        label = f"{ticker} {day_start.date()}"
 
-        params = {
-            "query": query,
-            "mode": "artlist",
-            "format": "json",
-            "maxrecords": max_per_day,
-            "sort": "datedesc",
-            "startdatetime": day_start.strftime("%Y%m%d%H%M%S"),
-            "enddatetime":   day_end.strftime("%Y%m%d%H%M%S"),
-        }
+        for w in range(windows_per_day):
+            win_start = day_start + timedelta(seconds=w * window_seconds)
+            # last window absorbs any rounding remainder up to the day boundary
+            win_end = day_end if w == windows_per_day - 1 else \
+                day_start + timedelta(seconds=(w + 1) * window_seconds - 1)
+            label = f"{ticker} {win_start.date()} {win_start:%H:%M}-{win_end:%H:%M}"
 
-        data = _gdelt_get(params, label)
+            params = {
+                "query": query,
+                "mode": "artlist",
+                "format": "json",
+                "maxrecords": max_per_window,
+                "sort": "datedesc",
+                "startdatetime": win_start.strftime("%Y%m%d%H%M%S"),
+                "enddatetime":   win_end.strftime("%Y%m%d%H%M%S"),
+            }
 
-        if data is None:
-            consecutive_failures += 1
-            if consecutive_failures >= 5:
-                print(f"[GDELT] {ticker}: 5 consecutive failures, aborting remaining {days - day_offset - 1} days")
-                break
-            time.sleep(_GDELT_BASE_DELAY)
-            continue
+            data = _gdelt_get(params, label)
 
-        consecutive_failures = 0
-
-        for art in data.get("articles", []):
-            url = art.get("url")
-            title = (art.get("title") or "").strip()
-            if not url or not title or url in seen_urls:
+            if data is None:
+                consecutive_failures += 1
+                if consecutive_failures >= 5:
+                    print(f"[GDELT] {ticker}: 5 consecutive failures, aborting backfill")
+                    aborted = True
+                    break
+                time.sleep(_GDELT_BASE_DELAY)
                 continue
-            seen_urls.add(url)
 
-            seendate = art.get("seendate", "")
-            try:
-                pub_dt = datetime.strptime(seendate, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
-            except ValueError:
-                pub_dt = day_start
+            consecutive_failures = 0
 
-            headlines.append({
-                "ticker": ticker.upper(),
-                "title": title,
-                "source": art.get("domain") or "GDELT",
-                "url": url,
-                "published_at": pub_dt,
-            })
+            for art in data.get("articles", []):
+                url = art.get("url")
+                title = (art.get("title") or "").strip()
+                if not url or not title or url in seen_urls:
+                    continue
+                seen_urls.add(url)
 
-        time.sleep(_GDELT_BASE_DELAY)
+                seendate = art.get("seendate", "")
+                try:
+                    pub_dt = datetime.strptime(seendate, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    pub_dt = win_start
 
-    print(f"[GDELT] {ticker}: fetched {len(headlines)} headlines over {days} days")
+                headlines.append({
+                    "ticker": ticker.upper(),
+                    "title": title,
+                    "source": art.get("domain") or "GDELT",
+                    "url": url,
+                    "published_at": pub_dt,
+                })
+
+            time.sleep(_GDELT_BASE_DELAY)
+
+        if aborted:
+            break
+
+    print(f"[GDELT] {ticker}: fetched {len(headlines)} headlines over {days} days "
+          f"({windows_per_day} windows/day)")
     return headlines
