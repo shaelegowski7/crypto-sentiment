@@ -340,6 +340,52 @@ GDELT_QUERIES = {
 }
 
 
+# GDELT pacing: ~1 req/sec is the safe sustained rate.  Bursting past that
+# returns 429 + temporary IP throttle that lasts several minutes.  We use a
+# floor of 1.2s between successful calls and exponential backoff on 429.
+_GDELT_BASE_DELAY = 1.2          # seconds between successful calls
+_GDELT_MAX_RETRIES = 4           # per-day retry budget
+_GDELT_BACKOFF_BASE = 8          # first 429 sleeps 8s, then 16s, 32s, 64s
+
+
+def _gdelt_get(params: dict, label: str) -> dict | None:
+    """Single GDELT call with retry + exponential backoff on 429 / timeout."""
+    delay = _GDELT_BACKOFF_BASE
+    for attempt in range(_GDELT_MAX_RETRIES):
+        try:
+            res = requests.get(
+                GDELT_DOC_URL,
+                params=params,
+                timeout=30,
+                headers={"User-Agent": "SentimentFX/1.0 (+https://sentimentfx.org)"},
+            )
+            if res.status_code == 200:
+                if not res.text.strip():
+                    return {}
+                try:
+                    return res.json()
+                except ValueError:
+                    print(f"[GDELT] {label}: non-JSON response (len={len(res.text)})")
+                    return None
+            if res.status_code == 429:
+                print(f"[GDELT] {label}: 429, sleeping {delay}s (attempt {attempt + 1}/{_GDELT_MAX_RETRIES})")
+                time.sleep(delay)
+                delay *= 2
+                continue
+            print(f"[GDELT] {label}: HTTP {res.status_code}")
+            return None
+        except requests.exceptions.Timeout:
+            print(f"[GDELT] {label}: timeout, sleeping {delay}s (attempt {attempt + 1}/{_GDELT_MAX_RETRIES})")
+            time.sleep(delay)
+            delay *= 2
+            continue
+        except Exception as e:
+            print(f"[GDELT] {label} error: {e}")
+            return None
+    print(f"[GDELT] {label}: giving up after {_GDELT_MAX_RETRIES} retries")
+    return None
+
+
 def fetch_gdelt_headlines(ticker: str, days: int = 30, max_per_day: int = 75) -> list:
     """Pull historical headlines from GDELT 2.0 in 1-day chunks.
 
@@ -356,10 +402,12 @@ def fetch_gdelt_headlines(ticker: str, days: int = 30, max_per_day: int = 75) ->
     headlines = []
     seen_urls = set()
     now = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0)
+    consecutive_failures = 0
 
     for day_offset in range(days):
         day_end = now - timedelta(days=day_offset)
         day_start = day_end - timedelta(days=1, seconds=-1)
+        label = f"{ticker} {day_start.date()}"
 
         params = {
             "query": query,
@@ -371,29 +419,17 @@ def fetch_gdelt_headlines(ticker: str, days: int = 30, max_per_day: int = 75) ->
             "enddatetime":   day_end.strftime("%Y%m%d%H%M%S"),
         }
 
-        try:
-            res = requests.get(
-                GDELT_DOC_URL,
-                params=params,
-                timeout=20,
-                headers={"User-Agent": "SentimentFX/1.0 (+https://sentimentfx.org)"},
-            )
-            if res.status_code != 200:
-                print(f"[GDELT] {ticker} {day_start.date()}: HTTP {res.status_code}")
-                time.sleep(1)
-                continue
+        data = _gdelt_get(params, label)
 
-            # GDELT sometimes returns empty body when there are zero matches.
-            if not res.text.strip():
-                continue
+        if data is None:
+            consecutive_failures += 1
+            if consecutive_failures >= 5:
+                print(f"[GDELT] {ticker}: 5 consecutive failures, aborting remaining {days - day_offset - 1} days")
+                break
+            time.sleep(_GDELT_BASE_DELAY)
+            continue
 
-            data = res.json()
-        except ValueError:
-            print(f"[GDELT] {ticker} {day_start.date()}: non-JSON response")
-            continue
-        except Exception as e:
-            print(f"[GDELT] {ticker} {day_start.date()} error: {e}")
-            continue
+        consecutive_failures = 0
 
         for art in data.get("articles", []):
             url = art.get("url")
@@ -416,10 +452,7 @@ def fetch_gdelt_headlines(ticker: str, days: int = 30, max_per_day: int = 75) ->
                 "published_at": pub_dt,
             })
 
-        # Polite: GDELT has no published rate limit but bursting it gets you
-        # silently throttled.  300ms per call ≈ 200/min, well below anything
-        # they'd care about.
-        time.sleep(0.3)
+        time.sleep(_GDELT_BASE_DELAY)
 
     print(f"[GDELT] {ticker}: fetched {len(headlines)} headlines over {days} days")
     return headlines
