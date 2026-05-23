@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines
+from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_gdelt_headlines, GDELT_QUERIES
 from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from datetime import datetime, timedelta, timezone
@@ -1452,6 +1452,71 @@ def backfill(background_tasks: BackgroundTasks, tickers: str, days: int = 30, of
     for ticker in ticker_list:
         background_tasks.add_task(run_backfill, ticker, days, offset)
     return {"message": f"Backfill started for {len(ticker_list)} ticker(s): {','.join(ticker_list)} ({days} days, offset {offset}) - check Railway logs for progress"}
+
+
+def _run_gdelt_backfill(ticker_list: list, days: int):
+    db = SessionLocal()
+    summary = {}
+    try:
+        for ticker in ticker_list:
+            try:
+                headlines = fetch_gdelt_headlines(ticker, days=days)
+                saved = 0
+                for h in headlines:
+                    exists = db.query(models.Headline).filter(
+                        models.Headline.url == h["url"]
+                    ).first()
+                    if exists:
+                        continue
+                    t0 = time.time()
+                    sentiment = analyse_sentiment(h["title"])
+                    FINBERT_LATENCY.observe(time.time() - t0)
+                    db.add(models.Headline(
+                        ticker=h["ticker"],
+                        title=h["title"],
+                        source=h["source"],
+                        url=h["url"],
+                        sentiment_score=sentiment["score"],
+                        sentiment_label=sentiment["label"],
+                        published_at=h["published_at"],
+                    ))
+                    HEADLINES_INGESTED.labels(source="gdelt", ticker=h["ticker"]).inc()
+                    saved += 1
+                db.commit()
+                summary[ticker] = saved
+                print(f"[GDELT-BACKFILL] {ticker}: +{saved} new of {len(headlines)} fetched")
+            except Exception as e:
+                db.rollback()
+                summary[ticker] = f"error: {e}"
+                print(f"[GDELT-BACKFILL] {ticker} error: {e}")
+    finally:
+        db.close()
+    total = sum(v for v in summary.values() if isinstance(v, int))
+    print(f"[GDELT-BACKFILL] done — +{total} new headlines across {len(summary)} tickers")
+
+
+@app.post("/backfill/gdelt")
+def backfill_gdelt(
+    background_tasks: BackgroundTasks,
+    tickers: str = "all",
+    days: int = 30,
+    admin=Depends(require_admin),
+):
+    if tickers.lower() == "all":
+        ticker_list = list(GDELT_QUERIES.keys())
+    else:
+        ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+
+    unknown = [t for t in ticker_list if t not in GDELT_QUERIES]
+    if unknown:
+        raise HTTPException(status_code=404, detail=f"Unknown tickers: {','.join(unknown)}")
+
+    background_tasks.add_task(_run_gdelt_backfill, ticker_list, days)
+    return {
+        "message": f"GDELT backfill queued for {len(ticker_list)} ticker(s) over {days} days — check Railway logs for progress",
+        "tickers": ticker_list,
+        "days": days,
+    }
 
 
 @app.post("/alerts")
