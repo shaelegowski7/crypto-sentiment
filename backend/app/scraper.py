@@ -287,10 +287,13 @@ def fetch_rss_headlines(ticker: str) -> list:
 
 GDELT_QUERIES = {
     # Crypto
-    "BTC":  '("Bitcoin" OR "BTC") sourcelang:english',
+    # NB: GDELT rejects quoted phrases shorter than ~5 chars with "The specified
+    # phrase is too short." — so bare tickers like "BTC"/"XRP" must be replaced
+    # with longer phrases or they silently return zero articles.
+    "BTC":  '("Bitcoin" OR "BTC price") sourcelang:english',
     "ETH":  '("Ethereum" OR "ether token") sourcelang:english',
     "SOL":  '("Solana" OR "SOL token") sourcelang:english',
-    "XRP":  '("XRP" OR "Ripple Labs") sourcelang:english',
+    "XRP":  '("Ripple Labs" OR "XRP price" OR "XRP cryptocurrency") sourcelang:english',
     "DOGE": '("Dogecoin" OR "DOGE coin") sourcelang:english',
 
     # FX
@@ -343,14 +346,28 @@ GDELT_QUERIES = {
 # GDELT pacing: ~1 req/sec is the safe sustained rate.  Bursting past that
 # returns 429 + temporary IP throttle that lasts several minutes.  We use a
 # floor of 1.2s between successful calls and exponential backoff on 429.
-_GDELT_BASE_DELAY = 1.2          # seconds between successful calls
-_GDELT_MAX_RETRIES = 4           # per-day retry budget
-_GDELT_BACKOFF_BASE = 8          # first 429 sleeps 8s, then 16s, 32s, 64s
+# GDELT enforces a hard limit of ONE request every 5 seconds.  Bursting past it
+# returns 429 ("Please limit requests to one every 5 seconds") AND an extended
+# IP penalty that persists for several minutes even after you slow back down.
+# So we pace at 6s, and when throttled we wait the penalty out in long,
+# escalating sleeps (up to 5 min) rather than giving up — an unattended backfill
+# would rather wait than silently lose days of history.
+_GDELT_BASE_DELAY = 6.0          # seconds between successful calls (5s limit + margin)
+_GDELT_MAX_RETRIES = 8           # generous budget so a multi-minute ban is waited out
+_GDELT_BACKOFF_BASE = 60         # first 429 sleeps 60s, then 120, 240, capped at cap
+_GDELT_BACKOFF_CAP = 300         # never sleep longer than 5 min between retries
 _GDELT_MAXRECORDS = 250          # hard cap GDELT enforces on a single query
 
 
 def _gdelt_get(params: dict, label: str) -> dict | None:
-    """Single GDELT call with retry + exponential backoff on 429 / timeout."""
+    """Single GDELT call with retry + long escalating backoff on 429 / timeout.
+
+    A non-JSON 200 body is a *query rejection* (e.g. "The specified phrase is too
+    short."), not a transient error, so it is NOT retried — the message is logged
+    so a broken query surfaces instead of failing silently.  A 429 is a throttle:
+    we sleep an escalating amount (capped at _GDELT_BACKOFF_CAP) and retry, so a
+    multi-minute IP penalty is waited out rather than aborted.
+    """
     delay = _GDELT_BACKOFF_BASE
     for attempt in range(_GDELT_MAX_RETRIES):
         try:
@@ -366,19 +383,19 @@ def _gdelt_get(params: dict, label: str) -> dict | None:
                 try:
                     return res.json()
                 except ValueError:
-                    print(f"[GDELT] {label}: non-JSON response (len={len(res.text)})")
+                    print(f"[GDELT] {label}: query rejected (HTTP 200): {res.text.strip()[:120]!r}")
                     return None
             if res.status_code == 429:
-                print(f"[GDELT] {label}: 429, sleeping {delay}s (attempt {attempt + 1}/{_GDELT_MAX_RETRIES})")
+                print(f"[GDELT] {label}: 429 throttled, sleeping {delay}s (attempt {attempt + 1}/{_GDELT_MAX_RETRIES})")
                 time.sleep(delay)
-                delay *= 2
+                delay = min(delay * 2, _GDELT_BACKOFF_CAP)
                 continue
             print(f"[GDELT] {label}: HTTP {res.status_code}")
             return None
         except requests.exceptions.Timeout:
             print(f"[GDELT] {label}: timeout, sleeping {delay}s (attempt {attempt + 1}/{_GDELT_MAX_RETRIES})")
             time.sleep(delay)
-            delay *= 2
+            delay = min(delay * 2, _GDELT_BACKOFF_CAP)
             continue
         except Exception as e:
             print(f"[GDELT] {label} error: {e}")
