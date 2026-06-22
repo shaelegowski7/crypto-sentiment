@@ -238,6 +238,42 @@ def _create_stripe_customer(email: str):
 # Auth dependencies
 # ---------------------------------------------------------------------------
 
+async def require_super_admin(authorization: str = Header(None)):
+    """Email-allowlisted admin gate.  Uses Supabase JWT verification (same path
+    as require_pro) but checks the user's email against the ADMIN_EMAILS env
+    var (comma-separated, case-insensitive).  Cheaper than provisioning a
+    separate admin token and works with the existing dashboard login flow —
+    just sign in normally with an allowlisted email."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    token = authorization.split(" ")[1]
+    try:
+        from supabase import create_client
+        supabase_client = create_client(
+            os.getenv("SUPABASE_URL"),
+            os.getenv("SUPABASE_SERVICE_KEY"),
+        )
+        user_resp = supabase_client.auth.get_user(token)
+        user = user_resp.user
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        allowlist = {
+            e.strip().lower()
+            for e in (os.getenv("ADMIN_EMAILS") or "").split(",")
+            if e.strip()
+        }
+        if not allowlist:
+            # If unset, deny — never allow open admin access by misconfiguration.
+            raise HTTPException(status_code=403, detail="Admin allowlist not configured")
+        if (user.email or "").lower() not in allowlist:
+            raise HTTPException(status_code=403, detail="Admin only")
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
+
+
 async def require_pro(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing authorization token")
@@ -2621,6 +2657,111 @@ def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db
         "trades": trades,
         "equity_curve": equity_curve,
     }
+
+
+# In-memory cache for the admin backtest board.  Computing all 42 tickers
+# synchronously takes ~13s on Railway (180d headlines + 180d prices per
+# ticker, then trade simulation).  Results don't change minute-to-minute
+# so a 1h TTL is fine.  Cache is process-local; survives within a Railway
+# instance but resets on redeploy — acceptable for an admin tool.
+_BACKTEST_BOARD_CACHE = {"key": None, "computed_at": None, "data": None}
+_BACKTEST_BOARD_TTL_SECONDS = 3600
+
+
+@app.get("/admin/backtest-board")
+def admin_backtest_board(
+    signal: str = "shift",
+    hold_days: int = 7,
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+    admin=Depends(require_super_admin),
+):
+    """Per-ticker backtest leaderboard — which tickers' signals actually work.
+
+    Runs the same backtest as GET /backtest/{ticker} for every tracked ticker
+    and returns only the summary stats (no trades, no equity curve) so the
+    admin can rank by historical edge.  Default sort is total_return_pct
+    descending.  Calling with ?refresh=true bypasses the 1-hour cache.
+
+    Tickers without enough historical data return null metrics and
+    total_trades=0 — the UI sinks them to the bottom rather than dropping
+    them, so it's obvious which assets still need data accumulation.
+    """
+    if signal not in ("shift", "divergence"):
+        raise HTTPException(status_code=400, detail="signal must be 'shift' or 'divergence'")
+    hold_days = max(1, min(hold_days, 30))
+
+    cache_key = (signal, hold_days)
+    now = datetime.utcnow()
+    cached = _BACKTEST_BOARD_CACHE
+    if (not refresh
+        and cached.get("key") == cache_key
+        and cached.get("computed_at")
+        and (now - cached["computed_at"]).total_seconds() < _BACKTEST_BOARD_TTL_SECONDS):
+        return cached["data"]
+
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    rows = []
+    for t in all_tickers:
+        try:
+            # Call the existing route function directly — the Depends(get_db)
+            # default is just a sentinel; passing our own db overrides it.
+            result = get_backtest(t, signal=signal, hold_days=hold_days, db=db)
+        except Exception as e:
+            rows.append({
+                "ticker": t, "category": _category_for(t),
+                "win_rate": None, "avg_return_pct": None,
+                "total_return_pct": None, "alpha_pct": None,
+                "sharpe": None, "max_drawdown_pct": None,
+                "buy_hold_return_pct": None, "total_trades": 0,
+                "error": str(e),
+            })
+            continue
+
+        if "summary" not in result:
+            rows.append({
+                "ticker": t, "category": _category_for(t),
+                "win_rate": None, "avg_return_pct": None,
+                "total_return_pct": None, "alpha_pct": None,
+                "sharpe": None, "max_drawdown_pct": None,
+                "buy_hold_return_pct": None, "total_trades": 0,
+                "message": result.get("message"),
+            })
+            continue
+
+        s = result["summary"]
+        rows.append({
+            "ticker": t,
+            "category": _category_for(t),
+            "win_rate": s["win_rate"],
+            "avg_return_pct": s["avg_return_pct"],
+            "total_return_pct": s["total_return_pct"],
+            "alpha_pct": s["alpha_pct"],
+            "sharpe": s["sharpe"],
+            "max_drawdown_pct": s["max_drawdown_pct"],
+            "buy_hold_return_pct": s["buy_hold_return_pct"],
+            "total_trades": s["total_trades"],
+        })
+
+    # Sort: tickers with no backtest data sink to the bottom; rest by total
+    # return desc.  Using total_return_pct (compounded) not avg_return_pct
+    # because it accounts for trade frequency — a 60% win rate that fires
+    # 5x means more than the same win rate firing twice.
+    rows.sort(key=lambda r: (
+        r.get("total_return_pct") is None,
+        -(r.get("total_return_pct") or 0),
+    ))
+
+    response = {
+        "computed_at": now.isoformat() + "Z",
+        "signal": signal,
+        "hold_days": hold_days,
+        "rows": rows,
+    }
+    _BACKTEST_BOARD_CACHE.update({
+        "key": cache_key, "computed_at": now, "data": response,
+    })
+    return response
 
 
 @app.get("/headline-impact/{ticker}")

@@ -2115,6 +2115,123 @@ function _scoreColor(v) {
   return "var(--neutral)"
 }
 
+// Admin-only backtest leaderboard.  Visually distinct from the public table
+// (red accent border + "ADMIN" eyebrow) so it's obvious this isn't public data.
+// Sortable by any numeric column; default sort = total return desc, matching
+// the backend.
+const ADMIN_BOARD_COLS = [
+  { key: "ticker",              label: "Asset",       align: "left",  fmt: (r) => `${FX_LABELS[r.ticker] ?? COMMODITY_LABELS[r.ticker] ?? r.ticker}` },
+  { key: "total_trades",        label: "Trades",      align: "right", fmt: (r) => r.total_trades ?? 0 },
+  { key: "win_rate",            label: "Win rate",    align: "right", fmt: (r) => r.win_rate == null ? "—" : `${Math.round(r.win_rate * 100)}%` },
+  { key: "avg_return_pct",      label: "Avg / trade", align: "right", fmt: (r) => r.avg_return_pct == null ? "—" : `${r.avg_return_pct > 0 ? "+" : ""}${r.avg_return_pct.toFixed(2)}%`, color: (r) => r.avg_return_pct },
+  { key: "total_return_pct",    label: "Total ret.",  align: "right", fmt: (r) => r.total_return_pct == null ? "—" : `${r.total_return_pct > 0 ? "+" : ""}${r.total_return_pct.toFixed(2)}%`, color: (r) => r.total_return_pct },
+  { key: "buy_hold_return_pct", label: "Buy & hold",  align: "right", fmt: (r) => r.buy_hold_return_pct == null ? "—" : `${r.buy_hold_return_pct > 0 ? "+" : ""}${r.buy_hold_return_pct.toFixed(2)}%`, color: (r) => r.buy_hold_return_pct },
+  { key: "alpha_pct",           label: "Alpha",       align: "right", fmt: (r) => r.alpha_pct == null ? "—" : `${r.alpha_pct > 0 ? "+" : ""}${r.alpha_pct.toFixed(2)}%`, color: (r) => r.alpha_pct, bold: true },
+  { key: "sharpe",              label: "Sharpe",      align: "right", fmt: (r) => r.sharpe == null ? "—" : r.sharpe.toFixed(2) },
+  { key: "max_drawdown_pct",    label: "Max DD",      align: "right", fmt: (r) => r.max_drawdown_pct == null ? "—" : `${r.max_drawdown_pct.toFixed(2)}%`, color: () => -1 },
+]
+
+function AdminBacktestBoard({ board, sortKey, onSort }) {
+  const sorted = [...(board?.rows ?? [])].sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey]
+    // Nulls always sink — null means "not enough data", which is the least
+    // interesting case regardless of sort direction.
+    if (av == null && bv == null) return 0
+    if (av == null) return 1
+    if (bv == null) return -1
+    if (typeof av === "string") return av.localeCompare(bv)
+    return bv - av   // numeric: descending so the best metric leads
+  })
+
+  const generated = board?.computed_at ? new Date(board.computed_at) : null
+
+  return (
+    <section style={{
+      marginTop: "48px", padding: "24px",
+      border: "1px solid var(--negative)", borderRadius: "2px",
+      background: "var(--surface)",
+    }}>
+      <div style={{
+        fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.2em",
+        color: "var(--negative)", textTransform: "uppercase", marginBottom: "8px",
+      }}>● Admin · backtest performance</div>
+      <h2 style={{
+        fontFamily: "var(--mono)", fontSize: "18px", fontWeight: 500,
+        color: "var(--text)", marginBottom: "6px",
+      }}>Which tickers' signals actually work</h2>
+      <p style={{
+        fontFamily: "var(--sans)", fontSize: "12px", color: "var(--muted)",
+        marginBottom: "16px", maxWidth: "640px",
+      }}>
+        {board?.signal === "shift" ? "Sentiment-shift" : "Divergence"} signal,
+        {" "}{board?.hold_days}d hold.  Long-only, no overlap.
+        Past performance not predictive — calibrate confidence, don't chase.
+      </p>
+
+      <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "2px" }}>
+        <table style={{
+          width: "100%", borderCollapse: "collapse",
+          fontFamily: "var(--mono)", fontSize: "12px",
+        }}>
+          <thead>
+            <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+              <th style={{ padding: "10px 12px", textAlign: "right", width: "48px",
+                           color: "var(--muted)", fontWeight: 500, letterSpacing: "0.08em" }}>#</th>
+              {ADMIN_BOARD_COLS.map(c => (
+                <th key={c.key}
+                    onClick={() => onSort(c.key)}
+                    style={{
+                      padding: "10px 12px", textAlign: c.align, fontWeight: 500,
+                      color: sortKey === c.key ? "var(--accent2)" : "var(--muted)",
+                      letterSpacing: "0.08em", cursor: "pointer", userSelect: "none",
+                      textTransform: "uppercase", fontSize: "10px",
+                    }}>
+                  {c.label}{sortKey === c.key ? " ↓" : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r, i) => (
+              <tr key={r.ticker} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--muted)" }}>{i + 1}</td>
+                {ADMIN_BOARD_COLS.map(c => {
+                  const val = c.fmt(r)
+                  const colorVal = c.color ? c.color(r) : null
+                  const color = colorVal == null ? "var(--text)"
+                    : colorVal > 0 ? "var(--positive)"
+                    : colorVal < 0 ? "var(--negative)"
+                    : "var(--text)"
+                  return (
+                    <td key={c.key} style={{
+                      padding: "10px 12px", textAlign: c.align, color,
+                      fontWeight: c.bold ? 600 : 400,
+                    }}>{val}</td>
+                  )
+                })}
+              </tr>
+            ))}
+            {sorted.length === 0 && (
+              <tr><td colSpan={ADMIN_BOARD_COLS.length + 1} style={{
+                padding: "32px", textAlign: "center", color: "var(--muted)",
+              }}>No backtest data yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {generated && (
+        <div style={{
+          marginTop: "12px", fontFamily: "var(--mono)", fontSize: "10px",
+          color: "var(--muted)", letterSpacing: "0.05em", textAlign: "right",
+        }}>
+          Computed {generated.toLocaleString()} · cached 1h · append ?refresh=true to force
+        </div>
+      )}
+    </section>
+  )
+}
+
 function Leaderboard() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -2122,6 +2239,14 @@ function Leaderboard() {
   // sortKey null = use backend default ordering; otherwise client-sort
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState("desc")
+  // Admin-only backtest board.  Hidden by default; populated only when the
+  // backend accepts the user's Supabase JWT and confirms they're on the
+  // ADMIN_EMAILS allowlist.  A 401/403 leaves these null and the section
+  // never renders — non-admins don't even know it exists.
+  const [adminBoard, setAdminBoard] = useState(null)
+  const [adminBoardLoading, setAdminBoardLoading] = useState(false)
+  const [adminBoardError, setAdminBoardError] = useState(null)
+  const [adminSort, setAdminSort] = useState("total_return_pct")
 
   useEffect(() => {
     document.title = "Sentiment Leaderboard — 24h movers · SentimentFX"
@@ -2140,6 +2265,39 @@ function Leaderboard() {
     axios.get(`${API}/leaderboard`)
       .then(r => { if (!cancelled) setData(r.data) })
       .catch(e => { if (!cancelled) setError(e.message ?? "Failed to load") })
+    return () => { cancelled = true }
+  }, [])
+
+  // Probe /admin/backtest-board with the current Supabase JWT.  If 200, the
+  // user is on the email allowlist and we render the section.  Any 401/403/
+  // network error silently leaves it hidden — there's no UI affordance that
+  // would tip off a non-admin that the section exists.
+  useEffect(() => {
+    let cancelled = false
+    setAdminBoardLoading(true)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return
+      const token = session?.access_token
+      if (!token) {
+        setAdminBoardLoading(false)
+        return   // logged out — no probe needed
+      }
+      axios.get(`${API}/admin/backtest-board`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => { if (!cancelled) { setAdminBoard(r.data); setAdminBoardLoading(false) } })
+        .catch(e => {
+          if (cancelled) return
+          // 401/403 = not an admin → silently hide.  Anything else (5xx,
+          // network) is a real error worth surfacing only if the section
+          // would otherwise have rendered, so we keep adminBoard null too.
+          const status = e?.response?.status
+          if (status !== 401 && status !== 403) {
+            setAdminBoardError(e?.message ?? "Failed to load")
+          }
+          setAdminBoardLoading(false)
+        })
+    })
     return () => { cancelled = true }
   }, [])
 
@@ -2341,6 +2499,17 @@ function Leaderboard() {
             }}>
               Updated {new Date(data.generated_at).toLocaleString()} · 15-min refresh cycle
             </div>
+          )}
+
+          {/* Admin-only backtest board.  Renders only after the backend has
+              confirmed the logged-in user is on the ADMIN_EMAILS allowlist.
+              Non-admins never see this section — no skeleton, no error toast. */}
+          {adminBoard && (
+            <AdminBacktestBoard
+              board={adminBoard}
+              sortKey={adminSort}
+              onSort={setAdminSort}
+            />
           )}
         </main>
       </div>
