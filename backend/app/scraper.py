@@ -192,6 +192,13 @@ def fetch_background_headlines(ticker: str) -> list:
 
 
 def fetch_headlines(ticker: str) -> list:
+    # GNews is off by default — the free tier (100 calls/day) can't cover 42
+    # tickers hourly, and RSS already over-covers the same publishers.  Code is
+    # kept intact so we can flip it back on with a single env var if a paid tier
+    # ever makes sense.  Set GNEWS_ENABLED=true to re-enable.
+    if os.getenv("GNEWS_ENABLED", "").lower() not in ("1", "true", "yes"):
+        return []
+
     query = TICKERS.get(ticker)
     if not query:
         print(f"[GNEWS] Unknown ticker: {ticker}")
