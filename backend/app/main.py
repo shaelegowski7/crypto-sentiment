@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.brief import send_morning_briefs
+from app.trade_card import build_trade_card, format_trade_card_html, format_trade_card_text
 from . import models
 import math
 from .database import SessionLocal
@@ -20,7 +21,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from collections import defaultdict
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Gauge, Histogram
@@ -314,62 +315,34 @@ def check_alerts(db):
         )
 
         if triggered:
+            # Build the full trade card BEFORE sending — if the card fails to
+            # build (eg. backtest DB queries crash), we'd rather log and skip
+            # than fall back to a bare-data email that under-delivers value.
+            try:
+                card = build_trade_card(db, alert.ticker)
+            except Exception as e:
+                print(f"Alert trade-card build error for {alert.ticker}: {e}")
+                continue
+
+            # Subject reflects the recommendation, not the bare threshold —
+            # this is what shows up in the user's inbox preview and is the
+            # single biggest pull on whether they open the email.
+            if card["direction"] == "NEUTRAL":
+                subject = f"SentimentFX: {alert.ticker} alert triggered"
+            else:
+                conf = card["confidence"].upper()
+                subject = f"SentimentFX: {card['direction']} signal on {alert.ticker} · {conf} confidence"
+
             try:
                 resend.api_key = os.getenv("RESEND_API_KEY")
                 resend.Emails.send({
                     "from": "SentimentFX <hello@sentimentfx.org>",
                     "to": alert.email,
-                    "subject": f"SentimentFX Alert: {alert.ticker} sentiment {alert.direction} {alert.threshold}",
-                    "html": f"""
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#080c10;font-family:'Courier New',monospace;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#080c10;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-          <tr>
-            <td style="border-bottom:1px solid #21262d;padding-bottom:20px;">
-              <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">SentimentFX</span>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:40px 0 32px;">
-              <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">— Alert Triggered</p>
-              <h1 style="font-size:28px;font-weight:600;color:#e6edf3;margin:0 0 16px;line-height:1.2;">{alert.ticker} Sentiment Alert</h1>
-              <p style="font-size:14px;color:#7d8590;margin:0 0 16px;line-height:1.7;">
-                Your alert condition has been met.
-              </p>
-              <p style="font-family:'Courier New',monospace;font-size:13px;color:#e6edf3;margin:0 0 32px;">
-                24h avg sentiment: <strong style="color:#f0b429;">{round(avg_score, 4)}</strong><br>
-                Condition: sentiment {alert.direction} {alert.threshold}
-              </p>
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
-                <tr>
-                  <td style="background:#f0b429;border-radius:2px;">
-                    <a href="https://app.sentimentfx.org" style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">
-                      View Dashboard -&gt;
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="border-top:1px solid #21262d;padding-top:20px;">
-              <p style="font-size:10px;color:#7d8590;margin:0;letter-spacing:0.05em;line-height:1.7;">
-                SentimentFX · Crypto sentiment intelligence<br>
-                <a href="mailto:hello@sentimentfx.org" style="color:#f0b429;text-decoration:none;">hello@sentimentfx.org</a>
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-                    """
+                    "subject": subject,
+                    "html": format_trade_card_html(card),
+                    # Plain-text fallback for clients that prefer it (or strip HTML).
+                    # Mail providers also use this to score deliverability.
+                    "text": format_trade_card_text(card),
                 })
                 alert.active = False
                 alert.fired_at = datetime.utcnow()
@@ -1451,6 +1424,34 @@ def delete_alert(alert_id: int, db: Session = Depends(get_db), user=Depends(requ
     db.delete(alert)
     db.commit()
     return {"message": "Alert deleted"}
+
+
+@app.get("/alerts/preview/{ticker}")
+def preview_trade_card(
+    ticker: str,
+    format: str = "json",
+    db: Session = Depends(get_db),
+    user=Depends(require_pro),
+):
+    """Render the trade-card that WOULD be sent if an alert fired right now.
+
+    Used by the dashboard's alert-setup UI ("what will this alert look like?")
+    and by any user who wants to inspect a ticker's current actionable signal
+    without configuring a real alert.  Pro-only because the card is the
+    main value-add of the Pro tier — exposing it free would undercut alerts.
+
+    `format=html` returns the rendered email body for a faithful preview;
+    default JSON returns the underlying card so the frontend can render
+    a native UI on top of the same data.
+    """
+    if ticker.upper() not in TICKERS and ticker.upper() not in BACKGROUND_TICKERS:
+        raise HTTPException(status_code=404, detail="Unknown ticker")
+    card = build_trade_card(db, ticker)
+    if format == "html":
+        return Response(format_trade_card_html(card), media_type="text/html")
+    if format == "text":
+        return Response(format_trade_card_text(card), media_type="text/plain")
+    return card
 
 
 @app.post("/create-checkout-session")
