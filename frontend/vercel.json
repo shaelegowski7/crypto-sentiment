@@ -12,5 +12,11 @@
       "destination": "https://app.sentimentfx.org/$1",
       "permanent": true
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
