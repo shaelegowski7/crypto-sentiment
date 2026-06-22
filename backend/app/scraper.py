@@ -392,8 +392,9 @@ def _gdelt_get(params: dict, label: str) -> dict | None:
                 continue
             print(f"[GDELT] {label}: HTTP {res.status_code}")
             return None
-        except requests.exceptions.Timeout:
-            print(f"[GDELT] {label}: timeout, sleeping {delay}s (attempt {attempt + 1}/{_GDELT_MAX_RETRIES})")
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            kind = "timeout" if isinstance(e, requests.exceptions.Timeout) else "connection error"
+            print(f"[GDELT] {label}: {kind}, sleeping {delay}s (attempt {attempt + 1}/{_GDELT_MAX_RETRIES})")
             time.sleep(delay)
             delay = min(delay * 2, _GDELT_BACKOFF_CAP)
             continue

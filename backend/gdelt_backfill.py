@@ -26,6 +26,10 @@ import argparse
 import time
 from datetime import datetime, timedelta, timezone
 
+# Line-buffer stdout so progress is visible in real time even when redirected to
+# a log file — Python block-buffers stdout otherwise, hiding progress for hours.
+sys.stdout.reconfigure(line_buffering=True)
+
 from app.database import SessionLocal, DATABASE_URL
 from app.models import Headline
 from app.sentiment import analyse_sentiment
@@ -89,13 +93,25 @@ def backfill(tickers: list, days: int, windows_per_day: int, max_per_window: int
     summary = {}
     for idx, ticker in enumerate(tickers, 1):
         print(f"[{idx}/{len(tickers)}] {ticker} — fetching…")
-        db = SessionLocal()
+        # Fetch first WITHOUT a DB session open — the throttle backoff can make a
+        # single ticker take many minutes, and Railway drops connections left idle
+        # that long ("server closed the connection unexpectedly").
         try:
             headlines = fetch_gdelt_headlines(
                 ticker, days=days,
                 windows_per_day=windows_per_day,
                 max_per_window=max_per_window,
             )
+        except KeyboardInterrupt:
+            print("\nInterrupted during fetch — re-run to resume.")
+            break
+        except Exception as e:
+            summary[ticker] = f"fetch error: {e}"
+            print(f"[{idx}/{len(tickers)}] {ticker} — fetch error: {e}")
+            continue
+
+        db = SessionLocal()
+        try:
             saved = 0
             for h in headlines:
                 exists = db.query(Headline).filter(Headline.url == h["url"]).first()
@@ -112,12 +128,14 @@ def backfill(tickers: list, days: int, windows_per_day: int, max_per_window: int
                     published_at=h["published_at"],
                 ))
                 saved += 1
+                if saved % 50 == 0:   # commit periodically so progress persists
+                    db.commit()
             db.commit()
             summary[ticker] = saved
             print(f"[{idx}/{len(tickers)}] {ticker} — +{saved} new of {len(headlines)} fetched")
         except KeyboardInterrupt:
             db.rollback()
-            print("\nInterrupted — progress so far is committed per-ticker; re-run to resume.")
+            print("\nInterrupted — progress committed per-50; re-run to resume.")
             db.close()
             break
         except Exception as e:
