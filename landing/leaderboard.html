@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentiment Leaderboard — 24h Movers Across 42 Assets | SentimentFX</title>
+  <meta name="description" content="Live FinBERT sentiment leaderboard ranking 42 assets by biggest 24-hour news-sentiment movers — crypto, FX, stocks, ETFs and commodities. Updated every 15 minutes by SentimentFX.">
+  <meta name="keywords" content="sentiment leaderboard, market sentiment ranking, crypto sentiment movers, FX sentiment, FinBERT leaderboard, news sentiment rank, top sentiment stocks">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#080c10">
+  <link rel="canonical" href="https://sentimentfx.org/leaderboard">
+
+  <meta property="og:site_name" content="SentimentFX">
+  <meta property="og:title" content="Sentiment Leaderboard — 24h Movers Across 42 Assets | SentimentFX">
+  <meta property="og:description" content="Live FinBERT sentiment leaderboard ranking 42 assets by biggest 24-hour news-sentiment movers — crypto, FX, stocks, ETFs and commodities.">
+  <meta property="og:url" content="https://sentimentfx.org/leaderboard">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://sentimentfx.org/dashboard.jpeg">
+  <meta property="og:locale" content="en_GB">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Sentiment Leaderboard — 24h Movers Across 42 Assets | SentimentFX">
+  <meta name="twitter:description" content="Live FinBERT sentiment leaderboard ranking 42 assets by 24h news-sentiment movers.">
+  <meta name="twitter:image" content="https://sentimentfx.org/dashboard.jpeg">
+
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Sentiment Leaderboard","item":"https://sentimentfx.org/leaderboard"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What does the sentiment leaderboard show?","acceptedAnswer":{"@type":"Answer","text":"The SentimentFX leaderboard ranks 42 tracked assets — across crypto, FX, stocks, ETFs and commodities — by the largest change in news sentiment over the last 24 hours compared with the prior 24 hours. Sentiment is a volume-weighted average of FinBERT scores across recent headlines."}},{"@type":"Question","name":"How often is the leaderboard updated?","acceptedAnswer":{"@type":"Answer","text":"Headline sentiment refreshes every 15 minutes from RSS feeds across major financial publishers, so the leaderboard reflects new movers almost in real time. Prices are refreshed hourly via yfinance."}},{"@type":"Question","name":"How is sentiment scored?","acceptedAnswer":{"@type":"Answer","text":"Each headline is scored by FinBERT, a transformer fine-tuned on financial text. The score for an individual headline is the model's positive probability minus its negative probability, giving a value from -1 (very bearish) to +1 (very bullish). Daily sentiment is a volume-weighted mean across all scored headlines for that ticker."}},{"@type":"Question","name":"Can I get the leaderboard data via API?","acceptedAnswer":{"@type":"Answer","text":"Yes — the GET /leaderboard endpoint on api.sentimentfx.org returns the same data as JSON, with one row per ticker. No authentication is required for the leaderboard endpoint. See developers.sentimentfx.org for full API reference."}}]}</script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
+      --border:#21262d;--border2:#30363d;
+      --text:#e6edf3;--muted:#7d8590;
+      --accent:#f0b429;--accent2:#58a6ff;
+      --positive:#3fb950;--negative:#f85149;--neutral:#8b949e;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
+    a{color:var(--accent);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+
+    nav{display:flex;align-items:center;justify-content:space-between;padding:14px 40px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+    .nav-logo{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;}
+    .nav-logo span{color:var(--muted);font-weight:400;}
+    .nav-links{display:flex;gap:24px;list-style:none;align-items:center;}
+    .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
+    .nav-links a:hover{color:var(--text);text-decoration:none;}
+    .nav-cta{background:var(--accent);color:#080c10!important;padding:6px 14px;border-radius:2px;font-weight:600;}
+
+    main{max-width:1100px;margin:0 auto;padding:48px 24px;}
+    .breadcrumb{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);margin-bottom:24px;text-transform:uppercase;}
+    .breadcrumb a{color:var(--muted);}
+    .breadcrumb a:hover{color:var(--text);text-decoration:none;}
+    .breadcrumb span{margin:0 8px;color:var(--border2);}
+
+    .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;}
+    h1{font-family:var(--mono);font-size:30px;font-weight:600;line-height:1.2;margin-bottom:14px;}
+    .lede{font-size:17px;color:var(--text);max-width:760px;margin-bottom:28px;line-height:1.6;}
+
+    .filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+    .filter-btn{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;padding:6px 12px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;border-radius:2px;text-transform:uppercase;}
+    .filter-btn:hover{color:var(--text);}
+    .filter-btn.active{color:var(--accent2);border-color:var(--accent2);background:rgba(88,166,255,0.06);}
+
+    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:2px;}
+    table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;}
+    thead tr{background:var(--surface);border-bottom:1px solid var(--border);}
+    th{padding:10px 12px;text-align:right;color:var(--muted);font-weight:500;letter-spacing:0.08em;text-transform:uppercase;font-size:10px;}
+    th.left{text-align:left;}
+    tbody tr{border-bottom:1px solid var(--border);}
+    tbody tr:hover{background:var(--surface);}
+    td{padding:10px 12px;text-align:right;}
+    td.left{text-align:left;}
+    td.muted{color:var(--muted);}
+    td a{color:var(--text);}
+    td a:hover{color:var(--accent);text-decoration:none;}
+    .cat-tag{display:inline-block;font-size:9px;letter-spacing:0.1em;color:var(--muted);margin-left:8px;text-transform:uppercase;}
+    .pos{color:var(--positive);}
+    .neg{color:var(--negative);}
+    .neutral{color:var(--neutral);}
+    .empty{text-align:center;padding:32px;color:var(--muted);}
+
+    .cta-card{margin-top:32px;padding:20px 24px;border:1px solid var(--border);border-radius:2px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
+    .cta-card .cta-text{font-family:var(--mono);font-size:13px;color:var(--text);margin-bottom:4px;}
+    .cta-card .cta-sub{font-family:var(--sans);font-size:12px;color:var(--muted);}
+    .cta{display:inline-block;background:var(--accent);color:#080c10!important;padding:10px 18px;border-radius:2px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
+    .cta-secondary{background:transparent;color:var(--text)!important;border:1px solid var(--border2);}
+    .cta:hover{text-decoration:none;}
+
+    .updated{margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.05em;text-align:right;}
+
+    h2{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:48px;margin-bottom:14px;}
+    p{margin-bottom:14px;color:#c9d1d9;}
+
+    .related{margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
+    .related-title{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;}
+    .related ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;}
+    .related a{display:block;padding:8px 12px;border:1px solid var(--border);border-radius:2px;font-family:var(--mono);font-size:11px;color:var(--text);}
+    .related a:hover{border-color:var(--accent);text-decoration:none;}
+
+    @media (max-width:640px){
+      nav{padding:12px 16px;}
+      .nav-links{gap:12px;}
+      main{padding:32px 16px;}
+      h1{font-size:24px;}
+      .lede{font-size:15px;}
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="nav-logo">SENTIMENT<span>FX</span></a>
+    <ul class="nav-links">
+      <li><a href="https://app.sentimentfx.org/">Dashboard</a></li>
+      <li><a href="https://developers.sentimentfx.org">API</a></li>
+      <li><a href="https://app.sentimentfx.org/?auth=signup" class="nav-cta">Sign Up</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <div class="breadcrumb">
+      <a href="/">SentimentFX</a><span>/</span>Leaderboard
+    </div>
+
+    <div class="eyebrow">Live · 15-min refresh</div>
+    <h1>24-hour sentiment leaderboard</h1>
+    <p class="lede">
+      The biggest news-sentiment movers across 42 tracked assets — crypto, FX, stocks,
+      ETFs and commodities — ranked by absolute change in FinBERT-scored sentiment over
+      the last 24 hours vs. the prior 24 hours. Refreshed every 15 minutes from RSS feeds
+      across CoinTelegraph, CoinDesk, Bloomberg, Reuters, FXStreet and more.
+    </p>
+
+    <div class="filter-bar" id="filter-bar">
+      <button class="filter-btn active" data-cat="all">All</button>
+      <button class="filter-btn" data-cat="crypto">Crypto</button>
+      <button class="filter-btn" data-cat="fx">FX</button>
+      <button class="filter-btn" data-cat="stocks">Stocks</button>
+      <button class="filter-btn" data-cat="etfs">ETFs</button>
+      <button class="filter-btn" data-cat="commodities">Commodities</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:48px">#</th>
+            <th class="left">Asset</th>
+            <th>Sentiment</th>
+            <th>Δ 24h</th>
+            <th>Articles</th>
+            <th>Price</th>
+            <th>24h %</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body">
+          <tr><td colspan="7" class="empty">LOADING…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="updated" id="updated"></div>
+
+    <div class="cta-card">
+      <div>
+        <div class="cta-text">Get notified when these move.</div>
+        <div class="cta-sub">Sentiment alerts, full chart history, and CSV export with a free account.</div>
+      </div>
+      <a href="https://app.sentimentfx.org/?auth=signup" class="cta">Set up alerts →</a>
+    </div>
+
+    <h2>How the leaderboard works</h2>
+    <p>
+      Every 15 minutes, SentimentFX pulls fresh headlines from a curated list of RSS feeds
+      across crypto, FX, equities and macro outlets. Each headline is scored by FinBERT — a
+      finance-tuned transformer — producing a value between -1 (very bearish) and +1 (very
+      bullish). For each asset, we compute a volume-weighted mean of the last 24 hours of
+      scores, then subtract the same mean over the prior 24 hours. That difference is the
+      "Δ 24h" column above, and is what the leaderboard ranks by.
+    </p>
+
+    <h2>Reading the columns</h2>
+    <p>
+      <strong>Sentiment</strong> is the current 24-hour weighted average — positive means
+      headlines are skewing bullish, negative means bearish. <strong>Δ 24h</strong> is the
+      shift compared with the prior day. <strong>Articles</strong> is how many headlines
+      contributed; tickers with very low article counts can swing on a single story, so
+      treat thin coverage with caution. <strong>Price</strong> and <strong>24h %</strong>
+      come from yfinance, in GBP.
+    </p>
+
+    <h2>API access</h2>
+    <p>
+      The same data is available as a single JSON document at
+      <a href="https://api.sentimentfx.org/leaderboard"><code>GET /leaderboard</code></a>
+      — no authentication required. See
+      <a href="https://developers.sentimentfx.org">developers.sentimentfx.org</a> for the
+      per-ticker endpoints (sentiment history, correlation, signal, divergence).
+    </p>
+
+    <div class="related">
+      <div class="related-title">Per-ticker sentiment pages</div>
+      <ul>
+        <li><a href="/sentiment/btc">Bitcoin (BTC)</a></li>
+        <li><a href="/sentiment/eth">Ethereum (ETH)</a></li>
+        <li><a href="/sentiment/sol">Solana (SOL)</a></li>
+        <li><a href="/sentiment/xrp">XRP (Ripple)</a></li>
+        <li><a href="/sentiment/eurusd">EUR/USD</a></li>
+        <li><a href="/sentiment/gbpusd">GBP/USD</a></li>
+        <li><a href="/sentiment/aapl">Apple (AAPL)</a></li>
+        <li><a href="/sentiment/nvda">Nvidia (NVDA)</a></li>
+        <li><a href="/sentiment/spy">S&amp;P 500 (SPY)</a></li>
+        <li><a href="/sentiment/gold-futures">Gold Futures</a></li>
+      </ul>
+    </div>
+  </main>
+
+  <script>
+    // Mirror of the React leaderboard's display helpers — kept inline so the
+    // static page is self-contained and doesn't depend on the SPA bundle.
+    const FX_LABELS = { EURUSD: "EUR/USD", GBPUSD: "GBP/USD", USDJPY: "USD/JPY", AUDUSD: "AUD/USD", USDCAD: "USD/CAD", USDCHF: "USD/CHF", NZDUSD: "NZD/USD" };
+    const COMMODITY_LABELS = { "GC=F": "Gold", "SI=F": "Silver", "CL=F": "Oil", "NG=F": "Nat Gas" };
+    const TICKER_SLUGS = {
+      BTC:"btc",ETH:"eth",SOL:"sol",XRP:"xrp",DOGE:"doge",
+      EURUSD:"eurusd",GBPUSD:"gbpusd",USDJPY:"usdjpy",AUDUSD:"audusd",
+      USDCAD:"usdcad",USDCHF:"usdchf",NZDUSD:"nzdusd",
+      AAPL:"aapl",MSFT:"msft",GOOGL:"googl",AMZN:"amzn",META:"meta",
+      NVDA:"nvda",TSLA:"tsla",JPM:"jpm",BAC:"bac",GS:"gs",V:"v",
+      MA:"ma",XOM:"xom",JNJ:"jnj",AMD:"amd",NFLX:"nflx",WMT:"wmt",
+      UBER:"uber",CRM:"crm",PLTR:"pltr",
+      SPY:"spy",QQQ:"qqq",GLD:"gld",SLV:"slv",USO:"uso",ARKK:"arkk",
+      "GC=F":"gold-futures","SI=F":"silver-futures",
+      "CL=F":"crude-oil-futures","NG=F":"natural-gas-futures",
+    };
+    const FX_TICKERS = ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD"];
+
+    const label = t => FX_LABELS[t] || COMMODITY_LABELS[t] || t;
+    const fmtPrice = (v, t) => {
+      if (v == null) return "—";
+      if (FX_TICKERS.indexOf(t) >= 0) return v.toFixed(4);
+      if (v >= 1000) return "£" + (v/1000).toFixed(2) + "k";
+      if (v >= 1) return "£" + v.toFixed(2);
+      return "£" + v.toFixed(4);
+    };
+    const fmtPct = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(2) + "%";
+    const fmtScore = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(3);
+    const colorClass = v => v == null ? "neutral" : v > 0.05 ? "pos" : v < -0.05 ? "neg" : "neutral";
+
+    let allRows = [];
+    let currentFilter = "all";
+
+    function render(rows){
+      const tbody = document.getElementById("leaderboard-body");
+      const filtered = currentFilter === "all" ? rows : rows.filter(r => r.category === currentFilter);
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No tickers in this category yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = filtered.map((r, i) => {
+        const slug = TICKER_SLUGS[r.ticker];
+        const href = slug ? "/sentiment/" + slug : "#";
+        return `<tr>
+          <td class="muted">${i + 1}</td>
+          <td class="left"><a href="${href}">${label(r.ticker)}</a><span class="cat-tag">${(r.category || "").toUpperCase()}</span></td>
+          <td class="${colorClass(r.sentiment_24h)}">${fmtScore(r.sentiment_24h)}</td>
+          <td class="${colorClass(r.sentiment_change_24h)}" style="font-weight:500;">${fmtScore(r.sentiment_change_24h)}</td>
+          <td class="muted">${r.article_count_24h || 0}</td>
+          <td>${fmtPrice(r.price, r.ticker)}</td>
+          <td class="${colorClass(r.price_change_24h_pct)}">${fmtPct(r.price_change_24h_pct)}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    document.getElementById("filter-bar").addEventListener("click", e => {
+      if (e.target.tagName !== "BUTTON") return;
+      currentFilter = e.target.dataset.cat;
+      document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b === e.target));
+      render(allRows);
+    });
+
+    fetch("https://api.sentimentfx.org/leaderboard")
+      .then(r => r.json())
+      .then(data => {
+        allRows = data.rows || [];
+        render(allRows);
+        if (data.generated_at) {
+          const dt = new Date(data.generated_at);
+          document.getElementById("updated").textContent =
+            "Updated " + dt.toLocaleString() + " · 15-min refresh cycle";
+        }
+      })
+      .catch(err => {
+        document.getElementById("leaderboard-body").innerHTML =
+          '<tr><td colspan="7" class="empty">Failed to load leaderboard: ' + (err.message || err) + '</td></tr>';
+      });
+  </script>
+</body>
+</html>

@@ -129,7 +129,7 @@ async def protect_metrics(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_GET_PREFIXES = ("/v1/",)
-_PUBLIC_GET_PATHS = {"/", "/status", "/health"}
+_PUBLIC_GET_PATHS = {"/", "/status", "/health", "/leaderboard"}
 _PUBLIC_GET_DATA_PREFIXES = ("/dashboard/", "/correlation/", "/headlines/", "/prices/", "/summary/")
 
 @app.middleware("http")
@@ -2323,6 +2323,111 @@ def get_divergence(ticker: str, db: Session = Depends(get_db)):
         "streak_days": streak,
         "magnitude": magnitude,
         "summary": summary,
+    }
+
+
+@app.get("/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)):
+    """Public market-wide sentiment movers board.
+
+    Returns one row per tracked ticker (all 42 across crypto/FX/stocks/ETFs/
+    commodities) ranked by absolute 24h sentiment change.  Designed as an SEO
+    landing surface — no auth, no paywall, served with the standard public-data
+    Cache-Control so the CDN absorbs traffic spikes.
+
+    Two bulk queries (headlines for last 48h, prices for last 5d) feed in-Python
+    aggregation rather than 42 × N round-trips.  Sentiment is volume-weighted
+    (|score| weighting) to match the existing /divergence convention so the
+    leaderboard and divergence card agree on what "today's sentiment" means.
+    """
+    now = datetime.utcnow()
+    cutoff_now = now - timedelta(hours=24)
+    cutoff_prev = now - timedelta(hours=48)
+    price_cutoff = now - timedelta(days=5)
+
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+
+    # Pull only the columns we need; published_at index on Headline keeps this cheap.
+    headline_rows = db.query(
+        models.Headline.ticker,
+        models.Headline.sentiment_score,
+        models.Headline.published_at,
+    ).filter(models.Headline.published_at >= cutoff_prev).all()
+
+    now_bucket = defaultdict(lambda: {"num": 0.0, "den": 0.0, "cnt": 0})
+    prev_bucket = defaultdict(lambda: {"num": 0.0, "den": 0.0, "cnt": 0})
+    for ticker, score, ts in headline_rows:
+        bucket = now_bucket if ts >= cutoff_now else prev_bucket
+        w = abs(score) if score is not None else 0.0
+        if w == 0:
+            continue   # neutral-scored articles contribute nothing to a weighted mean
+        b = bucket[ticker]
+        b["num"] += score * w
+        b["den"] += w
+        b["cnt"] += 1
+
+    def _wavg(b):
+        return b["num"] / b["den"] if b["den"] > 0 else None
+
+    # Prices: last 5d gives ample slack for weekend/holiday gaps when finding a
+    # "prior" close ≥24h before latest (24h crypto + 3-day equity weekend covered).
+    price_rows = db.query(
+        models.Price.ticker,
+        models.Price.date,
+        models.Price.close_price,
+    ).filter(models.Price.date >= price_cutoff).order_by(
+        models.Price.ticker, models.Price.date.desc()
+    ).all()
+    price_index = defaultdict(list)
+    for ticker, date, close in price_rows:
+        price_index[ticker].append((date, close))
+
+    rows = []
+    for t in all_tickers:
+        s_now = _wavg(now_bucket[t])
+        s_prev = _wavg(prev_bucket[t])
+        sentiment_change = (s_now - s_prev) if (s_now is not None and s_prev is not None) else None
+
+        prices = price_index.get(t, [])
+        latest_close = prices[0][1] if prices else None
+        prior_close = None
+        if prices:
+            latest_date = prices[0][0]
+            # Walk back until we find a close that's at least ~20h older — robust
+            # against intraday duplicate rows from the latest-price refresh path.
+            for d, c in prices[1:]:
+                if (latest_date - d) >= timedelta(hours=20):
+                    prior_close = c
+                    break
+        price_change_pct = (
+            (latest_close - prior_close) / prior_close * 100
+            if (latest_close is not None and prior_close)
+            else None
+        )
+
+        rows.append({
+            "ticker": t,
+            "category": _category_for(t),
+            "sentiment_24h": round(s_now, 4) if s_now is not None else None,
+            "sentiment_change_24h": round(sentiment_change, 4) if sentiment_change is not None else None,
+            "article_count_24h": now_bucket[t]["cnt"],
+            "price": round(latest_close, 4) if latest_close is not None else None,
+            "price_change_24h_pct": round(price_change_pct, 2) if price_change_pct is not None else None,
+        })
+
+    # Default sort: tickers with NO 24h sentiment change sink to the bottom; the
+    # rest sorted by absolute change descending so the biggest movers (in either
+    # direction) lead.  Frontend can re-sort client-side for the other views.
+    rows.sort(key=lambda r: (
+        r["sentiment_change_24h"] is None,
+        -abs(r["sentiment_change_24h"]) if r["sentiment_change_24h"] is not None else 0.0,
+    ))
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "window_hours": 24,
+        "default_sort": "abs_sentiment_change_24h_desc",
+        "rows": rows,
     }
 
 

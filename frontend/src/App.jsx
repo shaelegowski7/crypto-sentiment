@@ -20,6 +20,21 @@ const FREE_TICKERS = ["BTC"]
 const FX_TICKERS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
 const FX_LABELS = { EURUSD: "EUR/USD", GBPUSD: "GBP/USD", USDJPY: "USD/JPY", AUDUSD: "AUD/USD", USDCAD: "USD/CAD", USDCHF: "USD/CHF", NZDUSD: "NZD/USD" }
 const COMMODITY_LABELS = { "GC=F": "Gold", "SI=F": "Silver", "CL=F": "Oil", "NG=F": "Nat Gas" }
+// Mirror of landing/sentiment-tickers.json — kept in sync manually because the
+// frontend bundles independently of the landing repo.  Used by the leaderboard
+// row links to deep-link into the per-ticker SEO landing page on sentimentfx.org.
+const TICKER_SLUGS = {
+  BTC: "btc", ETH: "eth", SOL: "sol", XRP: "xrp", DOGE: "doge",
+  EURUSD: "eurusd", GBPUSD: "gbpusd", USDJPY: "usdjpy", AUDUSD: "audusd",
+  USDCAD: "usdcad", USDCHF: "usdchf", NZDUSD: "nzdusd",
+  AAPL: "aapl", MSFT: "msft", GOOGL: "googl", AMZN: "amzn", META: "meta",
+  NVDA: "nvda", TSLA: "tsla", JPM: "jpm", BAC: "bac", GS: "gs", V: "v",
+  MA: "ma", XOM: "xom", JNJ: "jnj", AMD: "amd", NFLX: "nflx", WMT: "wmt",
+  UBER: "uber", CRM: "crm", PLTR: "pltr",
+  SPY: "spy", QQQ: "qqq", GLD: "gld", SLV: "slv", USO: "uso", ARKK: "arkk",
+  "GC=F": "gold-futures", "SI=F": "silver-futures",
+  "CL=F": "crude-oil-futures", "NG=F": "natural-gas-futures",
+}
 const API = "https://api.sentimentfx.org"
 const HEADLINES_PER_PAGE = 10
 
@@ -2044,7 +2059,305 @@ function BacktestPanel({ ticker }) {
   )
 }
 
+// ─── Leaderboard (public SEO page, no auth) ──────────────────────────────────
+// Lives at /leaderboard.  Pulls GET /leaderboard once on mount; the backend
+// caches via Cache-Control so the CDN absorbs the load.  Default sort is the
+// backend's: biggest absolute 24h sentiment movers first.  Each row links to
+// the existing per-ticker SEO landing page on sentimentfx.org for SEO juice.
+
+const CATEGORY_FILTERS = [
+  { key: "all",         label: "All" },
+  { key: "crypto",      label: "Crypto" },
+  { key: "fx",          label: "FX" },
+  { key: "stocks",      label: "Stocks" },
+  { key: "etfs",        label: "ETFs" },
+  { key: "commodities", label: "Commodities" },
+]
+
+const LEADERBOARD_COLS = [
+  // key on returned row, label, sort accessor (numeric, NaN = last)
+  { key: "ticker",                label: "Asset",        align: "left",  sort: r => r.ticker },
+  { key: "sentiment_24h",         label: "Sentiment",    align: "right", sort: r => r.sentiment_24h ?? -Infinity },
+  { key: "sentiment_change_24h",  label: "Δ 24h",        align: "right", sort: r => r.sentiment_change_24h ?? -Infinity, abs: true },
+  { key: "article_count_24h",     label: "Articles",     align: "right", sort: r => r.article_count_24h ?? 0 },
+  { key: "price",                 label: "Price",        align: "right", sort: r => r.price ?? -Infinity },
+  { key: "price_change_24h_pct",  label: "24h %",        align: "right", sort: r => r.price_change_24h_pct ?? -Infinity },
+]
+
+function _displayLabel(t) {
+  return FX_LABELS[t] ?? COMMODITY_LABELS[t] ?? t
+}
+
+function _formatPrice(v, ticker) {
+  if (v === null || v === undefined) return "—"
+  if (FX_TICKERS.includes(ticker)) return v.toFixed(4)
+  if (v >= 1000) return `£${(v / 1000).toFixed(2)}k`
+  if (v >= 1)    return `£${v.toFixed(2)}`
+  return `£${v.toFixed(4)}`
+}
+
+function _signedPct(v) {
+  if (v === null || v === undefined) return "—"
+  const sign = v > 0 ? "+" : ""
+  return `${sign}${v.toFixed(2)}%`
+}
+
+function _signedScore(v) {
+  if (v === null || v === undefined) return "—"
+  const sign = v > 0 ? "+" : ""
+  return `${sign}${v.toFixed(3)}`
+}
+
+function _scoreColor(v) {
+  if (v === null || v === undefined) return "var(--muted)"
+  if (v > 0.05) return "var(--positive)"
+  if (v < -0.05) return "var(--negative)"
+  return "var(--neutral)"
+}
+
+function Leaderboard() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const [filter, setFilter] = useState("all")
+  // sortKey null = use backend default ordering; otherwise client-sort
+  const [sortKey, setSortKey] = useState(null)
+  const [sortDir, setSortDir] = useState("desc")
+
+  useEffect(() => {
+    document.title = "Sentiment Leaderboard — 24h movers · SentimentFX"
+    const setMeta = (name, content) => {
+      let el = document.querySelector(`meta[name="${name}"]`)
+      if (!el) { el = document.createElement("meta"); el.setAttribute("name", name); document.head.appendChild(el) }
+      el.setAttribute("content", content)
+    }
+    setMeta("description",
+      "Live FinBERT sentiment leaderboard for 42 assets across crypto, FX, stocks, ETFs and commodities. " +
+      "Ranked by biggest 24h sentiment movers. Updated every 15 minutes.")
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    axios.get(`${API}/leaderboard`)
+      .then(r => { if (!cancelled) setData(r.data) })
+      .catch(e => { if (!cancelled) setError(e.message ?? "Failed to load") })
+    return () => { cancelled = true }
+  }, [])
+
+  const onSort = (col) => {
+    if (sortKey === col.key) {
+      setSortDir(d => d === "asc" ? "desc" : "asc")
+    } else {
+      setSortKey(col.key)
+      setSortDir("desc")
+    }
+  }
+
+  const rows = (data?.rows ?? []).filter(r => filter === "all" ? true : r.category === filter)
+  const sortedRows = (() => {
+    if (!sortKey) return rows   // backend default = biggest abs Δ sentiment
+    const col = LEADERBOARD_COLS.find(c => c.key === sortKey)
+    if (!col) return rows
+    const dir = sortDir === "asc" ? 1 : -1
+    return [...rows].sort((a, b) => {
+      const av = col.sort(a), bv = col.sort(b)
+      if (typeof av === "string") return av.localeCompare(bv) * dir
+      return (av - bv) * dir
+    })
+  })()
+
+  return (
+    <>
+      <style>{styles}</style>
+      <div className="dashboard">
+        <header className="topbar">
+          <div className="topbar-left">
+            <a href="https://sentimentfx.org" className="logo" style={{ textDecoration: "none" }}>SentimentFX</a>
+            <div className="logo-divider" />
+            <span className="tagline">SENTIMENT LEADERBOARD</span>
+          </div>
+          <div className="topbar-right">
+            <a href="/" style={{
+              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+              color: "var(--muted)", textDecoration: "none",
+            }}>DASHBOARD</a>
+            <a href="https://developers.sentimentfx.org" target="_blank" rel="noreferrer" style={{
+              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+              color: "var(--muted)", textDecoration: "none",
+            }}>DEVELOPERS</a>
+            <a href="/?auth=signup" style={{
+              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+              padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
+              background: "rgba(240,180,41,0.06)", color: "var(--accent)", textDecoration: "none",
+            }}>SIGN UP</a>
+            <div className="live-indicator">
+              <div className="live-dot" />
+              LIVE
+            </div>
+          </div>
+        </header>
+
+        <main className="main" style={{ padding: "32px 24px 64px" }}>
+          <div style={{ marginBottom: "24px" }}>
+            <h1 style={{
+              fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 500,
+              color: "var(--text)", letterSpacing: "0.02em", marginBottom: "8px",
+            }}>24-hour sentiment movers</h1>
+            <p style={{
+              fontFamily: "var(--sans)", fontSize: "13px", color: "var(--muted)",
+              maxWidth: "680px", lineHeight: 1.5,
+            }}>
+              FinBERT-scored news sentiment across {data?.rows?.length ?? 42} tracked assets.
+              Ranked by absolute change in volume-weighted sentiment over the last 24 hours
+              vs. the prior 24 hours. Refreshed every 15 minutes from RSS, with prices in GBP.
+            </p>
+          </div>
+
+          {/* Category filter — matches the dashboard switcher pattern */}
+          <nav className="category-bar" style={{ marginBottom: "16px" }}>
+            {CATEGORY_FILTERS.map(c => (
+              <button
+                key={c.key}
+                className={`category-btn ${filter === c.key ? "active" : ""}`}
+                onClick={() => setFilter(c.key)}
+              >
+                {c.label}
+              </button>
+            ))}
+          </nav>
+
+          {error && (
+            <div style={{
+              padding: "16px", border: "1px solid var(--negative)", borderRadius: "2px",
+              fontFamily: "var(--mono)", fontSize: "12px", color: "var(--negative)",
+            }}>
+              Failed to load leaderboard: {error}
+            </div>
+          )}
+
+          {!error && !data && (
+            <div style={{
+              padding: "32px", textAlign: "center", color: "var(--muted)",
+              fontFamily: "var(--mono)", fontSize: "11px", letterSpacing: "0.08em",
+            }}>LOADING…</div>
+          )}
+
+          {data && !error && (
+            <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "2px" }}>
+              <table style={{
+                width: "100%", borderCollapse: "collapse",
+                fontFamily: "var(--mono)", fontSize: "12px",
+              }}>
+                <thead>
+                  <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+                    <th style={{ padding: "10px 12px", textAlign: "right", color: "var(--muted)", fontWeight: 500, letterSpacing: "0.08em", width: "48px" }}>#</th>
+                    {LEADERBOARD_COLS.map(c => (
+                      <th key={c.key}
+                          onClick={() => onSort(c)}
+                          style={{
+                            padding: "10px 12px", textAlign: c.align, fontWeight: 500,
+                            color: sortKey === c.key ? "var(--accent2)" : "var(--muted)",
+                            letterSpacing: "0.08em", cursor: "pointer", userSelect: "none",
+                          }}>
+                        {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedRows.length === 0 && (
+                    <tr><td colSpan={LEADERBOARD_COLS.length + 1} style={{
+                      padding: "32px", textAlign: "center", color: "var(--muted)",
+                    }}>No tickers in this category yet.</td></tr>
+                  )}
+                  {sortedRows.map((r, i) => {
+                    const slug = TICKER_SLUGS[r.ticker]
+                    const href = slug ? `https://sentimentfx.org/sentiment/${slug}.html` : "#"
+                    return (
+                      <tr key={r.ticker}
+                          style={{
+                            borderBottom: "1px solid var(--border)",
+                            transition: "background 0.1s",
+                          }}
+                          onMouseOver={e => e.currentTarget.style.background = "var(--surface)"}
+                          onMouseOut={e => e.currentTarget.style.background = "transparent"}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--muted)" }}>{i + 1}</td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <a href={href} style={{
+                            color: "var(--text)", textDecoration: "none", fontWeight: 500,
+                          }}>{_displayLabel(r.ticker)}</a>
+                          <span style={{ color: "var(--muted)", marginLeft: "8px", fontSize: "10px", letterSpacing: "0.08em" }}>
+                            {r.category?.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: _scoreColor(r.sentiment_24h) }}>
+                          {_signedScore(r.sentiment_24h)}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: _scoreColor(r.sentiment_change_24h), fontWeight: 500 }}>
+                          {_signedScore(r.sentiment_change_24h)}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--muted)" }}>
+                          {r.article_count_24h ?? 0}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text)" }}>
+                          {_formatPrice(r.price, r.ticker)}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: _scoreColor(r.price_change_24h_pct) }}>
+                          {_signedPct(r.price_change_24h_pct)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Acquisition CTA — the whole point of this page being public */}
+          <div style={{
+            marginTop: "32px", padding: "20px 24px",
+            border: "1px solid var(--border)", borderRadius: "2px",
+            background: "var(--surface)", display: "flex",
+            justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap",
+          }}>
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "13px", color: "var(--text)", marginBottom: "4px" }}>
+                Get notified when these move.
+              </div>
+              <div style={{ fontFamily: "var(--sans)", fontSize: "12px", color: "var(--muted)" }}>
+                Sentiment alerts, full chart history, and CSV export with a free account.
+              </div>
+            </div>
+            <a href="/?auth=signup" style={{
+              fontFamily: "var(--mono)", fontSize: "11px", letterSpacing: "0.08em",
+              padding: "10px 18px", border: "1px solid var(--accent)", borderRadius: "2px",
+              background: "var(--accent)", color: "var(--bg)", textDecoration: "none", fontWeight: 500,
+            }}>SET UP ALERTS →</a>
+          </div>
+
+          {data?.generated_at && (
+            <div style={{
+              marginTop: "16px", fontFamily: "var(--mono)", fontSize: "10px",
+              color: "var(--muted)", letterSpacing: "0.05em", textAlign: "right",
+            }}>
+              Updated {new Date(data.generated_at).toLocaleString()} · 15-min refresh cycle
+            </div>
+          )}
+        </main>
+      </div>
+    </>
+  )
+}
+
+// Top-level dispatcher.  Keeps the hooks rule clean: the dashboard hooks only
+// run when we're actually rendering Dashboard, and Leaderboard's hooks only
+// run when we're on /leaderboard — no conditional hook calls inside either.
 export default function App() {
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "/"
+  if (pathname === "/leaderboard") return <Leaderboard />
+  return <Dashboard />
+}
+
+function Dashboard() {
   const [ticker, setTicker] = useState("BTC")
   const [category, setCategory] = useState("Crypto")
   const [allData, setAllData] = useState([])
@@ -2462,6 +2775,17 @@ export default function App() {
             <span className="tagline">CRYPTO SENTIMENT INTELLIGENCE</span>
           </div>
           <div className="topbar-right">
+            <a
+              href="/leaderboard"
+              style={{
+                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                color: "var(--muted)", textDecoration: "none", transition: "color 0.15s"
+              }}
+              onMouseOver={e => e.currentTarget.style.color = "var(--text)"}
+              onMouseOut={e => e.currentTarget.style.color = "var(--muted)"}
+            >
+              LEADERBOARD
+            </a>
             <a
               href="https://developers.sentimentfx.org"
               target="_blank"
