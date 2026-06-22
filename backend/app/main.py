@@ -397,7 +397,85 @@ def refresh_subscription_gauge():
         print(f"Subscription gauge refresh error: {e}")
 
 
+def _ingest_headlines(db, headlines: list, label: str) -> int:
+    """Dedup + FinBERT-score + save a batch of headline dicts.  Returns the
+    number of NEW rows actually inserted (existing URLs are silently skipped).
+    Used by both the 15-min RSS job and the hourly omnibus job so the ingest
+    semantics stay identical regardless of which scheduler fires."""
+    saved = 0
+    for h in headlines:
+        exists = db.query(models.Headline).filter(
+            models.Headline.url == h["url"]
+        ).first()
+        if exists:
+            continue
+        t0 = time.time()
+        sentiment = analyse_sentiment(h["title"])
+        FINBERT_LATENCY.observe(time.time() - t0)
+        db.add(models.Headline(
+            ticker=h["ticker"],
+            title=h["title"],
+            source=h["source"],
+            url=h["url"],
+            sentiment_score=sentiment["score"],
+            sentiment_label=sentiment["label"],
+            published_at=h["published_at"],
+        ))
+        HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
+        saved += 1
+    return saved
+
+
+def scrape_rss_only():
+    """RSS-only headline ingestion.  Runs every 15 minutes — no prices, no
+    GNews, no alerts.  RSS has no quota and FinBERT only fires on NEW rows
+    (dedup happens first), so 4× polling cost is essentially zero on idle
+    ticks and just discovers fresh headlines ~45 min sooner on average."""
+    global last_scrape_time, last_scrape_duration
+    start = time.time()
+    print(f"[RSS-15M] fired at {datetime.utcnow()}")
+    db = SessionLocal()
+    any_failure = False
+    try:
+        for ticker in TICKERS:
+            try:
+                headlines = fetch_rss_headlines(ticker)
+                saved = _ingest_headlines(db, headlines, "RSS")
+                db.commit()
+                print(f"[RSS-15M] {ticker}: +{saved} new / {len(headlines)} fetched")
+            except Exception as e:
+                any_failure = True
+                db.rollback()
+                print(f"[RSS-15M] {ticker} error: {e}")
+
+        for ticker in BACKGROUND_TICKERS:
+            try:
+                headlines = fetch_background_headlines(ticker)
+                saved = _ingest_headlines(db, headlines, "BACKGROUND")
+                db.commit()
+                print(f"[RSS-15M] {ticker}: +{saved} new / {len(headlines)} fetched")
+            except Exception as e:
+                any_failure = True
+                db.rollback()
+                print(f"[RSS-15M] {ticker} error: {e}")
+    finally:
+        db.close()
+
+    elapsed = round(time.time() - start, 2)
+    status = "failure" if any_failure else "success"
+    SCRAPER_RUNS.labels(status=status).inc()
+    SCRAPER_DURATION.observe(elapsed)
+    last_scrape_time = datetime.now(timezone.utc).isoformat()
+    last_scrape_duration = elapsed
+    print(f"[RSS-15M] complete in {elapsed}s (status={status})")
+
+
 def scrape_all():
+    """Hourly omnibus: GNews (gated off via GNEWS_ENABLED by default), price
+    refresh for primary + background tickers, and alert checks.  RSS is
+    handled by scrape_rss_only at higher cadence — this job intentionally
+    does NOT re-scrape RSS to avoid wasting FinBERT calls on guaranteed-empty
+    dedups every hour at minute=0."""
     global last_scrape_time, last_scrape_duration
     start = time.time()
     print(f"[SCHEDULER] fired at {datetime.utcnow()}")
@@ -411,32 +489,9 @@ def scrape_all():
 
     for ticker in TICKERS:
         try:
-            headlines = fetch_headlines(ticker) + fetch_rss_headlines(ticker)
-
-            saved_count = 0
-            for h in headlines:
-                exists = db.query(models.Headline).filter(
-                    models.Headline.url == h["url"]
-                ).first()
-                if exists:
-                    continue
-
-                t0 = time.time()
-                sentiment = analyse_sentiment(h["title"])
-                FINBERT_LATENCY.observe(time.time() - t0)
-
-                headline = models.Headline(
-                    ticker=h["ticker"],
-                    title=h["title"],
-                    source=h["source"],
-                    url=h["url"],
-                    sentiment_score=sentiment["score"],
-                    sentiment_label=sentiment["label"],
-                    published_at=h["published_at"]
-                )
-                db.add(headline)
-                HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
-                saved_count += 1
+            # GNews returns [] unless GNEWS_ENABLED=true — see scraper.fetch_headlines
+            headlines = fetch_headlines(ticker)
+            saved_count = _ingest_headlines(db, headlines, "GNEWS")
 
             prices = latest_prices.get(ticker)
             if prices:
@@ -465,30 +520,6 @@ def scrape_all():
 
     for ticker in BACKGROUND_TICKERS:
         try:
-            headlines = fetch_background_headlines(ticker)
-            saved_count = 0
-            for h in headlines:
-                exists = db.query(models.Headline).filter(
-                    models.Headline.url == h["url"]
-                ).first()
-                if exists:
-                    continue
-                t0 = time.time()
-                sentiment = analyse_sentiment(h["title"])
-                FINBERT_LATENCY.observe(time.time() - t0)
-                headline = models.Headline(
-                    ticker=h["ticker"],
-                    title=h["title"],
-                    source=h["source"],
-                    url=h["url"],
-                    sentiment_score=sentiment["score"],
-                    sentiment_label=sentiment["label"],
-                    published_at=h["published_at"],
-                )
-                db.add(headline)
-                HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
-                saved_count += 1
-
             price_data = fetch_latest_stock_price(ticker)
             if price_data:
                 existing_price = db.query(models.Price).filter(
@@ -501,7 +532,7 @@ def scrape_all():
                     db.add(models.Price(**price_data))
 
             db.commit()
-            print(f"[BACKGROUND] {ticker} committed: {saved_count} new / {len(headlines)} fetched")
+            print(f"[BACKGROUND] {ticker} price refreshed")
         except Exception as e:
             any_failure = True
             db.rollback()
@@ -542,6 +573,20 @@ def reset_monthly_api_usage():
         db.close()
 
 
+# RSS scrape runs at minute 0/15/30/45.  max_instances=1+coalesce=True means
+# a slow run (Reddit/FXStreet latency spikes can push a tick past 15min) won't
+# pile up — APScheduler skips the overlap rather than spawning a parallel job.
+scheduler.add_job(
+    scrape_rss_only,
+    CronTrigger(minute="*/15"),
+    id="rss_scrape",
+    max_instances=1,
+    coalesce=True,
+    replace_existing=True,
+)
+# Hourly omnibus stays at minute=0; if RSS run is still going it'll overlap
+# briefly (different DB sessions, dedup-by-URL handles any contention), which
+# is cheaper than staggering and having to reason about cross-job ordering.
 scheduler.add_job(scrape_all, CronTrigger(minute=0))
 scheduler.add_job(refresh_subscription_gauge, CronTrigger(minute=30))
 scheduler.add_job(reset_monthly_api_usage, CronTrigger(day=1, hour=0, minute=0, timezone="UTC"))
