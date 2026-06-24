@@ -2117,33 +2117,103 @@ function _scoreColor(v) {
 
 // Admin-only backtest leaderboard.  Visually distinct from the public table
 // (red accent border + "ADMIN" eyebrow) so it's obvious this isn't public data.
-// Sortable by any numeric column; default sort = total return desc, matching
-// the backend.
+// New backend shape: each row has {full, in_sample, out_of_sample} blocks,
+// each with {gross, net} sub-blocks.  The OOS-net column is the most honest
+// single number — it's the strategy's edge on the window the thresholds
+// never saw, net of round-trip transaction costs.
+const _pct = (v, opts = {}) => {
+  if (v == null) return "—"
+  const sign = v > 0 ? "+" : ""
+  return `${sign}${v.toFixed(opts.dp ?? 2)}%`
+}
+const _winRate = (v) => v == null ? "—" : `${Math.round(v * 100)}%`
+const _g = (path) => (r) => path.split(".").reduce((o, k) => o?.[k], r)
+
 const ADMIN_BOARD_COLS = [
-  { key: "ticker",              label: "Asset",       align: "left",  fmt: (r) => `${FX_LABELS[r.ticker] ?? COMMODITY_LABELS[r.ticker] ?? r.ticker}` },
-  { key: "total_trades",        label: "Trades",      align: "right", fmt: (r) => r.total_trades ?? 0 },
-  { key: "win_rate",            label: "Win rate",    align: "right", fmt: (r) => r.win_rate == null ? "—" : `${Math.round(r.win_rate * 100)}%` },
-  { key: "avg_return_pct",      label: "Avg / trade", align: "right", fmt: (r) => r.avg_return_pct == null ? "—" : `${r.avg_return_pct > 0 ? "+" : ""}${r.avg_return_pct.toFixed(2)}%`, color: (r) => r.avg_return_pct },
-  { key: "total_return_pct",    label: "Total ret.",  align: "right", fmt: (r) => r.total_return_pct == null ? "—" : `${r.total_return_pct > 0 ? "+" : ""}${r.total_return_pct.toFixed(2)}%`, color: (r) => r.total_return_pct },
-  { key: "buy_hold_return_pct", label: "Buy & hold",  align: "right", fmt: (r) => r.buy_hold_return_pct == null ? "—" : `${r.buy_hold_return_pct > 0 ? "+" : ""}${r.buy_hold_return_pct.toFixed(2)}%`, color: (r) => r.buy_hold_return_pct },
-  { key: "alpha_pct",           label: "Alpha",       align: "right", fmt: (r) => r.alpha_pct == null ? "—" : `${r.alpha_pct > 0 ? "+" : ""}${r.alpha_pct.toFixed(2)}%`, color: (r) => r.alpha_pct, bold: true },
-  { key: "sharpe",              label: "Sharpe",      align: "right", fmt: (r) => r.sharpe == null ? "—" : r.sharpe.toFixed(2) },
-  { key: "max_drawdown_pct",    label: "Max DD",      align: "right", fmt: (r) => r.max_drawdown_pct == null ? "—" : `${r.max_drawdown_pct.toFixed(2)}%`, color: () => -1 },
+  { key: "ticker",     label: "Asset",      align: "left",  hint: "Ticker / display label",
+    val: (r) => FX_LABELS[r.ticker] ?? COMMODITY_LABELS[r.ticker] ?? r.ticker },
+  { key: "category",   label: "Cat",        align: "left",  hint: "Asset category drives default cost bps",
+    val: (r) => (r.category ?? "").toUpperCase() },
+  { key: "full_trades",        label: "Trades",     align: "right", hint: "Total trades in the full 180d window",
+    val: (r) => _g("full.gross.trades")(r) ?? 0,
+    sort: (r) => _g("full.gross.trades")(r) },
+  { key: "full_win_rate",      label: "WR",         align: "right", hint: "Win rate across the full window (gross)",
+    val: (r) => _winRate(_g("full.gross.win_rate")(r)),
+    sort: (r) => _g("full.gross.win_rate")(r) },
+  { key: "full_gross_total",   label: "Full Gross", align: "right", hint: "Compounded total return over 180d, before costs",
+    val: (r) => _pct(_g("full.gross.total_return_pct")(r)),
+    sort: (r) => _g("full.gross.total_return_pct")(r),
+    color: (r) => _g("full.gross.total_return_pct")(r) },
+  { key: "full_net_total",     label: "Full Net",   align: "right", hint: "Same window, AFTER round-trip transaction costs",
+    val: (r) => _pct(_g("full.net.total_return_pct")(r)),
+    sort: (r) => _g("full.net.total_return_pct")(r),
+    color: (r) => _g("full.net.total_return_pct")(r) },
+  { key: "oos_trades",         label: "OOS n",      align: "right", hint: "Trades in the out-of-sample window (last 1/3)",
+    val: (r) => _g("out_of_sample.gross.trades")(r) ?? 0,
+    sort: (r) => _g("out_of_sample.gross.trades")(r) },
+  { key: "oos_win_rate",       label: "OOS WR",     align: "right", hint: "Win rate in out-of-sample window",
+    val: (r) => _winRate(_g("out_of_sample.gross.win_rate")(r)),
+    sort: (r) => _g("out_of_sample.gross.win_rate")(r) },
+  { key: "oos_gross_total",    label: "OOS Gross",  align: "right", hint: "OOS total return, before costs",
+    val: (r) => _pct(_g("out_of_sample.gross.total_return_pct")(r)),
+    sort: (r) => _g("out_of_sample.gross.total_return_pct")(r),
+    color: (r) => _g("out_of_sample.gross.total_return_pct")(r) },
+  { key: "oos_net_total",      label: "OOS Net",    align: "right", hint: "THE honest number: OOS return after costs. If positive across the board, edge probably real. If broadly negative, edge is mirage.",
+    val: (r) => _pct(_g("out_of_sample.net.total_return_pct")(r)),
+    sort: (r) => _g("out_of_sample.net.total_return_pct")(r),
+    color: (r) => _g("out_of_sample.net.total_return_pct")(r),
+    bold: true },
+  { key: "is_oos_gap",         label: "IS→OOS Δ",   align: "right", hint: "In-sample net minus out-of-sample net. Large positive = overfit; small or negative = robust.",
+    val: (r) => {
+      const is = _g("in_sample.net.total_return_pct")(r)
+      const oos = _g("out_of_sample.net.total_return_pct")(r)
+      if (is == null || oos == null) return "—"
+      const delta = is - oos
+      return `${delta > 0 ? "+" : ""}${delta.toFixed(2)}%`
+    },
+    sort: (r) => {
+      const is = _g("in_sample.net.total_return_pct")(r)
+      const oos = _g("out_of_sample.net.total_return_pct")(r)
+      if (is == null || oos == null) return null
+      return is - oos
+    },
+    color: (r) => {
+      const is = _g("in_sample.net.total_return_pct")(r)
+      const oos = _g("out_of_sample.net.total_return_pct")(r)
+      if (is == null || oos == null) return null
+      // Inverted: a LARGE positive gap is BAD (overfit), so colour negative.
+      return -(is - oos)
+    } },
+  { key: "costs_pct_per_trade", label: "Cost/trade", align: "right", hint: "Round-trip transaction cost assumed for this ticker (per trade)",
+    val: (r) => r.costs_pct_per_trade == null ? "—" : `${r.costs_pct_per_trade.toFixed(2)}%`,
+    sort: (r) => r.costs_pct_per_trade },
 ]
 
 function AdminBacktestBoard({ board, sortKey, onSort }) {
+  const cols = ADMIN_BOARD_COLS
+  const activeCol = cols.find(c => c.key === sortKey)
   const sorted = [...(board?.rows ?? [])].sort((a, b) => {
-    const av = a[sortKey], bv = b[sortKey]
-    // Nulls always sink — null means "not enough data", which is the least
-    // interesting case regardless of sort direction.
+    if (!activeCol?.sort) return 0
+    const av = activeCol.sort(a), bv = activeCol.sort(b)
     if (av == null && bv == null) return 0
     if (av == null) return 1
     if (bv == null) return -1
     if (typeof av === "string") return av.localeCompare(bv)
-    return bv - av   // numeric: descending so the best metric leads
+    return bv - av
   })
 
   const generated = board?.computed_at ? new Date(board.computed_at) : null
+
+  // Headline aggregate across all OOS-net values — "does the strategy work in
+  // aggregate" is more useful than any single ticker.  Average across rows
+  // that have a settled OOS net.
+  const oosNets = (board?.rows ?? [])
+    .map(r => _g("out_of_sample.net.total_return_pct")(r))
+    .filter(v => v != null)
+  const avgOosNet = oosNets.length
+    ? oosNets.reduce((a, b) => a + b, 0) / oosNets.length
+    : null
+  const positiveCount = oosNets.filter(v => v > 0).length
 
   return (
     <section style={{
@@ -2154,19 +2224,43 @@ function AdminBacktestBoard({ board, sortKey, onSort }) {
       <div style={{
         fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.2em",
         color: "var(--negative)", textTransform: "uppercase", marginBottom: "8px",
-      }}>● Admin · backtest performance</div>
+      }}>● Admin · is the edge real?</div>
       <h2 style={{
         fontFamily: "var(--mono)", fontSize: "18px", fontWeight: 500,
         color: "var(--text)", marginBottom: "6px",
-      }}>Which tickers' signals actually work</h2>
+      }}>Backtest with out-of-sample split + transaction costs</h2>
       <p style={{
         fontFamily: "var(--sans)", fontSize: "12px", color: "var(--muted)",
-        marginBottom: "16px", maxWidth: "640px",
+        marginBottom: "16px", maxWidth: "720px",
       }}>
         {board?.signal === "shift" ? "Sentiment-shift" : "Divergence"} signal,
-        {" "}{board?.hold_days}d hold.  Long-only, no overlap.
-        Past performance not predictive — calibrate confidence, don't chase.
+        {" "}{board?.hold_days}d hold, long-only.  Split: {board?.split_ratio ?? "2/3 IS · 1/3 OOS"}.
+        Default cost assumptions: 30 bps crypto · 15 bps FX · 6 bps stocks · 4 bps ETFs · 12 bps commodities (per round-trip).
+        {" "}<strong style={{ color: "var(--text)" }}>Read OOS Net first.</strong>
+        {" "}If it's broadly positive across tickers, edge probably survives a regime change AND transaction costs.
+        If broadly negative or near zero, the full-window numbers are likely backtest artifacts.
       </p>
+
+      {avgOosNet != null && (
+        <div style={{
+          marginBottom: "16px", padding: "16px 18px",
+          background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "2px",
+          display: "flex", gap: "32px", flexWrap: "wrap",
+        }}>
+          <div>
+            <div style={{ fontSize: "10px", letterSpacing: "0.15em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "4px" }}>Avg OOS net (all tickers)</div>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: avgOosNet > 0 ? "var(--positive)" : avgOosNet < 0 ? "var(--negative)" : "var(--text)", fontFamily: "var(--mono)" }}>
+              {avgOosNet > 0 ? "+" : ""}{avgOosNet.toFixed(2)}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "10px", letterSpacing: "0.15em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "4px" }}>Tickers with positive OOS net</div>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--text)", fontFamily: "var(--mono)" }}>
+              {positiveCount} / {oosNets.length}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "2px" }}>
         <table style={{
@@ -2177,14 +2271,16 @@ function AdminBacktestBoard({ board, sortKey, onSort }) {
             <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
               <th style={{ padding: "10px 12px", textAlign: "right", width: "48px",
                            color: "var(--muted)", fontWeight: 500, letterSpacing: "0.08em" }}>#</th>
-              {ADMIN_BOARD_COLS.map(c => (
+              {cols.map(c => (
                 <th key={c.key}
-                    onClick={() => onSort(c.key)}
+                    onClick={() => c.sort && onSort(c.key)}
+                    title={c.hint}
                     style={{
                       padding: "10px 12px", textAlign: c.align, fontWeight: 500,
                       color: sortKey === c.key ? "var(--accent2)" : "var(--muted)",
-                      letterSpacing: "0.08em", cursor: "pointer", userSelect: "none",
-                      textTransform: "uppercase", fontSize: "10px",
+                      letterSpacing: "0.08em", cursor: c.sort ? "pointer" : "default",
+                      userSelect: "none", textTransform: "uppercase", fontSize: "10px",
+                      whiteSpace: "nowrap",
                     }}>
                   {c.label}{sortKey === c.key ? " ↓" : ""}
                 </th>
@@ -2195,8 +2291,8 @@ function AdminBacktestBoard({ board, sortKey, onSort }) {
             {sorted.map((r, i) => (
               <tr key={r.ticker} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--muted)" }}>{i + 1}</td>
-                {ADMIN_BOARD_COLS.map(c => {
-                  const val = c.fmt(r)
+                {cols.map(c => {
+                  const val = c.val(r)
                   const colorVal = c.color ? c.color(r) : null
                   const color = colorVal == null ? "var(--text)"
                     : colorVal > 0 ? "var(--positive)"
@@ -2205,14 +2301,14 @@ function AdminBacktestBoard({ board, sortKey, onSort }) {
                   return (
                     <td key={c.key} style={{
                       padding: "10px 12px", textAlign: c.align, color,
-                      fontWeight: c.bold ? 600 : 400,
+                      fontWeight: c.bold ? 600 : 400, whiteSpace: "nowrap",
                     }}>{val}</td>
                   )
                 })}
               </tr>
             ))}
             {sorted.length === 0 && (
-              <tr><td colSpan={ADMIN_BOARD_COLS.length + 1} style={{
+              <tr><td colSpan={cols.length + 1} style={{
                 padding: "32px", textAlign: "center", color: "var(--muted)",
               }}>No backtest data yet.</td></tr>
             )}
@@ -2226,6 +2322,7 @@ function AdminBacktestBoard({ board, sortKey, onSort }) {
           color: "var(--muted)", letterSpacing: "0.05em", textAlign: "right",
         }}>
           Computed {generated.toLocaleString()} · cached 1h · append ?refresh=true to force
+          {board?.costs_bps_override != null ? ` · costs override: ${board.costs_bps_override}bps` : ""}
         </div>
       )}
     </section>
@@ -2246,7 +2343,9 @@ function Leaderboard() {
   const [adminBoard, setAdminBoard] = useState(null)
   const [adminBoardLoading, setAdminBoardLoading] = useState(false)
   const [adminBoardError, setAdminBoardError] = useState(null)
-  const [adminSort, setAdminSort] = useState("total_return_pct")
+  // Default to OOS-net sort — matches the backend's primary ordering and
+  // surfaces the most honest single metric at the top of the table.
+  const [adminSort, setAdminSort] = useState("oos_net_total")
 
   useEffect(() => {
     document.title = "Sentiment Leaderboard — 24h movers · SentimentFX"

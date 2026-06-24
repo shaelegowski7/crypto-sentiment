@@ -2756,6 +2756,27 @@ def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db
     }
 
 
+# Round-trip transaction-cost defaults by asset category, expressed in basis
+# points (1 bp = 0.01%).  These approximate retail-broker reality across one
+# full entry+exit.  Override per-request with ?costs_bps=N on the admin board.
+#
+#  - crypto:      ~10 bps taker fee + ~5 bps slippage, both sides ≈ 30 bps RT
+#  - fx:          spread on EUR/USD ~0.7 pips ≈ 7-8 bps + retail markup → ~15 bps RT
+#  - stocks:      0 commission retail, ~3 bps spread per side → ~6 bps RT
+#  - etfs:        major ETFs trade tighter than single names → ~4 bps RT
+#  - commodities: futures spread + commission → ~12 bps RT
+#
+# These are conservative — real fills on a small retail account may be worse;
+# real fills on a market-making prop account would be better.  The point is
+# to remove the cost-blind backtest artifact, not to pin to a specific broker.
+_TICKER_COSTS_BPS_DEFAULT = {
+    "crypto":      30,
+    "fx":          15,
+    "stocks":       6,
+    "etfs":         4,
+    "commodities": 12,
+}
+
 # In-memory cache for the admin backtest board.  Computing all 42 tickers
 # synchronously takes ~13s on Railway (180d headlines + 180d prices per
 # ticker, then trade simulation).  Results don't change minute-to-minute
@@ -2765,30 +2786,177 @@ _BACKTEST_BOARD_CACHE = {"key": None, "computed_at": None, "data": None}
 _BACKTEST_BOARD_TTL_SECONDS = 3600
 
 
+def _costs_pct_for(ticker: str, override_bps: int | None) -> float:
+    """Return RT cost as a percentage (not bps).  override_bps wins if set."""
+    bps = override_bps if override_bps is not None else \
+          _TICKER_COSTS_BPS_DEFAULT.get(_category_for(ticker), 10)
+    return bps / 100.0   # 30 bps → 0.30%
+
+
+def _compact_backtest_summary(
+    daily_sentiment: dict,
+    daily_price: dict,
+    common: list,
+    signal: str,
+    hold_days: int,
+    costs_pct: float,
+):
+    """Pure trade-sim + summary stats over a date window.  No equity curve,
+    no per-trade list.  Returns a dict with both `gross` and `net` summaries,
+    or None if the window can't generate any trades.
+
+    The `net` block subtracts `costs_pct` from each trade's gross return
+    BEFORE compounding — so the net total_return is the geometric truth, not
+    just gross minus (n × costs).
+
+    Mirrors the threshold + signal-detection conventions of get_backtest.
+    If you ever change those there, change them here too (or refactor both
+    to share).  Comment marker: BACKTEST_THRESHOLDS_DUPLICATED.
+    """
+    if len(common) < 14:
+        return None
+
+    sorted_price_dates = sorted(daily_price.keys())
+    common_set = set(common)
+    THRESHOLD_S, THRESHOLD_P = 0.02, 0.5
+    SHIFT_THRESH = 0.05
+
+    signal_series = {}
+    if signal == "divergence":
+        for i in range(14, len(common) + 1):
+            window = common[i - 14:i]
+            p7, r7 = window[:7], window[7:]
+            ps = sum(daily_sentiment[d] for d in p7) / 7
+            rs = sum(daily_sentiment[d] for d in r7) / 7
+            pp = sum(daily_price[d] for d in p7) / 7
+            rp = sum(daily_price[d] for d in r7) / 7
+            sc = rs - ps
+            pc = (rp - pp) / pp * 100 if pp > 0 else 0
+            if sc > THRESHOLD_S and pc < -THRESHOLD_P:
+                signal_series[common[i - 1]] = "bullish"
+            elif sc < -THRESHOLD_S and pc > THRESHOLD_P:
+                signal_series[common[i - 1]] = "bearish"
+    else:   # "shift"
+        for i, d in enumerate(common):
+            prior = [daily_sentiment[common[j]] for j in range(max(0, i - 7), i)]
+            if len(prior) >= 3:
+                shift = daily_sentiment[d] - sum(prior) / len(prior)
+                if shift > SHIFT_THRESH:
+                    signal_series[d] = "bullish"
+                elif shift < -SHIFT_THRESH:
+                    signal_series[d] = "bearish"
+
+    # Long-only simulation, no overlap.  Entry on next available price after
+    # signal day; exit on first price ≥ entry+hold_days.  Window edge case:
+    # exits that fall past the window boundary still use the next available
+    # price (which may be outside `common`) — that's intentional, so a signal
+    # firing at the very end of the IS window doesn't get truncated.
+    trade_returns = []
+    in_trade_until = None
+    for d in sorted(signal_series.keys()):
+        if in_trade_until and d <= in_trade_until:
+            continue
+        if signal_series[d] != "bullish":
+            continue
+        entry_date = next((pd for pd in sorted_price_dates if pd > d), None)
+        if not entry_date:
+            continue
+        entry_price = daily_price[entry_date]
+        target = entry_date + timedelta(days=hold_days)
+        exit_date = next((pd for pd in sorted_price_dates if pd >= target), sorted_price_dates[-1])
+        exit_price = daily_price[exit_date]
+        gross_ret = (exit_price - entry_price) / entry_price * 100
+        trade_returns.append(gross_ret)
+        in_trade_until = exit_date
+
+    if not trade_returns:
+        return None
+
+    def _stats(returns):
+        n = len(returns)
+        winning = sum(1 for r in returns if r > 0)
+        compounded = 100.0
+        for r in returns:
+            compounded *= (1 + r / 100)
+        return {
+            "trades": n,
+            "win_rate": round(winning / n, 3),
+            "avg_return_pct": round(sum(returns) / n, 2),
+            "total_return_pct": round(compounded - 100, 2),
+        }
+
+    return {
+        "gross": _stats(trade_returns),
+        "net": _stats([r - costs_pct for r in trade_returns]),
+        "costs_pct_per_trade": costs_pct,
+    }
+
+
+def _build_daily_series(headlines, prices):
+    """Build the (daily_sentiment, daily_price, common_dates) triple used by
+    every backtest variant.  Pulled out so admin-board doesn't redo the work
+    three times per ticker."""
+    daily = defaultdict(lambda: {"scores": [], "weights": []})
+    for h in headlines:
+        if abs(h.sentiment_score) < 0.05:
+            continue
+        d = h.published_at.date()
+        daily[d]["scores"].append(h.sentiment_score)
+        daily[d]["weights"].append(abs(h.sentiment_score))
+
+    daily_sentiment = {}
+    for d, v in daily.items():
+        if not v["scores"]:
+            continue
+        w_sum = sum(v["weights"])
+        daily_sentiment[d] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
+
+    daily_price = {p.date.date(): p.close_price for p in prices}
+    common = sorted(set(daily_sentiment.keys()) & set(daily_price.keys()))
+    return daily_sentiment, daily_price, common
+
+
 @app.get("/admin/backtest-board")
 def admin_backtest_board(
     signal: str = "shift",
     hold_days: int = 7,
+    costs_bps: int | None = None,
     refresh: bool = False,
     db: Session = Depends(get_db),
     admin=Depends(require_super_admin),
 ):
-    """Per-ticker backtest leaderboard — which tickers' signals actually work.
+    """Per-ticker backtest leaderboard with in-sample / out-of-sample split
+    and transaction-cost-adjusted returns.
 
-    Runs the same backtest as GET /backtest/{ticker} for every tracked ticker
-    and returns only the summary stats (no trades, no equity curve) so the
-    admin can rank by historical edge.  Default sort is total_return_pct
-    descending.  Calling with ?refresh=true bypasses the 1-hour cache.
+    For each tracked ticker we compute three backtest windows:
+      • full  — all 180d of history we have
+      • IS    — first 2/3 of common dates (the "developer's view")
+      • OOS   — last 1/3 of common dates (what the thresholds never saw
+                when they were originally chosen)
 
-    Tickers without enough historical data return null metrics and
-    total_trades=0 — the UI sinks them to the bottom rather than dropping
-    them, so it's obvious which assets still need data accumulation.
+    For each window, we report both `gross` and `net` summary stats.  `net`
+    subtracts a per-trade round-trip cost (default by asset category; override
+    with ?costs_bps=N to stress-test).  The headline number to look at is
+    `oos.net.total_return_pct` — if that's positive, the edge probably
+    survives a regime change AND transaction costs.  If it's negative, the
+    backtest looks great in-sample because the thresholds happened to suit
+    that window, and the strategy is unlikely to make money in production.
+
+    Default sort is `oos.net.total_return_pct` descending — the most honest
+    number we can compute leads.  Tickers without enough OOS data fall back
+    to gross full ranking so they still show up.
+
+    `?costs_bps=N` overrides ALL categories' costs with a single N value;
+    useful for sensitivity analysis ("what if my real fills are 50 bps RT?").
+    `?refresh=true` bypasses the 1-hour cache.
     """
     if signal not in ("shift", "divergence"):
         raise HTTPException(status_code=400, detail="signal must be 'shift' or 'divergence'")
     hold_days = max(1, min(hold_days, 30))
+    if costs_bps is not None:
+        costs_bps = max(0, min(costs_bps, 500))   # 5% RT is already absurd
 
-    cache_key = (signal, hold_days)
+    cache_key = (signal, hold_days, costs_bps)
     now = datetime.utcnow()
     cached = _BACKTEST_BOARD_CACHE
     if (not refresh
@@ -2797,62 +2965,85 @@ def admin_backtest_board(
         and (now - cached["computed_at"]).total_seconds() < _BACKTEST_BOARD_TTL_SECONDS):
         return cached["data"]
 
+    since = datetime.utcnow() - timedelta(days=180)
     all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
     rows = []
+
     for t in all_tickers:
         try:
-            # Call the existing route function directly — the Depends(get_db)
-            # default is just a sentinel; passing our own db overrides it.
-            result = get_backtest(t, signal=signal, hold_days=hold_days, db=db)
+            headlines = db.query(models.Headline).filter(
+                models.Headline.ticker == t,
+                models.Headline.published_at >= since,
+            ).order_by(models.Headline.published_at).all()
+            prices = db.query(models.Price).filter(
+                models.Price.ticker == t,
+                models.Price.date >= since,
+            ).order_by(models.Price.date).all()
+
+            if len(headlines) < 20 or len(prices) < 30:
+                rows.append({
+                    "ticker": t, "category": _category_for(t),
+                    "full": None, "in_sample": None, "out_of_sample": None,
+                    "costs_pct_per_trade": _costs_pct_for(t, costs_bps),
+                    "message": "Not enough data",
+                })
+                continue
+
+            daily_sentiment, daily_price, common = _build_daily_series(headlines, prices)
+            if len(common) < 20:
+                rows.append({
+                    "ticker": t, "category": _category_for(t),
+                    "full": None, "in_sample": None, "out_of_sample": None,
+                    "costs_pct_per_trade": _costs_pct_for(t, costs_bps),
+                    "message": "Not enough overlapping data",
+                })
+                continue
+
+            # 2/3 IS, 1/3 OOS — conventional split.  We don't slide the boundary
+            # because the thresholds are static, so any split point works the
+            # same way.  Walk-forward analysis is a separate tool (#3 on roadmap).
+            split = (len(common) * 2) // 3
+            is_window  = common[:split]
+            oos_window = common[split:]
+            costs_pct  = _costs_pct_for(t, costs_bps)
+
+            full_summary = _compact_backtest_summary(
+                daily_sentiment, daily_price, common, signal, hold_days, costs_pct)
+            is_summary   = _compact_backtest_summary(
+                daily_sentiment, daily_price, is_window, signal, hold_days, costs_pct)
+            oos_summary  = _compact_backtest_summary(
+                daily_sentiment, daily_price, oos_window, signal, hold_days, costs_pct)
+
+            rows.append({
+                "ticker": t, "category": _category_for(t),
+                "full": full_summary,
+                "in_sample": is_summary,
+                "out_of_sample": oos_summary,
+                "costs_pct_per_trade": costs_pct,
+                "window_days": (max(common) - min(common)).days if common else 0,
+            })
         except Exception as e:
             rows.append({
                 "ticker": t, "category": _category_for(t),
-                "win_rate": None, "avg_return_pct": None,
-                "total_return_pct": None, "alpha_pct": None,
-                "sharpe": None, "max_drawdown_pct": None,
-                "buy_hold_return_pct": None, "total_trades": 0,
+                "full": None, "in_sample": None, "out_of_sample": None,
                 "error": str(e),
             })
-            continue
 
-        if "summary" not in result:
-            rows.append({
-                "ticker": t, "category": _category_for(t),
-                "win_rate": None, "avg_return_pct": None,
-                "total_return_pct": None, "alpha_pct": None,
-                "sharpe": None, "max_drawdown_pct": None,
-                "buy_hold_return_pct": None, "total_trades": 0,
-                "message": result.get("message"),
-            })
-            continue
-
-        s = result["summary"]
-        rows.append({
-            "ticker": t,
-            "category": _category_for(t),
-            "win_rate": s["win_rate"],
-            "avg_return_pct": s["avg_return_pct"],
-            "total_return_pct": s["total_return_pct"],
-            "alpha_pct": s["alpha_pct"],
-            "sharpe": s["sharpe"],
-            "max_drawdown_pct": s["max_drawdown_pct"],
-            "buy_hold_return_pct": s["buy_hold_return_pct"],
-            "total_trades": s["total_trades"],
-        })
-
-    # Sort: tickers with no backtest data sink to the bottom; rest by total
-    # return desc.  Using total_return_pct (compounded) not avg_return_pct
-    # because it accounts for trade frequency — a 60% win rate that fires
-    # 5x means more than the same win rate firing twice.
-    rows.sort(key=lambda r: (
-        r.get("total_return_pct") is None,
-        -(r.get("total_return_pct") or 0),
-    ))
+    # Sort by OOS net total return desc — the most honest single number.
+    # Tickers with no OOS sink to the bottom but stay visible so it's obvious
+    # which assets are still data-starved.
+    def _oos_net_key(r):
+        try:    return r["out_of_sample"]["net"]["total_return_pct"]
+        except (KeyError, TypeError): return None
+    rows.sort(key=lambda r: (_oos_net_key(r) is None, -(_oos_net_key(r) or 0)))
 
     response = {
         "computed_at": now.isoformat() + "Z",
         "signal": signal,
         "hold_days": hold_days,
+        "costs_bps_override": costs_bps,
+        "costs_defaults_by_category_bps": _TICKER_COSTS_BPS_DEFAULT,
+        "split_ratio": "2/3 IS · 1/3 OOS",
         "rows": rows,
     }
     _BACKTEST_BOARD_CACHE.update({
