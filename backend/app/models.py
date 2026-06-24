@@ -81,6 +81,26 @@ class AlertOutcome(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class Brief(Base):
+    """One row per day's morning brief.  Generated at 07:00 Europe/London by
+    the APScheduler job, saved here before emails go out so the public archive
+    always has the same content subscribers received.  The `ai_summary` is
+    the Claude-generated paragraph (cheap to show free, hooks readers);
+    `ticker_data` and `content_html` are the paid product (full per-ticker
+    breakdown with sentiment + price + headlines + divergence flags).
+    """
+    __tablename__ = "briefs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(DateTime, unique=True, index=True)   # midnight UTC of the day this brief is FOR
+    ai_summary = Column(Text)                          # the Claude-generated paragraph
+    ticker_data = Column(Text)                         # JSON dump of per-ticker stats
+    content_html = Column(Text)                        # fully rendered email body
+    tickers = Column(String)                           # comma-sep ticker list for quick listing
+    sent_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class APIKey(Base):
     __tablename__ = "api_keys"
 

@@ -131,8 +131,8 @@ async def protect_metrics(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_GET_PREFIXES = ("/v1/",)
-_PUBLIC_GET_PATHS = {"/", "/status", "/health", "/leaderboard"}
-_PUBLIC_GET_DATA_PREFIXES = ("/dashboard/", "/correlation/", "/headlines/", "/prices/", "/summary/")
+_PUBLIC_GET_PATHS = {"/", "/status", "/health", "/leaderboard", "/brief/latest", "/brief/archive"}
+_PUBLIC_GET_DATA_PREFIXES = ("/dashboard/", "/correlation/", "/headlines/", "/prices/", "/summary/", "/brief/")
 
 @app.middleware("http")
 async def cache_control(request: Request, call_next):
@@ -203,13 +203,28 @@ def _category_for(ticker: str) -> str:
             return cat
     return "other"
 
-# Stripe price IDs for Data tier 
+# Stripe price IDs for Data tier
 DATA_PRICE_IDS = {
     "price_1TUqVG2NzVdYK0wrKrPTE28e",
     "price_1TUqVx2NzVdYK0wryheortJg",
 }
+# Stripe price IDs for the Brief-only tier (£~10/mo).  Sourced from env so the
+# user can spin up Stripe prices independently and just set BRIEF_PRICE_ID_*
+# without a redeploy.  Empty set if not configured — checkout still works for
+# Pro/Data, but the brief tier can't be purchased until prices are wired.
+BRIEF_PRICE_IDS = {
+    p for p in (
+        os.getenv("BRIEF_PRICE_ID_MONTHLY"),
+        os.getenv("BRIEF_PRICE_ID_YEARLY"),
+    ) if p
+}
 PRO_MONTHLY_ALLOWANCE = 1000
 DATA_MONTHLY_ALLOWANCE = 5000
+
+# Tiers that get full access to the morning brief archive content.  Free
+# users see the AI-summary paragraph + ticker list only; anyone in this set
+# sees the full per-ticker breakdown that subscribers received by email.
+_BRIEF_FULL_ACCESS_TIERS = {"brief", "pro", "data"}
 
 
 # ---------------------------------------------------------------------------
@@ -1589,7 +1604,14 @@ def preview_trade_card(
 
 @app.post("/create-checkout-session")
 def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
-    tier = "data" if price_id in DATA_PRICE_IDS else "pro"
+    # Map price → tier.  Brief tier is the cheapest, no API allowance; Data
+    # tier is the most expensive, gets the largest allowance; default is Pro.
+    if price_id in BRIEF_PRICE_IDS:
+        tier = "brief"
+    elif price_id in DATA_PRICE_IDS:
+        tier = "data"
+    else:
+        tier = "pro"
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -1644,7 +1666,14 @@ async def stripe_webhook(request: Request):
         tier = session.get("metadata", {}).get("tier", "pro")
         if customer_email:
             supabase_client.table("profiles").update({"tier": tier}).eq("email", customer_email).execute()
-            allowance = DATA_MONTHLY_ALLOWANCE if tier == "data" else PRO_MONTHLY_ALLOWANCE
+            # Brief tier intentionally gets zero API allowance — it's a
+            # content product, not a data product.  Pro/Data get allowances.
+            if tier == "data":
+                allowance = DATA_MONTHLY_ALLOWANCE
+            elif tier == "pro":
+                allowance = PRO_MONTHLY_ALLOWANCE
+            else:
+                allowance = 0
             webhook_db = SessionLocal()
             try:
                 api_key = webhook_db.query(models.APIKey).filter(models.APIKey.email == customer_email).first()
@@ -3255,6 +3284,94 @@ def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Se
             if len(scores) > 0
         ]
     }
+
+def _resolve_brief_tier(authorization: str | None) -> str:
+    """Soft auth: look at the Bearer JWT if present and return the user's tier.
+    Returns 'free' on any failure — these endpoints are public, auth just
+    upgrades what's returned.  Failures here MUST NOT raise."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return "free"
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+        user = sb.auth.get_user(authorization.split(" ", 1)[1]).user
+        if not user:
+            return "free"
+        profile = sb.table("profiles").select("tier").eq("id", user.id).single().execute()
+        return (profile.data or {}).get("tier") or "free"
+    except Exception:
+        return "free"
+
+
+def _serialize_brief(brief: "models.Brief", tier: str) -> dict:
+    """Render a Brief row for the API, gating content by tier.
+
+    Free / anonymous users see: date, ai_summary, list of tickers covered.
+    That's enough to be useful as a teaser and to drive SEO; the full
+    per-ticker breakdown stays gated so subscribers get something real.
+
+    Paid (brief/pro/data): full per-ticker data plus the rendered HTML so
+    the public page can show exactly what subscribers got by email.
+    """
+    out = {
+        "date": brief.date.date().isoformat(),
+        "ai_summary": brief.ai_summary,
+        "tickers": (brief.tickers or "").split(",") if brief.tickers else [],
+        "sent_count": brief.sent_count,
+        "is_paywalled": tier not in _BRIEF_FULL_ACCESS_TIERS,
+    }
+    if tier in _BRIEF_FULL_ACCESS_TIERS:
+        try:
+            out["ticker_data"] = json.loads(brief.ticker_data) if brief.ticker_data else []
+        except Exception:
+            out["ticker_data"] = []
+        out["content_html"] = brief.content_html
+    return out
+
+
+@app.get("/brief/archive")
+def brief_archive(limit: int = 30, db: Session = Depends(get_db)):
+    """Public list of past briefs (date + AI summary preview).  Always fully
+    open — this is the SEO funnel and a "see what you're missing" surface
+    for free visitors.  No per-ticker data here; that's the paid product."""
+    limit = max(1, min(limit, 90))
+    briefs = db.query(models.Brief).order_by(models.Brief.date.desc()).limit(limit).all()
+    return {
+        "briefs": [{
+            "date": b.date.date().isoformat(),
+            "ai_summary": b.ai_summary,
+            "tickers": (b.tickers or "").split(",") if b.tickers else [],
+        } for b in briefs],
+    }
+
+
+@app.get("/brief/latest")
+def brief_latest(authorization: str | None = Header(None), db: Session = Depends(get_db)):
+    """Today's brief, or the most recent one if today's hasn't generated yet.
+    Tier-gated content per _serialize_brief.  Optional auth — Bearer JWT
+    upgrades the response, no auth = free preview."""
+    brief = db.query(models.Brief).order_by(models.Brief.date.desc()).first()
+    if not brief:
+        raise HTTPException(status_code=404, detail="No briefs yet")
+    return _serialize_brief(brief, _resolve_brief_tier(authorization))
+
+
+@app.get("/brief/{date}")
+def brief_by_date(
+    date: str,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Brief for a specific UTC date (YYYY-MM-DD).  Same gating as latest."""
+    try:
+        target = datetime.strptime(date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+    brief = db.query(models.Brief).filter(models.Brief.date == target).first()
+    if not brief:
+        raise HTTPException(status_code=404, detail="No brief for that date")
+    return _serialize_brief(brief, _resolve_brief_tier(authorization))
+
 
 @app.post("/api/brief/test")
 def test_brief(email: str, db: Session = Depends(get_db), admin=Depends(require_admin)):

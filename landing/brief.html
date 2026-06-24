@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentimentFX Morning Brief — Daily AI-Scored Market Sentiment Email</title>
+  <meta name="description" content="A 60-second daily email decoding overnight market sentiment across crypto, FX, and equities. FinBERT-scored, Claude-summarised, delivered before the London open. £9.99/mo.">
+  <meta name="keywords" content="morning brief, crypto sentiment newsletter, daily market brief, FinBERT, market sentiment email">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#080c10">
+  <link rel="canonical" href="https://sentimentfx.org/brief">
+
+  <meta property="og:site_name" content="SentimentFX">
+  <meta property="og:title" content="SentimentFX Morning Brief — Daily AI-Scored Market Sentiment">
+  <meta property="og:description" content="A 60-second daily email decoding overnight market sentiment across crypto, FX, and equities. Delivered before the London open.">
+  <meta property="og:url" content="https://sentimentfx.org/brief">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://sentimentfx.org/dashboard.jpeg">
+  <meta property="og:locale" content="en_GB">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SentimentFX Morning Brief — Daily AI-Scored Market Sentiment">
+  <meta name="twitter:description" content="A 60-second daily email decoding overnight market sentiment across crypto, FX, and equities.">
+  <meta name="twitter:image" content="https://sentimentfx.org/dashboard.jpeg">
+
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Morning Brief","item":"https://sentimentfx.org/brief"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"SentimentFX Morning Brief","description":"Daily AI-scored market sentiment email covering crypto, FX, and equities, delivered before the London open.","brand":{"@type":"Brand","name":"SentimentFX"},"offers":{"@type":"Offer","price":"9.99","priceCurrency":"GBP","availability":"https://schema.org/InStock","url":"https://sentimentfx.org/brief"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the SentimentFX Morning Brief?","acceptedAnswer":{"@type":"Answer","text":"A daily email summarising overnight market sentiment across Bitcoin, Ethereum, XRP and other tracked assets. Headlines are scored by FinBERT (a transformer model fine-tuned on financial text); Claude generates a plain-English summary of the most important signals. Delivered at 07:00 London time, every morning."}},{"@type":"Question","name":"What's the difference between free and paid?","acceptedAnswer":{"@type":"Answer","text":"Free readers can browse the archive and see the AI summary paragraph for any day. Paid subscribers receive the full brief by email each morning, including per-ticker sentiment scores, 24h price changes, the highest-impact headline of the day, and divergence flags."}},{"@type":"Question","name":"How is this different from a regular crypto newsletter?","acceptedAnswer":{"@type":"Answer","text":"Most crypto newsletters are written by humans who skim the same news everyone else reads. SentimentFX runs every headline from a curated set of RSS feeds through FinBERT for sentiment scoring, then aggregates volume-weighted means and flags statistical divergences against price. The brief is generated from that structured data — not from a journalist's read of the morning headlines."}}]}</script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
+      --border:#21262d;--border2:#30363d;
+      --text:#e6edf3;--muted:#7d8590;
+      --accent:#f0b429;--accent2:#58a6ff;
+      --positive:#3fb950;--negative:#f85149;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
+    a{color:var(--accent);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+
+    nav{display:flex;align-items:center;justify-content:space-between;padding:14px 40px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+    .nav-logo{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;}
+    .nav-logo span{color:var(--muted);font-weight:400;}
+    .nav-links{display:flex;gap:24px;list-style:none;align-items:center;}
+    .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
+    .nav-links a:hover{color:var(--text);text-decoration:none;}
+    .nav-cta{background:var(--accent);color:#080c10!important;padding:6px 14px;border-radius:2px;font-weight:600;}
+
+    main{max-width:880px;margin:0 auto;padding:48px 24px;}
+    .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;}
+    h1{font-family:var(--mono);font-size:32px;font-weight:600;line-height:1.15;margin-bottom:16px;}
+    .lede{font-size:18px;color:var(--text);max-width:720px;margin-bottom:32px;line-height:1.55;}
+
+    .hero-card{background:var(--surface);border:1px solid var(--border2);border-left:3px solid var(--accent);padding:24px 28px;margin-bottom:40px;}
+    .hero-card .eyebrow{margin-bottom:8px;}
+    .hero-card h2{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--text);margin-bottom:14px;letter-spacing:0.02em;}
+    .hero-card .summary{font-size:15px;color:#c9d1d9;line-height:1.65;font-family:var(--sans);}
+
+    .price-strip{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:40px;}
+    .price-card{flex:1;min-width:220px;background:var(--surface);border:1px solid var(--border);padding:20px 22px;border-radius:2px;}
+    .price-card.featured{border-color:var(--accent);background:rgba(240,180,41,0.04);}
+    .price-tier{font-family:var(--mono);font-size:10px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
+    .price-amount{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--text);margin-bottom:6px;}
+    .price-amount .per{color:var(--muted);font-size:12px;font-weight:400;margin-left:4px;}
+    .price-list{font-family:var(--sans);font-size:12px;color:#c9d1d9;line-height:1.8;margin:10px 0 16px;list-style:none;}
+    .price-list li::before{content:"·  ";color:var(--accent);}
+    .price-cta{display:inline-block;background:var(--accent);color:#080c10!important;padding:10px 18px;border-radius:2px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
+    .price-cta.secondary{background:transparent;color:var(--text)!important;border:1px solid var(--border2);}
+
+    .archive{margin-top:48px;}
+    .archive-title{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;letter-spacing:0.04em;}
+    .archive-item{display:block;padding:14px 16px;border-bottom:1px solid var(--border);transition:background 0.1s;}
+    .archive-item:hover{background:var(--surface);text-decoration:none;}
+    .archive-date{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:4px;}
+    .archive-summary{font-size:13px;color:#c9d1d9;line-height:1.5;}
+    .archive-empty{font-family:var(--mono);font-size:11px;color:var(--muted);padding:24px;text-align:center;border:1px dashed var(--border);}
+
+    h2{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:48px;margin-bottom:14px;}
+    p{margin-bottom:14px;color:#c9d1d9;}
+
+    @media (max-width:640px){
+      nav{padding:12px 16px;}
+      .nav-links{gap:12px;}
+      main{padding:32px 16px;}
+      h1{font-size:24px;}
+      .lede{font-size:15px;}
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="nav-logo">SENTIMENT<span>FX</span></a>
+    <ul class="nav-links">
+      <li><a href="/leaderboard">Leaderboard</a></li>
+      <li><a href="https://app.sentimentfx.org/">Dashboard</a></li>
+      <li><a href="https://developers.sentimentfx.org">API</a></li>
+      <li><a href="https://app.sentimentfx.org/?auth=signup" class="nav-cta">Sign Up</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <div class="eyebrow">Daily · 07:00 London</div>
+    <h1>The morning brief that actually does the reading for you.</h1>
+    <p class="lede">
+      Every morning before the London open, SentimentFX runs every overnight
+      headline across crypto, FX and equities through FinBERT for sentiment
+      scoring. Claude turns the structured signal into a 60-second plain-English
+      brief on what matters today. Delivered to your inbox before you've finished
+      the kettle.
+    </p>
+
+    <div class="hero-card">
+      <div class="eyebrow" id="latest-eyebrow">Loading latest brief…</div>
+      <h2 id="latest-date"></h2>
+      <div class="summary" id="latest-summary">
+        The most recent brief loads here. If this stays empty, it means today's
+        brief hasn't been generated yet — first one will be live tomorrow at
+        07:00 London.
+      </div>
+    </div>
+
+    <div class="price-strip">
+      <div class="price-card featured">
+        <div class="price-tier">Brief</div>
+        <div class="price-amount">£9.99<span class="per">/month</span></div>
+        <ul class="price-list">
+          <li>Daily morning brief by email</li>
+          <li>Full per-ticker sentiment + headlines</li>
+          <li>Divergence flags</li>
+          <li>Archive access</li>
+        </ul>
+        <a href="https://app.sentimentfx.org/?auth=signup&from=brief" class="price-cta">Get the brief →</a>
+      </div>
+      <div class="price-card">
+        <div class="price-tier">Pro</div>
+        <div class="price-amount">£11.99<span class="per">/month</span></div>
+        <ul class="price-list">
+          <li>Everything in Brief</li>
+          <li>Live dashboard, 42 tickers</li>
+          <li>Sentiment alerts (email)</li>
+          <li>CSV export · 1,000 API calls/mo</li>
+        </ul>
+        <a href="https://app.sentimentfx.org/?auth=signup&from=brief-pro" class="price-cta secondary">Upgrade to Pro →</a>
+      </div>
+    </div>
+
+    <div class="archive">
+      <div class="archive-title">Recent briefs</div>
+      <div id="archive-list">
+        <div class="archive-empty">Loading archive…</div>
+      </div>
+    </div>
+
+    <h2>How the brief is generated</h2>
+    <p>
+      At 06:55 London time, SentimentFX pulls every headline from the last 24 hours
+      that mentions one of the tracked tickers. Each one is scored with FinBERT — a
+      transformer model fine-tuned on financial text — producing a value between
+      -1 (very bearish) and +1 (very bullish). The volume-weighted mean is compared
+      against the prior 24 hours to detect sentiment shifts, and against the matching
+      24-hour price move to detect divergences.
+    </p>
+    <p>
+      Claude (Sonnet 4.6) then synthesises a plain-English summary: the most
+      important signal first, any notable moves, and one actionable observation.
+      No bullet points. No "good morning". No padding.
+    </p>
+
+    <h2>What you get vs. what's free</h2>
+    <p>
+      <strong>Free readers</strong> can browse the public archive (you're looking
+      at it) and see the AI summary paragraph for any past day. Use this to decide
+      whether the brief is worth £9.99/mo before paying for anything.
+    </p>
+    <p>
+      <strong>Paid subscribers</strong> get the full brief by email each morning,
+      including per-ticker sentiment scores, 24h price moves, the highest-impact
+      headline of the day, and divergence flags. The same content surfaces on the
+      app dashboard if you prefer to read in-browser.
+    </p>
+
+    <h2>Why daily, why morning</h2>
+    <p>
+      The biggest news moves overnight while the UK sleeps — Asian trading hours
+      for crypto, US earnings + FOMC statements for equities. By 07:00 London
+      you've missed the action; the brief catches you up in 60 seconds so you can
+      enter the day knowing what already happened. Anything that breaks during
+      the day fires through the in-app alert system instead.
+    </p>
+
+    <p style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:48px;letter-spacing:0.05em;">
+      Not financial advice. Sentiment signals are probabilistic, not certain.
+    </p>
+  </main>
+
+  <script>
+    const API = "https://api.sentimentfx.org";
+
+    fetch(`${API}/brief/latest`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(brief => {
+        document.getElementById("latest-eyebrow").textContent =
+          `Today's signal · ${brief.tickers.join(" · ")}`;
+        document.getElementById("latest-date").textContent =
+          new Date(brief.date).toLocaleDateString("en-GB", {
+            weekday: "long", day: "numeric", month: "long", year: "numeric"
+          });
+        document.getElementById("latest-summary").textContent =
+          brief.ai_summary || "No summary available for today.";
+      })
+      .catch(() => {
+        document.getElementById("latest-eyebrow").textContent = "No brief yet";
+        document.getElementById("latest-date").textContent = "First brief drops at 07:00 London tomorrow";
+        document.getElementById("latest-summary").textContent =
+          "Sign up below to be on the list when it goes live.";
+      });
+
+    fetch(`${API}/brief/archive?limit=14`)
+      .then(r => r.json())
+      .then(data => {
+        const list = document.getElementById("archive-list");
+        if (!data.briefs || data.briefs.length === 0) {
+          list.innerHTML = '<div class="archive-empty">No briefs in the archive yet — first one ships tomorrow at 07:00 London.</div>';
+          return;
+        }
+        list.innerHTML = data.briefs.map(b => {
+          const dateLabel = new Date(b.date).toLocaleDateString("en-GB", {
+            weekday: "short", day: "numeric", month: "short", year: "numeric"
+          });
+          // Truncate the summary so the archive doesn't give the whole product away.
+          const trimmed = (b.ai_summary || "").length > 180
+            ? (b.ai_summary || "").slice(0, 180).trim() + "…"
+            : (b.ai_summary || "—");
+          return `<a class="archive-item" href="/brief/${b.date}">
+            <span class="archive-date">${dateLabel}</span>
+            <span class="archive-summary">${trimmed}</span>
+          </a>`;
+        }).join("");
+      })
+      .catch(() => {
+        document.getElementById("archive-list").innerHTML =
+          '<div class="archive-empty">Archive temporarily unavailable.</div>';
+      });
+  </script>
+</body>
+</html>

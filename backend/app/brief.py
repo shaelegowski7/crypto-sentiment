@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from anthropic import Anthropic
@@ -219,29 +220,49 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
 </html>"""
 
 
+def _save_brief_to_db(db_session, today_utc, ai_summary, ticker_data, content_html, sent_count):
+    """Persist (or update if regenerated same day) the brief row.
+
+    Public archive endpoints read from this table, so the on-disk content
+    must match what subscribers received.  Idempotent per UTC date: running
+    the test endpoint twice overwrites the same row rather than creating
+    duplicates.  Imported lazily so this module stays importable when
+    models/database aren't initialised (e.g. doc-gen contexts).
+    """
+    from .models import Brief
+    existing = db_session.query(Brief).filter(Brief.date == today_utc).first()
+    if existing:
+        existing.ai_summary = ai_summary
+        existing.ticker_data = json.dumps(ticker_data, default=str)
+        existing.content_html = content_html
+        existing.tickers = ",".join(d["ticker"] for d in ticker_data)
+        existing.sent_count = sent_count
+    else:
+        db_session.add(Brief(
+            date=today_utc,
+            ai_summary=ai_summary,
+            ticker_data=json.dumps(ticker_data, default=str),
+            content_html=content_html,
+            tickers=",".join(d["ticker"] for d in ticker_data),
+            sent_count=sent_count,
+        ))
+    db_session.commit()
+
+
 def send_morning_briefs(db_session):
-    """Main entry point — called by APScheduler."""
-    resend.api_key = os.environ["RESEND_API_KEY"]
+    """Main entry point — called by APScheduler at 07:00 Europe/London.
+
+    Now ALWAYS generates + persists the brief, even when no subscribers are
+    receiving email.  Reasoning: the public archive at sentimentfx.org/brief
+    needs daily content to function as an SEO funnel, and the AI generation
+    cost (one Claude call per day) is trivial.  Subscribers still get email
+    on top of persistence; this function just no longer bails early when
+    the recipient list is empty.
+    """
+    resend.api_key = os.environ.get("RESEND_API_KEY")
     supabase = get_supabase()
 
-    # Fetch all Pro users with morning brief enabled
-    result = supabase.from_("profiles").select("id, morning_brief_enabled").eq("tier", "pro").eq("morning_brief_enabled", True).execute()
-    profiles = result.data
-
-    if not profiles:
-        logger.info("No Pro users with morning brief enabled.")
-        return
-
-    # Fetch user emails from auth.users via service key
-    user_ids = [p["id"] for p in profiles]
-    users_result = supabase.auth.admin.list_users()
-    users_map = {u.id: u.email for u in users_result if u.id in user_ids and u.email}
-
-    if not users_map:
-        logger.info("No emails resolved for Pro users.")
-        return
-
-    # Fetch ticker data once for all users
+    # Fetch ticker data first — needed regardless of subscriber count
     ticker_data = []
     seen_headline_urls = set()
     for ticker in TICKERS:
@@ -258,15 +279,34 @@ def send_morning_briefs(db_session):
             logger.error(f"Failed to fetch data for {ticker}: {e}")
 
     if not ticker_data:
-        logger.error("No ticker data available for morning brief.")
+        logger.error("No ticker data available for morning brief — skipping entirely.")
         return
 
-    # Generate AI summary once (same for all users)
+    # Generate AI summary
     try:
         ai_summary = generate_ai_summary(ticker_data)
     except Exception as e:
         logger.error(f"Claude API call failed: {e}")
         ai_summary = "Market data is available in your dashboard. Sentiment and price data for BTC, ETH, and XRP are shown below."
+
+    # Resolve recipients — any tier with morning_brief_enabled=True qualifies.
+    # 'brief' and 'pro' and 'data' all get the email; 'free' doesn't.
+    result = supabase.from_("profiles").select("id, tier, morning_brief_enabled") \
+        .in_("tier", ["brief", "pro", "data"]).eq("morning_brief_enabled", True).execute()
+    profiles = result.data or []
+    users_map = {}
+    if profiles:
+        user_ids = [p["id"] for p in profiles]
+        users_result = supabase.auth.admin.list_users()
+        users_map = {u.id: u.email for u in users_result if u.id in user_ids and u.email}
+
+    # Build the canonical HTML once (used by both email and the saved archive
+    # row).  Unsubscribe link is recipient-specific, so the saved version uses
+    # a generic preferences link instead.
+    archive_html = build_email_html(
+        ticker_data, ai_summary,
+        unsubscribe_url="https://app.sentimentfx.org/?preferences=brief",
+    )
 
     sent = 0
     failed = 0
@@ -275,10 +315,8 @@ def send_morning_briefs(db_session):
         email = users_map.get(user_id)
         if not email:
             continue
-
         unsubscribe_url = f"https://api.sentimentfx.org/api/brief/unsubscribe?user_id={user_id}"
         html = build_email_html(ticker_data, ai_summary, unsubscribe_url)
-
         try:
             resend.Emails.send({
                 "from": "SentimentFX <hello@sentimentfx.org>",
@@ -291,4 +329,12 @@ def send_morning_briefs(db_session):
             logger.error(f"Failed to send brief to {email}: {e}")
             failed += 1
 
-    logger.info(f"Morning brief sent: {sent} success, {failed} failed.")
+    # Persist regardless of recipient count — the archive is now a product.
+    # Date is the UTC midnight of today so query-by-date is unambiguous.
+    today_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+    try:
+        _save_brief_to_db(db_session, today_utc, ai_summary, ticker_data, archive_html, sent)
+    except Exception as e:
+        logger.error(f"Failed to persist brief to DB: {e}")
+
+    logger.info(f"Morning brief: persisted, sent {sent} emails ({failed} failed).")
