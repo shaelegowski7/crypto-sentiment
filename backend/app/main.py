@@ -28,6 +28,7 @@ from prometheus_client import Counter, Gauge, Histogram
 import numpy as np
 import resend
 import os
+import json
 import requests
 import stripe
 import csv
@@ -382,9 +383,102 @@ def check_alerts(db):
                 })
                 alert.active = False
                 alert.fired_at = datetime.utcnow()
+
+                # Log an outcome row for every fired alert that recommended a
+                # trade — feeds the future /track-record page.  Skip NEUTRAL
+                # cards (no trade to settle).  Entry price = latest known close
+                # on the Price table at fire time.  Settlement happens later
+                # via the settle_alert_outcomes scheduler.
+                if card["direction"] in ("LONG", "SHORT"):
+                    latest_price = db.query(models.Price).filter(
+                        models.Price.ticker == alert.ticker
+                    ).order_by(models.Price.date.desc()).first()
+                    entry_price = latest_price.close_price if latest_price else None
+                    if entry_price is None:
+                        print(f"[ALERT-OUTCOME] {alert.ticker}: no price on record, skipping outcome log")
+                    else:
+                        db.add(models.AlertOutcome(
+                            alert_id=alert.id,
+                            user_id=alert.user_id,
+                            email=alert.email,
+                            ticker=alert.ticker,
+                            direction=card["direction"],
+                            confidence=card["confidence"],
+                            hold_days=card.get("exit_in_days") or 7,
+                            fired_at=datetime.utcnow(),
+                            entry_price=entry_price,
+                            card_snapshot=json.dumps(card, default=str),
+                        ))
                 db.commit()
             except Exception as e:
                 print(f"Alert email error: {e}")
+
+
+def settle_alert_outcomes():
+    """Settle alert outcomes whose hold period has elapsed.
+
+    For each unsettled AlertOutcome where fired_at + hold_days <= now, look up
+    the latest Price row for that ticker and record the exit + signed return.
+    Stocks settle on the next trading day after the target if the target falls
+    on a weekend — we just take whichever close is most recent, which biases
+    toward "actual realisable price" rather than ghost weekend marks.
+
+    Runs once a day; one missed settlement is fine — picked up next pass.
+    """
+    db = SessionLocal()
+    settled_count = 0
+    try:
+        now = datetime.utcnow()
+        # Pull unsettled outcomes that have ripened
+        pending = db.query(models.AlertOutcome).filter(
+            models.AlertOutcome.settled == False,
+            models.AlertOutcome.entry_price.isnot(None),
+        ).all()
+
+        for outcome in pending:
+            target_exit = outcome.fired_at + timedelta(days=outcome.hold_days)
+            if now < target_exit:
+                continue   # not ripe yet
+
+            # Find latest price AT OR AFTER target_exit.  If no price has been
+            # logged that late, fall back to the most recent overall — this
+            # happens for low-coverage tickers; better an imperfect settlement
+            # than leaving rows unsettled forever.
+            exit_row = db.query(models.Price).filter(
+                models.Price.ticker == outcome.ticker,
+                models.Price.date >= target_exit,
+            ).order_by(models.Price.date.asc()).first()
+            if exit_row is None:
+                exit_row = db.query(models.Price).filter(
+                    models.Price.ticker == outcome.ticker,
+                ).order_by(models.Price.date.desc()).first()
+            if exit_row is None:
+                continue   # ticker has zero price data — punt
+
+            exit_price = exit_row.close_price
+            entry = outcome.entry_price
+
+            if outcome.direction == "LONG":
+                ret = (exit_price - entry) / entry * 100
+            elif outcome.direction == "SHORT":
+                ret = (entry - exit_price) / entry * 100
+            else:
+                ret = 0.0   # shouldn't happen — NEUTRAL outcomes aren't logged
+
+            outcome.exit_price = exit_price
+            outcome.exit_at = exit_row.date
+            outcome.return_pct = round(ret, 3)
+            outcome.settled = True
+            settled_count += 1
+
+        if settled_count:
+            db.commit()
+        print(f"[OUTCOMES] settled {settled_count} alert outcome(s)")
+    except Exception as e:
+        db.rollback()
+        print(f"[OUTCOMES] settle error: {e}")
+    finally:
+        db.close()
 
 
 def refresh_subscription_gauge():
@@ -599,6 +693,9 @@ scheduler.add_job(
 scheduler.add_job(scrape_all, CronTrigger(minute=0))
 scheduler.add_job(refresh_subscription_gauge, CronTrigger(minute=30))
 scheduler.add_job(reset_monthly_api_usage, CronTrigger(day=1, hour=0, minute=0, timezone="UTC"))
+# Settle ripened alert outcomes once a day.  06:00 UTC = after crypto close in
+# all timezones we care about and well after equity weekly opens have settled.
+scheduler.add_job(settle_alert_outcomes, CronTrigger(hour=6, minute=15, timezone="UTC"))
 scheduler.start()
 
 
@@ -2762,6 +2859,92 @@ def admin_backtest_board(
         "key": cache_key, "computed_at": now, "data": response,
     })
     return response
+
+
+@app.get("/admin/track-record")
+def admin_track_record(
+    days: int = 90,
+    db: Session = Depends(get_db),
+    admin=Depends(require_super_admin),
+):
+    """Live track record of every alert that fired, vs. its eventual outcome.
+
+    Aggregates the AlertOutcome table.  Unsettled rows (alerts where the hold
+    period hasn't elapsed yet) are reported separately and excluded from
+    return/win-rate math — including them would bias toward whatever the
+    most-recent regime is.
+
+    Powers the future public /track-record page; right now it's the admin
+    answer to "is the trade-card strategy actually working in real life,
+    not just in backtests?".  Backtest uses 180d of historical data —
+    track record uses ONLY alerts that actually fired through the system.
+    """
+    days = max(7, min(days, 365))
+    since = datetime.utcnow() - timedelta(days=days)
+
+    outcomes = db.query(models.AlertOutcome).filter(
+        models.AlertOutcome.fired_at >= since,
+    ).order_by(models.AlertOutcome.fired_at.desc()).all()
+
+    settled = [o for o in outcomes if o.settled and o.return_pct is not None]
+    pending = [o for o in outcomes if not o.settled]
+
+    def _aggregate(rows):
+        """Win rate + compounded return + avg return for a slice of settled rows."""
+        if not rows:
+            return {"count": 0, "win_rate": None, "avg_return_pct": None, "total_return_pct": None}
+        rets = [r.return_pct for r in rows]
+        wins = sum(1 for r in rets if r > 0)
+        compounded = 100.0
+        for r in rets:
+            compounded *= (1 + r / 100)
+        return {
+            "count": len(rows),
+            "win_rate": round(wins / len(rows), 3),
+            "avg_return_pct": round(sum(rets) / len(rets), 2),
+            "total_return_pct": round(compounded - 100, 2),
+        }
+
+    by_direction = {
+        "LONG":  _aggregate([o for o in settled if o.direction == "LONG"]),
+        "SHORT": _aggregate([o for o in settled if o.direction == "SHORT"]),
+    }
+    by_confidence = {
+        "high":   _aggregate([o for o in settled if o.confidence == "high"]),
+        "medium": _aggregate([o for o in settled if o.confidence == "medium"]),
+        "low":    _aggregate([o for o in settled if o.confidence == "low"]),
+    }
+    by_ticker = {}
+    for o in settled:
+        by_ticker.setdefault(o.ticker, []).append(o)
+    by_ticker_agg = {t: _aggregate(rows) for t, rows in by_ticker.items()}
+
+    # Recent outcomes table — for the admin UI to render a "last 25" list.
+    recent = []
+    for o in outcomes[:25]:
+        recent.append({
+            "id": o.id,
+            "ticker": o.ticker,
+            "direction": o.direction,
+            "confidence": o.confidence,
+            "hold_days": o.hold_days,
+            "fired_at": o.fired_at.isoformat() + "Z" if o.fired_at else None,
+            "entry_price": o.entry_price,
+            "settled": o.settled,
+            "exit_at": o.exit_at.isoformat() + "Z" if o.exit_at else None,
+            "exit_price": o.exit_price,
+            "return_pct": o.return_pct,
+        })
+
+    return {
+        "window_days": days,
+        "overall": _aggregate(settled),
+        "pending_count": len(pending),
+        "by_direction": by_direction,
+        "by_confidence": by_confidence,
+        "by_ticker": by_ticker_agg,
+        "recent": recent,
+    }
 
 
 @app.get("/headline-impact/{ticker}")

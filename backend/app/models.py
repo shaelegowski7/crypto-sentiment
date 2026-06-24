@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text
 from .database import Base
 from datetime import datetime
 
@@ -45,6 +45,41 @@ class Alert(Base):
     active = Column(Boolean, default=True)      # deactivates after firing
     created_at = Column(DateTime, default=datetime.utcnow)
     fired_at = Column(DateTime, nullable=True)  # when it last fired
+
+class AlertOutcome(Base):
+    """One row per alert that actually fired with a tradeable recommendation.
+
+    Logged at fire time with entry_price = latest Price row.  Settled
+    asynchronously by the daily scheduler once hold_days have elapsed:
+    exit_price and return_pct are filled in, settled=True.  NEUTRAL trade
+    cards (no recommendation) are NOT logged here — there's nothing to
+    settle.  Snapshot of the trade card as JSON is kept so we can compute
+    edge per-confidence-band, per-magnitude, per-divergence-state, etc.
+    later without re-running the math against changed sentiment data.
+    """
+    __tablename__ = "alert_outcomes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    alert_id = Column(Integer, index=True, nullable=True)   # nullable so a deleted alert doesn't orphan
+    user_id = Column(String, index=True, nullable=True)
+    email = Column(String, nullable=True)
+    ticker = Column(String, index=True)
+
+    direction = Column(String)              # "LONG" or "SHORT"
+    confidence = Column(String)             # "high" / "medium" / "low"
+    hold_days = Column(Integer, default=7)
+
+    fired_at = Column(DateTime, index=True)
+    entry_price = Column(Float)
+
+    settled = Column(Boolean, default=False, index=True)
+    exit_at = Column(DateTime, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    return_pct = Column(Float, nullable=True)   # signed; LONG positive on rise, SHORT positive on fall
+
+    card_snapshot = Column(Text, nullable=True)    # JSON dump of the build_trade_card output
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class APIKey(Base):
     __tablename__ = "api_keys"
