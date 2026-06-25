@@ -131,7 +131,7 @@ async def protect_metrics(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_GET_PREFIXES = ("/v1/",)
-_PUBLIC_GET_PATHS = {"/", "/status", "/health", "/leaderboard", "/brief/latest", "/brief/archive"}
+_PUBLIC_GET_PATHS = {"/", "/status", "/health", "/leaderboard", "/track-record", "/brief/latest", "/brief/archive"}
 _PUBLIC_GET_DATA_PREFIXES = ("/dashboard/", "/correlation/", "/headlines/", "/prices/", "/summary/", "/brief/")
 
 @app.middleware("http")
@@ -3164,6 +3164,95 @@ def admin_track_record(
         "by_confidence": by_confidence,
         "by_ticker": by_ticker_agg,
         "recent": recent,
+    }
+
+
+@app.get("/track-record")
+def public_track_record(days: int = 90, db: Session = Depends(get_db)):
+    """Public, no-auth version of the alert outcome track record.
+
+    Same aggregation as /admin/track-record but the recent-trades list strips
+    user_id / email / alert_id — these would leak who set which alert.  Designed
+    as the conversion surface: a visitor lands on /track-record, sees the
+    headline win rate and total return, and signs up.  Cached at the CDN via
+    the public-data Cache-Control rule (added to _PUBLIC_GET_PATHS).
+
+    Reuses the same window-clamp (7..365d) and the same "settled only counts"
+    convention as the admin endpoint, so the two pages can never disagree on
+    the headline number.
+    """
+    days = max(7, min(days, 365))
+    since = datetime.utcnow() - timedelta(days=days)
+
+    outcomes = db.query(models.AlertOutcome).filter(
+        models.AlertOutcome.fired_at >= since,
+    ).order_by(models.AlertOutcome.fired_at.desc()).all()
+
+    settled = [o for o in outcomes if o.settled and o.return_pct is not None]
+    pending = [o for o in outcomes if not o.settled]
+
+    def _aggregate(rows):
+        if not rows:
+            return {"count": 0, "win_rate": None, "avg_return_pct": None, "total_return_pct": None}
+        rets = [r.return_pct for r in rows]
+        wins = sum(1 for r in rets if r > 0)
+        compounded = 100.0
+        for r in rets:
+            compounded *= (1 + r / 100)
+        return {
+            "count": len(rows),
+            "win_rate": round(wins / len(rows), 3),
+            "avg_return_pct": round(sum(rets) / len(rets), 2),
+            "total_return_pct": round(compounded - 100, 2),
+        }
+
+    by_direction = {
+        "LONG":  _aggregate([o for o in settled if o.direction == "LONG"]),
+        "SHORT": _aggregate([o for o in settled if o.direction == "SHORT"]),
+    }
+    by_confidence = {
+        "high":   _aggregate([o for o in settled if o.confidence == "high"]),
+        "medium": _aggregate([o for o in settled if o.confidence == "medium"]),
+        "low":    _aggregate([o for o in settled if o.confidence == "low"]),
+    }
+    by_ticker_map = {}
+    for o in settled:
+        by_ticker_map.setdefault(o.ticker, []).append(o)
+    # Sorted list (best win rate first) is more useful to a visitor than a dict
+    # — they want to see "which ticker is this working on?".  Tie-break by sample
+    # size so a 1-of-1 100% ticker doesn't lead over a 7-of-10.
+    by_ticker_rows = sorted(
+        ({"ticker": t, "category": _category_for(t), **_aggregate(rows)} for t, rows in by_ticker_map.items()),
+        key=lambda r: (r["win_rate"] is None, -(r["win_rate"] or 0), -(r["count"] or 0)),
+    )
+
+    # Recent 25 settled trades — public-safe fields only.  Unsettled rows are
+    # excluded; the still-open count is exposed separately so the page can show
+    # "N trades currently open" without leaking individual entries.
+    recent_public = [
+        {
+            "ticker": o.ticker,
+            "direction": o.direction,
+            "confidence": o.confidence,
+            "hold_days": o.hold_days,
+            "fired_at": o.fired_at.isoformat() + "Z" if o.fired_at else None,
+            "exit_at": o.exit_at.isoformat() + "Z" if o.exit_at else None,
+            "entry_price": o.entry_price,
+            "exit_price": o.exit_price,
+            "return_pct": o.return_pct,
+        }
+        for o in outcomes if o.settled and o.return_pct is not None
+    ][:25]
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "window_days": days,
+        "overall": _aggregate(settled),
+        "pending_count": len(pending),
+        "by_direction": by_direction,
+        "by_confidence": by_confidence,
+        "by_ticker": by_ticker_rows,
+        "recent": recent_public,
     }
 
 

@@ -267,6 +267,50 @@
         justify-content: center;
       }
 
+      /* Live track-record badge.  Hidden by default; the loader unhides it
+         only when /track-record returns a settled aggregate.  Position above
+         the primary CTA buttons — proof before pitch. */
+      .track-record-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 18px;
+        margin-bottom: 24px;
+        border: 1px solid var(--border2);
+        border-radius: 2px;
+        background: rgba(63,185,80,0.04);
+        color: var(--text);
+        text-decoration: none;
+        font-family: var(--mono);
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .track-record-badge:hover {
+        border-color: var(--positive);
+        background: rgba(63,185,80,0.08);
+      }
+      .track-record-badge .trb-eyebrow {
+        font-size: 9px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .track-record-badge .trb-stats {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .track-record-badge .trb-return {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .track-record-badge .trb-return.up   { color: var(--positive); }
+      .track-record-badge .trb-return.down { color: var(--negative); }
+      .track-record-badge .trb-return.flat { color: var(--text); }
+      .track-record-badge .trb-sep   { color: var(--border2); }
+      .track-record-badge .trb-meta  { color: var(--muted); font-size: 11px; }
+      .track-record-badge .trb-arrow { color: var(--muted); font-size: 14px; }
+
       .btn-primary {
         background: var(--accent);
         border: none;
@@ -893,6 +937,7 @@
       <ul class="nav-links">
         <li><a href="/brief">Brief</a></li>
         <li><a href="/leaderboard">Leaderboard</a></li>
+        <li><a href="https://app.sentimentfx.org/track-record">Track record</a></li>
         <li><a href="#coverage">Coverage</a></li>
         <li><a href="#features">Features</a></li>
         <li><a href="#how">How it works</a></li>
@@ -923,6 +968,16 @@
       <div class="ticker-strip" id="heroTickerStrip">
         <span class="ticker-chip" style="color:var(--muted);">Loading...</span>
       </div>
+
+      <a href="https://app.sentimentfx.org/track-record" id="trackRecordBadge" class="track-record-badge" style="display:none;">
+        <span class="trb-eyebrow">Track record · last 90d</span>
+        <span class="trb-stats">
+          <span class="trb-return" id="trbReturn">—</span>
+          <span class="trb-sep">·</span>
+          <span class="trb-meta" id="trbMeta">—</span>
+        </span>
+        <span class="trb-arrow">→</span>
+      </a>
 
       <div class="hero-actions">
         <a href="https://app.sentimentfx.org?auth=signup"
@@ -1299,6 +1354,37 @@
         } catch (e) {}
       }
 
+      // Live track-record badge.  We only render it if there are settled
+      // trades to talk about — early on the dataset is empty and a "0 trades"
+      // badge would be louder than no badge at all.  Pending count alone
+      // isn't enough; we wait for real outcomes.
+      async function loadTrackRecord() {
+        try {
+          const res = await fetch(`${API}/track-record?days=90`, { signal: AbortSignal.timeout(5000) });
+          if (!res.ok) return;
+          const data = await res.json();
+          const overall = data.overall;
+          if (!overall || !overall.count || overall.total_return_pct == null) return;
+
+          const badge   = document.getElementById('trackRecordBadge');
+          const retEl   = document.getElementById('trbReturn');
+          const metaEl  = document.getElementById('trbMeta');
+          if (!badge || !retEl || !metaEl) return;
+
+          const r = overall.total_return_pct;
+          const sign = r > 0 ? '+' : '';
+          retEl.textContent = `${sign}${r.toFixed(2)}%`;
+          retEl.classList.add(r > 0 ? 'up' : r < 0 ? 'down' : 'flat');
+
+          const wr = overall.win_rate == null ? null : Math.round(overall.win_rate * 100);
+          const parts = [`${overall.count} settled`];
+          if (wr != null) parts.push(`${wr}% win rate`);
+          metaEl.textContent = parts.join(' · ');
+
+          badge.style.display = 'inline-flex';
+        } catch (e) { /* silent — badge stays hidden */ }
+      }
+
       function fmtPrice(sym, p) {
         if (FX.includes(sym)) return p.toFixed(sym === 'USDJPY' ? 2 : 4);
         if (CRYPTO.includes(sym)) {
@@ -1373,10 +1459,12 @@
       }
 
       loadStats();
+      loadTrackRecord();
       loadHeroChips();
       loadLiveTicker();
       setInterval(loadLiveTicker, 60000);
       setInterval(loadHeroChips, 60000);
+      setInterval(loadTrackRecord, 5 * 60 * 1000);
     </script>
   </body>
 </html>
