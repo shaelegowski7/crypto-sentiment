@@ -1,22 +1,5 @@
 {
-  "cleanUrls": true,
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "(?!app\\.sentimentfx\\.org).*"
-        }
-      ],
-      "destination": "https://app.sentimentfx.org/$1",
-      "permanent": true
-    }
-  ],
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
