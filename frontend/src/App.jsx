@@ -2189,7 +2189,24 @@ const ADMIN_BOARD_COLS = [
     sort: (r) => r.costs_pct_per_trade },
 ]
 
-function AdminBacktestBoard({ board, sortKey, onSort }) {
+// Pill-toggle helper used by the admin control bar.  Tiny, intentionally
+// dumb — no portals, no popovers, just monospace text in a 1-px box that
+// flips style based on whether it's the active value.
+function _AdminPill({ active, onClick, children, title }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+      padding: "5px 10px",
+      border: active ? "1px solid var(--accent2)" : "1px solid var(--border2)",
+      borderRadius: "2px",
+      background: active ? "rgba(88,166,255,0.08)" : "transparent",
+      color: active ? "var(--accent2)" : "var(--muted)",
+      cursor: "pointer", textTransform: "uppercase",
+    }}>{children}</button>
+  )
+}
+
+function AdminBacktestBoard({ board, sortKey, onSort, params, onParamsChange, loading }) {
   const cols = ADMIN_BOARD_COLS
   const activeCol = cols.find(c => c.key === sortKey)
   const sorted = [...(board?.rows ?? [])].sort((a, b) => {
@@ -2234,12 +2251,85 @@ function AdminBacktestBoard({ board, sortKey, onSort }) {
         marginBottom: "16px", maxWidth: "720px",
       }}>
         {board?.signal === "shift" ? "Sentiment-shift" : "Divergence"} signal,
-        {" "}{board?.hold_days}d hold, long-only.  Split: {board?.split_ratio ?? "2/3 IS · 1/3 OOS"}.
+        {" "}{board?.hold_days}d hold,
+        {" "}{board?.direction_mode === "contrarian" ? "long-on-bearish (contrarian)" : "long-on-bullish (momentum)"}.
+        {" "}Split: {board?.split_ratio ?? "2/3 IS · 1/3 OOS"}.
         Default cost assumptions: 30 bps crypto · 15 bps FX · 6 bps stocks · 4 bps ETFs · 12 bps commodities (per round-trip).
         {" "}<strong style={{ color: "var(--text)" }}>Read OOS Net first.</strong>
         {" "}If it's broadly positive across tickers, edge probably survives a regime change AND transaction costs.
         If broadly negative or near zero, the full-window numbers are likely backtest artifacts.
       </p>
+
+      {/* Strategy knobs.  Flipping any of these re-probes the endpoint; backend
+          caches per-tuple so revisits are instant, first-time cold compute
+          can take ~10-30s — the inline pill below the row indicates that. */}
+      {onParamsChange && (
+        <div style={{
+          display: "flex", flexWrap: "wrap", alignItems: "center", gap: "20px",
+          marginBottom: "16px", padding: "12px 14px",
+          background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "2px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.15em",
+              color: "var(--muted)", textTransform: "uppercase",
+            }}>Direction</span>
+            <_AdminPill
+              active={params?.direction_mode === "momentum"}
+              onClick={() => onParamsChange({ ...params, direction_mode: "momentum" })}
+              title="Long on bullish signals — buy what's trending"
+            >Momentum</_AdminPill>
+            <_AdminPill
+              active={params?.direction_mode === "contrarian"}
+              onClick={() => onParamsChange({ ...params, direction_mode: "contrarian" })}
+              title="Long on bearish signals — buy the panic, fade the euphoria"
+            >Contrarian</_AdminPill>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.15em",
+              color: "var(--muted)", textTransform: "uppercase",
+            }}>Signal</span>
+            <_AdminPill
+              active={params?.signal === "shift"}
+              onClick={() => onParamsChange({ ...params, signal: "shift" })}
+              title="Sentiment shifts past a fixed threshold vs 7d rolling mean"
+            >Shift</_AdminPill>
+            <_AdminPill
+              active={params?.signal === "divergence"}
+              onClick={() => onParamsChange({ ...params, signal: "divergence" })}
+              title="7d sentiment moves against 7d price — classic mean-reversion setup"
+            >Divergence</_AdminPill>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.15em",
+              color: "var(--muted)", textTransform: "uppercase",
+            }}>Hold</span>
+            {[1, 3, 5, 7, 10].map(d => (
+              <_AdminPill
+                key={d}
+                active={params?.hold_days === d}
+                onClick={() => onParamsChange({ ...params, hold_days: d })}
+                title={`Exit ${d} calendar day${d === 1 ? "" : "s"} after entry`}
+              >{d}d</_AdminPill>
+            ))}
+          </div>
+          {loading && (
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.15em",
+              color: "var(--accent)", textTransform: "uppercase",
+              marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px",
+            }}>
+              <span style={{
+                width: "6px", height: "6px", borderRadius: "50%",
+                background: "var(--accent)", animation: "pulse 1.2s ease-in-out infinite",
+              }} />
+              Recomputing…
+            </span>
+          )}
+        </div>
+      )}
 
       {avgOosNet != null && (
         <div style={{
@@ -2353,6 +2443,17 @@ function Leaderboard() {
   // Default to OOS-net sort — matches the backend's primary ordering and
   // surfaces the most honest single metric at the top of the table.
   const [adminSort, setAdminSort] = useState("oos_net_total")
+  // Backtest parameter knobs.  Defaults mirror the backend's own defaults so
+  // the first render of the board is identical to what hitting the endpoint
+  // bare would return.  Toggling any of these re-probes the endpoint; the
+  // backend caches per-tuple, so flipping between previously-seen configs is
+  // instant.  Cold flips take ~10-30s — the "Recomputing…" indicator covers
+  // that gap.
+  const [adminParams, setAdminParams] = useState({
+    direction_mode: "momentum",
+    signal: "shift",
+    hold_days: 7,
+  })
 
   useEffect(() => {
     document.title = "Sentiment Leaderboard — 24h movers · SentimentFX"
@@ -2389,6 +2490,10 @@ function Leaderboard() {
   // user is on the email allowlist and we render the section.  Any 401/403/
   // network error silently leaves it hidden — there's no UI affordance that
   // would tip off a non-admin that the section exists.
+  //
+  // Re-fires on session change (login/logout) and on any adminParams flip
+  // (direction/signal/hold from the control bar).  Backend caches per-tuple
+  // so repeated visits to a previously-seen config are instant.
   useEffect(() => {
     let cancelled = false
     const token = session?.access_token
@@ -2398,7 +2503,12 @@ function Leaderboard() {
       return   // logged out — no probe needed
     }
     setAdminBoardLoading(true)
-    axios.get(`${API}/admin/backtest-board`, {
+    const qs = new URLSearchParams({
+      direction_mode: adminParams.direction_mode,
+      signal:         adminParams.signal,
+      hold_days:      String(adminParams.hold_days),
+    }).toString()
+    axios.get(`${API}/admin/backtest-board?${qs}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => { if (!cancelled) { setAdminBoard(r.data); setAdminBoardLoading(false) } })
@@ -2414,7 +2524,7 @@ function Leaderboard() {
         setAdminBoardLoading(false)
       })
     return () => { cancelled = true }
-  }, [session])
+  }, [session, adminParams])
 
   const openAuth = (mode) => { setAuthMode(mode); setShowAuth(true) }
 
@@ -2646,6 +2756,9 @@ function Leaderboard() {
               board={adminBoard}
               sortKey={adminSort}
               onSort={setAdminSort}
+              params={adminParams}
+              onParamsChange={setAdminParams}
+              loading={adminBoardLoading}
             />
           )}
         </main>
