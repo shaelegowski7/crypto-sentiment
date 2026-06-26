@@ -2829,6 +2829,7 @@ def _compact_backtest_summary(
     signal: str,
     hold_days: int,
     costs_pct: float,
+    direction_mode: str = "momentum",
 ):
     """Pure trade-sim + summary stats over a date window.  No equity curve,
     no per-trade list.  Returns a dict with both `gross` and `net` summaries,
@@ -2837,6 +2838,14 @@ def _compact_backtest_summary(
     The `net` block subtracts `costs_pct` from each trade's gross return
     BEFORE compounding — so the net total_return is the geometric truth, not
     just gross minus (n × costs).
+
+    `direction_mode` controls which signal the simulation acts on:
+      • "momentum"   — long-only on bullish signals (the default;
+                       what the board has always done)
+      • "contrarian" — long-only on BEARISH signals — i.e. buy the panic,
+                       fade the euphoria.  Useful for asking "is sentiment
+                       actually a fade indicator on crypto?".  Same P&L
+                       math; only the entry trigger flips.
 
     Mirrors the threshold + signal-detection conventions of get_backtest.
     If you ever change those there, change them here too (or refactor both
@@ -2880,12 +2889,18 @@ def _compact_backtest_summary(
     # exits that fall past the window boundary still use the next available
     # price (which may be outside `common`) — that's intentional, so a signal
     # firing at the very end of the IS window doesn't get truncated.
+    #
+    # `entry_trigger` flips with direction_mode: momentum acts on bullish
+    # signals (take the trend), contrarian acts on bearish signals (fade the
+    # crash).  Both modes are long-only so the gross/net stats stay directly
+    # comparable across the table — same P&L formula, different trigger.
+    entry_trigger = "bearish" if direction_mode == "contrarian" else "bullish"
     trade_returns = []
     in_trade_until = None
     for d in sorted(signal_series.keys()):
         if in_trade_until and d <= in_trade_until:
             continue
-        if signal_series[d] != "bullish":
+        if signal_series[d] != entry_trigger:
             continue
         entry_date = next((pd for pd in sorted_price_dates if pd > d), None)
         if not entry_date:
@@ -2950,6 +2965,7 @@ def admin_backtest_board(
     signal: str = "shift",
     hold_days: int = 7,
     costs_bps: int | None = None,
+    direction_mode: str = "momentum",
     refresh: bool = False,
     db: Session = Depends(get_db),
     admin=Depends(require_super_admin),
@@ -2977,15 +2993,26 @@ def admin_backtest_board(
 
     `?costs_bps=N` overrides ALL categories' costs with a single N value;
     useful for sensitivity analysis ("what if my real fills are 50 bps RT?").
-    `?refresh=true` bypasses the 1-hour cache.
+
+    `?direction_mode=momentum` (default) — long on bullish signals, current
+    behaviour.  `?direction_mode=contrarian` flips to long-on-bearish (buy
+    the panic).  Same P&L math, same cost model — only the entry trigger
+    changes.  Crypto rows turning positive under contrarian would tell you
+    sentiment is a fade indicator there, not a follow indicator.
+
+    `?refresh=true` bypasses the 1-hour cache.  The cache is keyed on the
+    full (signal, hold_days, costs_bps, direction_mode) tuple so toggling
+    any one re-runs cleanly without nuking the others.
     """
     if signal not in ("shift", "divergence"):
         raise HTTPException(status_code=400, detail="signal must be 'shift' or 'divergence'")
+    if direction_mode not in ("momentum", "contrarian"):
+        raise HTTPException(status_code=400, detail="direction_mode must be 'momentum' or 'contrarian'")
     hold_days = max(1, min(hold_days, 30))
     if costs_bps is not None:
         costs_bps = max(0, min(costs_bps, 500))   # 5% RT is already absurd
 
-    cache_key = (signal, hold_days, costs_bps)
+    cache_key = (signal, hold_days, costs_bps, direction_mode)
     now = datetime.utcnow()
     cached = _BACKTEST_BOARD_CACHE
     if (not refresh
@@ -3037,11 +3064,11 @@ def admin_backtest_board(
             costs_pct  = _costs_pct_for(t, costs_bps)
 
             full_summary = _compact_backtest_summary(
-                daily_sentiment, daily_price, common, signal, hold_days, costs_pct)
+                daily_sentiment, daily_price, common, signal, hold_days, costs_pct, direction_mode)
             is_summary   = _compact_backtest_summary(
-                daily_sentiment, daily_price, is_window, signal, hold_days, costs_pct)
+                daily_sentiment, daily_price, is_window, signal, hold_days, costs_pct, direction_mode)
             oos_summary  = _compact_backtest_summary(
-                daily_sentiment, daily_price, oos_window, signal, hold_days, costs_pct)
+                daily_sentiment, daily_price, oos_window, signal, hold_days, costs_pct, direction_mode)
 
             rows.append({
                 "ticker": t, "category": _category_for(t),
@@ -3070,6 +3097,7 @@ def admin_backtest_board(
         "computed_at": now.isoformat() + "Z",
         "signal": signal,
         "hold_days": hold_days,
+        "direction_mode": direction_mode,
         "costs_bps_override": costs_bps,
         "costs_defaults_by_category_bps": _TICKER_COSTS_BPS_DEFAULT,
         "split_ratio": "2/3 IS · 1/3 OOS",
