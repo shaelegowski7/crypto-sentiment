@@ -184,6 +184,26 @@
 
       .nav-cta:hover { background: rgba(240,180,41,0.08) !important; }
 
+      /* Dashboard variant — lower-key than Create Account so the primary
+         signup CTA still wins visual hierarchy, but obvious enough that
+         existing users have a fast path back into the app. */
+      .nav-cta-dashboard {
+        color: var(--text) !important;
+        border-color: var(--border2);
+      }
+      .nav-cta-dashboard:hover {
+        background: rgba(255,255,255,0.04) !important;
+        border-color: var(--text);
+      }
+
+      /* Hero "Open Dashboard" link — secondary-button shape with a quiet
+         border so it doesn't compete with Create Account / Log In. */
+      .btn-dashboard {
+        border-color: var(--border) !important;
+        opacity: 0.85;
+      }
+      .btn-dashboard:hover { opacity: 1; }
+
       .hero {
         position: relative;
         z-index: 1;
@@ -946,6 +966,8 @@
             target="_blank">Developers</a></li>
         <li><a href="https://status.sentimentfx.org"
             target="_blank">Status</a></li>
+        <li><a href="https://app.sentimentfx.org" target="_blank"
+            class="nav-cta nav-cta-dashboard">Dashboard</a></li>
         <li><a href="https://app.sentimentfx.org?auth=signup" target="_blank"
             class="nav-cta">Create Account</a></li>
       </ul>
@@ -984,6 +1006,8 @@
           class="btn-primary">Create Account</a>
         <a href="https://app.sentimentfx.org?auth=login"
           class="btn-secondary">Log In</a>
+        <a href="https://app.sentimentfx.org"
+          class="btn-secondary btn-dashboard">Open Dashboard →</a>
       </div>
     </section>
 

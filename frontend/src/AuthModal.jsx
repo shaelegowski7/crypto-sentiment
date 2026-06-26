@@ -30,7 +30,10 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
     setError(null)
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "https://app.sentimentfx.org",
+        // Return the user to whichever page they triggered the reset from
+        // (/leaderboard, /track-record, /) rather than always punting them
+        // to the dashboard root.
+        redirectTo: typeof window !== "undefined" ? window.location.href : "https://app.sentimentfx.org",
       })
       if (error) throw error
       setResetSent(true)
@@ -61,7 +64,11 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin }
+      // window.location.href (not .origin) so the OAuth round-trip lands the
+      // user back on the same path they started from — /leaderboard,
+      // /track-record, or /.  Without this, every Google login dumps users
+      // on the dashboard regardless of where they clicked Log In.
+      options: { redirectTo: window.location.href }
     })
   }
 

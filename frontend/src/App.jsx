@@ -2336,6 +2336,13 @@ function Leaderboard() {
   // sortKey null = use backend default ordering; otherwise client-sort
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState("desc")
+  // In-page auth — the Leaderboard now opens the same AuthModal the Dashboard
+  // uses instead of bouncing users to /?auth=login (which dropped them on the
+  // dashboard after login).  Subscribing to onAuthStateChange means the admin
+  // probe below re-fires when an admin signs in without a page refresh.
+  const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState("login")
+  const [session, setSession] = useState(null)
   // Admin-only backtest board.  Hidden by default; populated only when the
   // backend accepts the user's Supabase JWT and confirms they're on the
   // ADMIN_EMAILS allowlist.  A 401/403 leaves these null and the section
@@ -2367,38 +2374,49 @@ function Leaderboard() {
     return () => { cancelled = true }
   }, [])
 
+  // Track session locally so the in-page auth modal can flip header chrome
+  // without a refresh, AND so the admin probe below re-fires when an admin
+  // signs in (the effect's session dep means it reruns on the token change).
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_evt, s) => setSession(s)
+    )
+    return () => subscription.unsubscribe()
+  }, [])
+
   // Probe /admin/backtest-board with the current Supabase JWT.  If 200, the
   // user is on the email allowlist and we render the section.  Any 401/403/
   // network error silently leaves it hidden — there's no UI affordance that
   // would tip off a non-admin that the section exists.
   useEffect(() => {
     let cancelled = false
+    const token = session?.access_token
+    if (!token) {
+      setAdminBoard(null)
+      setAdminBoardLoading(false)
+      return   // logged out — no probe needed
+    }
     setAdminBoardLoading(true)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return
-      const token = session?.access_token
-      if (!token) {
-        setAdminBoardLoading(false)
-        return   // logged out — no probe needed
-      }
-      axios.get(`${API}/admin/backtest-board`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(r => { if (!cancelled) { setAdminBoard(r.data); setAdminBoardLoading(false) } })
-        .catch(e => {
-          if (cancelled) return
-          // 401/403 = not an admin → silently hide.  Anything else (5xx,
-          // network) is a real error worth surfacing only if the section
-          // would otherwise have rendered, so we keep adminBoard null too.
-          const status = e?.response?.status
-          if (status !== 401 && status !== 403) {
-            setAdminBoardError(e?.message ?? "Failed to load")
-          }
-          setAdminBoardLoading(false)
-        })
+    axios.get(`${API}/admin/backtest-board`, {
+      headers: { Authorization: `Bearer ${token}` },
     })
+      .then(r => { if (!cancelled) { setAdminBoard(r.data); setAdminBoardLoading(false) } })
+      .catch(e => {
+        if (cancelled) return
+        // 401/403 = not an admin → silently hide.  Anything else (5xx,
+        // network) is a real error worth surfacing only if the section
+        // would otherwise have rendered, so we keep adminBoard null too.
+        const status = e?.response?.status
+        if (status !== 401 && status !== 403) {
+          setAdminBoardError(e?.message ?? "Failed to load")
+        }
+        setAdminBoardLoading(false)
+      })
     return () => { cancelled = true }
-  }, [])
+  }, [session])
+
+  const openAuth = (mode) => { setAuthMode(mode); setShowAuth(true) }
 
   const onSort = (col) => {
     if (sortKey === col.key) {
@@ -2445,11 +2463,27 @@ function Leaderboard() {
               fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
               color: "var(--muted)", textDecoration: "none",
             }}>DEVELOPERS</a>
-            <a href="/?auth=signup" style={{
-              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-              padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
-              background: "rgba(240,180,41,0.06)", color: "var(--accent)", textDecoration: "none",
-            }}>SIGN UP</a>
+            {session ? (
+              <a href="/" style={{
+                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                padding: "4px 10px", border: "1px solid var(--border2)", borderRadius: "2px",
+                color: "var(--text)", textDecoration: "none",
+              }}>{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>
+            ) : (
+              <>
+                <button onClick={() => openAuth("login")} style={{
+                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                  background: "transparent", border: "none", color: "var(--muted)",
+                  cursor: "pointer", padding: 0,
+                }}>LOG IN</button>
+                <button onClick={() => openAuth("signup")} style={{
+                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                  padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
+                  background: "rgba(240,180,41,0.06)", color: "var(--accent)",
+                  cursor: "pointer",
+                }}>SIGN UP</button>
+              </>
+            )}
             <div className="live-indicator">
               <div className="live-dot" />
               LIVE
@@ -2616,6 +2650,7 @@ function Leaderboard() {
           )}
         </main>
       </div>
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} initialMode={authMode} />}
     </>
   )
 }
@@ -2695,6 +2730,20 @@ function TrackRecord() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [days, setDays] = useState(90)
+  // In-page auth so visitors can log in / sign up without losing their place.
+  const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState("login")
+  const [session, setSession] = useState(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_evt, s) => setSession(s)
+    )
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const openAuth = (mode) => { setAuthMode(mode); setShowAuth(true) }
 
   useEffect(() => {
     document.title = "Track Record — live alert outcomes · SentimentFX"
@@ -2747,11 +2796,27 @@ function TrackRecord() {
               fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
               color: "var(--muted)", textDecoration: "none",
             }}>LEADERBOARD</a>
-            <a href="/?auth=signup" style={{
-              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-              padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
-              background: "rgba(240,180,41,0.06)", color: "var(--accent)", textDecoration: "none",
-            }}>SIGN UP</a>
+            {session ? (
+              <a href="/" style={{
+                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                padding: "4px 10px", border: "1px solid var(--border2)", borderRadius: "2px",
+                color: "var(--text)", textDecoration: "none",
+              }}>{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>
+            ) : (
+              <>
+                <button onClick={() => openAuth("login")} style={{
+                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                  background: "transparent", border: "none", color: "var(--muted)",
+                  cursor: "pointer", padding: 0,
+                }}>LOG IN</button>
+                <button onClick={() => openAuth("signup")} style={{
+                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
+                  padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
+                  background: "rgba(240,180,41,0.06)", color: "var(--accent)",
+                  cursor: "pointer",
+                }}>SIGN UP</button>
+              </>
+            )}
             <div className="live-indicator">
               <div className="live-dot" />
               LIVE
@@ -3086,6 +3151,7 @@ function TrackRecord() {
           )}
         </main>
       </div>
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} initialMode={authMode} />}
     </>
   )
 }
