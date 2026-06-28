@@ -1460,13 +1460,17 @@ def waitlist_count(db: Session = Depends(get_db)):
     return {"count": count}
 
 
-def _run_gdelt_backfill(ticker_list: list, days: int, windows_per_day: int = 4):
+def _run_gdelt_backfill(ticker_list: list, days: int, windows_per_day: int = 4, start_days_ago: int = 0):
     db = SessionLocal()
     summary = {}
     try:
         for ticker in ticker_list:
             try:
-                headlines = fetch_gdelt_headlines(ticker, days=days, windows_per_day=windows_per_day)
+                headlines = fetch_gdelt_headlines(
+                    ticker, days=days,
+                    windows_per_day=windows_per_day,
+                    start_days_ago=start_days_ago,
+                )
                 saved = 0
                 for h in headlines:
                     exists = db.query(models.Headline).filter(
@@ -1508,6 +1512,7 @@ def backfill_gdelt(
     tickers: str = "all",
     days: int = 30,
     windows_per_day: int = 4,
+    start_days_ago: int = 0,
     admin=Depends(require_admin),
 ):
     if tickers.lower() == "all":
@@ -1520,14 +1525,53 @@ def backfill_gdelt(
         raise HTTPException(status_code=404, detail=f"Unknown tickers: {','.join(unknown)}")
 
     windows_per_day = max(1, min(windows_per_day, 24))
-    background_tasks.add_task(_run_gdelt_backfill, ticker_list, days, windows_per_day)
+    start_days_ago  = max(0, min(start_days_ago, 3650))   # 10y back, plenty
+    background_tasks.add_task(
+        _run_gdelt_backfill, ticker_list, days, windows_per_day, start_days_ago,
+    )
+    range_label = (
+        f"{start_days_ago}d–{start_days_ago + days}d ago"
+        if start_days_ago else f"last {days} days"
+    )
     return {
-        "message": f"GDELT backfill queued for {len(ticker_list)} ticker(s) over {days} days "
+        "message": f"GDELT backfill queued for {len(ticker_list)} ticker(s) over {range_label} "
                    f"({windows_per_day} windows/day) — check Railway logs for progress",
         "tickers": ticker_list,
         "days": days,
+        "start_days_ago": start_days_ago,
         "windows_per_day": windows_per_day,
     }
+
+
+@app.get("/admin/coverage")
+def admin_coverage(secret: str = None, db: Session = Depends(get_db)):
+    """Per-ticker oldest/newest headline + count.  Used to decide what gap to
+    backfill: if BTC's oldest is 180 days ago, run /backfill/gdelt with
+    start_days_ago=180 to extend backward without re-fetching what's covered.
+    Token-gated via the existing ADMIN_SECRET so it stays out of the public API.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    from sqlalchemy import func as _f
+    rows = db.query(
+        models.Headline.ticker,
+        _f.count(models.Headline.id).label("count"),
+        _f.min(models.Headline.published_at).label("oldest"),
+        _f.max(models.Headline.published_at).label("newest"),
+    ).group_by(models.Headline.ticker).all()
+    now = datetime.utcnow()
+    out = {}
+    for ticker, count, oldest, newest in rows:
+        oldest_days_ago = (now - oldest).days if oldest else None
+        newest_days_ago = (now - newest).days if newest else None
+        out[ticker] = {
+            "count": count,
+            "oldest": oldest.isoformat() + "Z" if oldest else None,
+            "newest": newest.isoformat() + "Z" if newest else None,
+            "oldest_days_ago": oldest_days_ago,
+            "newest_days_ago": newest_days_ago,
+        }
+    return {"computed_at": now.isoformat() + "Z", "tickers": out}
 
 
 @app.post("/alerts")

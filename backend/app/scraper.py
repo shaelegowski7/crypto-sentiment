@@ -417,6 +417,7 @@ def fetch_gdelt_headlines(
     days: int = 30,
     windows_per_day: int = 4,
     max_per_window: int = _GDELT_MAXRECORDS,
+    start_days_ago: int = 0,
 ) -> list:
     """Pull historical headlines from GDELT 2.0 in sub-day windows.
 
@@ -428,6 +429,13 @@ def fetch_gdelt_headlines(
     articles instead of one capped page.  Headlines come back in the same shape
     as fetch_headlines() / fetch_rss_headlines() so they slot straight into the
     existing ingestion pipeline.
+
+    ``start_days_ago`` skips the most recent N days entirely.  Use it to
+    backfill ONLY a missing historical window without re-fetching days you
+    already have — e.g. ``days=185, start_days_ago=180`` fills 180→365 days
+    ago.  Duplicate URLs would be deduped on insert anyway, but the HTTP
+    requests are paced at ~6s each, so skipping known-covered windows saves
+    real wall time on a full-universe sweep.
     """
     query = GDELT_QUERIES.get(ticker.upper())
     if not query:
@@ -445,7 +453,9 @@ def fetch_gdelt_headlines(
     aborted = False
 
     for day_offset in range(days):
-        day_end = now - timedelta(days=day_offset)
+        # day_offset 0 is normally "today"; start_days_ago shifts the whole
+        # iteration backwards so we fetch a specific historical window only.
+        day_end = now - timedelta(days=day_offset + start_days_ago)
         day_start = day_end - timedelta(days=1, seconds=-1)
 
         for w in range(windows_per_day):
