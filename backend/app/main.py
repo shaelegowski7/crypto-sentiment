@@ -1460,9 +1460,16 @@ def waitlist_count(db: Session = Depends(get_db)):
     return {"count": count}
 
 
-def _run_gdelt_backfill(ticker_list: list, days: int, windows_per_day: int = 4, start_days_ago: int = 0):
+def _run_gdelt_backfill(ticker_list: list, days: int, windows_per_day: int = 4,
+                        start_days_ago: int = 0, cooldown_s: int = 0):
     db = SessionLocal()
     summary = {}
+    # One startup cool-down at the runner level (not per-ticker) so a re-kicked
+    # backfill can wait out the prior run's IP penalty before sending request #1
+    # to GDELT.  Per-ticker sleeps would add up to hours over a 30-ticker run.
+    if cooldown_s > 0:
+        print(f"[GDELT-BACKFILL] startup cool-down: sleeping {cooldown_s}s before first request")
+        time.sleep(cooldown_s)
     try:
         for ticker in ticker_list:
             try:
@@ -1513,6 +1520,7 @@ def backfill_gdelt(
     days: int = 30,
     windows_per_day: int = 4,
     start_days_ago: int = 0,
+    cooldown_s: int = 0,
     admin=Depends(require_admin),
 ):
     if tickers.lower() == "all":
@@ -1526,8 +1534,9 @@ def backfill_gdelt(
 
     windows_per_day = max(1, min(windows_per_day, 24))
     start_days_ago  = max(0, min(start_days_ago, 3650))   # 10y back, plenty
+    cooldown_s      = max(0, min(cooldown_s, 600))        # 10 min cap; longer would block the worker pointlessly
     background_tasks.add_task(
-        _run_gdelt_backfill, ticker_list, days, windows_per_day, start_days_ago,
+        _run_gdelt_backfill, ticker_list, days, windows_per_day, start_days_ago, cooldown_s,
     )
     range_label = (
         f"{start_days_ago}d–{start_days_ago + days}d ago"
@@ -1535,11 +1544,12 @@ def backfill_gdelt(
     )
     return {
         "message": f"GDELT backfill queued for {len(ticker_list)} ticker(s) over {range_label} "
-                   f"({windows_per_day} windows/day) — check Railway logs for progress",
+                   f"({windows_per_day} windows/day, {cooldown_s}s cool-down) — check Railway logs for progress",
         "tickers": ticker_list,
         "days": days,
         "start_days_ago": start_days_ago,
         "windows_per_day": windows_per_day,
+        "cooldown_s": cooldown_s,
     }
 
 

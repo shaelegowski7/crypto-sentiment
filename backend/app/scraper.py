@@ -359,11 +359,20 @@ GDELT_QUERIES = {
 # So we pace at 6s, and when throttled we wait the penalty out in long,
 # escalating sleeps (up to 5 min) rather than giving up — an unattended backfill
 # would rather wait than silently lose days of history.
-_GDELT_BASE_DELAY = 6.0          # seconds between successful calls (5s limit + margin)
+_GDELT_BASE_DELAY = 15.0         # seconds between successful calls. GDELT's stated
+                                 # limit is 1/5s but real-world threshold sits closer
+                                 # to 1/8s — 10s keeps a margin even when the IP is
+                                 # warm from prior runs.
 _GDELT_MAX_RETRIES = 8           # generous budget so a multi-minute ban is waited out
-_GDELT_BACKOFF_BASE = 60         # first 429 sleeps 60s, then 120, 240, capped at cap
+_GDELT_BACKOFF_BASE = 120        # first 429 sleeps 2 min — GDELT's IP penalty often
+                                 # outlasts 60s, so the old 60s base just looped
+                                 # straight into another 429 on retry.
 _GDELT_BACKOFF_CAP = 300         # never sleep longer than 5 min between retries
 _GDELT_MAXRECORDS = 250          # hard cap GDELT enforces on a single query
+_GDELT_DEFAULT_COOLDOWN_S = 0    # default no startup cool-down; the endpoint sets
+                                 # this higher when called explicitly with cooldown_s
+                                 # so a re-kicked backfill can wait out the prior
+                                 # run's IP penalty before request #1.
 
 
 def _gdelt_get(params: dict, label: str) -> dict | None:
@@ -418,6 +427,7 @@ def fetch_gdelt_headlines(
     windows_per_day: int = 4,
     max_per_window: int = _GDELT_MAXRECORDS,
     start_days_ago: int = 0,
+    cooldown_s: int = 0,
 ) -> list:
     """Pull historical headlines from GDELT 2.0 in sub-day windows.
 
