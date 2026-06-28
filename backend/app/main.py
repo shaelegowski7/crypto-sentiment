@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_gdelt_headlines, GDELT_QUERIES
+from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES
 from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from datetime import datetime, timedelta, timezone
@@ -1460,22 +1460,16 @@ def waitlist_count(db: Session = Depends(get_db)):
     return {"count": count}
 
 
-def _run_gdelt_backfill(ticker_list: list, days: int, windows_per_day: int = 4,
-                        start_days_ago: int = 0, cooldown_s: int = 0):
+def _run_hn_backfill(ticker_list: list, days: int, chunk_days: int = 14,
+                     start_days_ago: int = 0):
     db = SessionLocal()
     summary = {}
-    # One startup cool-down at the runner level (not per-ticker) so a re-kicked
-    # backfill can wait out the prior run's IP penalty before sending request #1
-    # to GDELT.  Per-ticker sleeps would add up to hours over a 30-ticker run.
-    if cooldown_s > 0:
-        print(f"[GDELT-BACKFILL] startup cool-down: sleeping {cooldown_s}s before first request")
-        time.sleep(cooldown_s)
     try:
         for ticker in ticker_list:
             try:
-                headlines = fetch_gdelt_headlines(
+                headlines = fetch_hn_headlines(
                     ticker, days=days,
-                    windows_per_day=windows_per_day,
+                    chunk_days=chunk_days,
                     start_days_ago=start_days_ago,
                 )
                 saved = 0
@@ -1497,66 +1491,64 @@ def _run_gdelt_backfill(ticker_list: list, days: int, windows_per_day: int = 4,
                         sentiment_label=sentiment["label"],
                         published_at=h["published_at"],
                     ))
-                    HEADLINES_INGESTED.labels(source="gdelt", ticker=h["ticker"]).inc()
+                    HEADLINES_INGESTED.labels(source="hn", ticker=h["ticker"]).inc()
                     saved += 1
                 db.commit()
                 summary[ticker] = saved
-                print(f"[GDELT-BACKFILL] {ticker}: +{saved} new of {len(headlines)} fetched")
+                print(f"[HN-BACKFILL] {ticker}: +{saved} new of {len(headlines)} fetched")
             except Exception as e:
                 db.rollback()
                 summary[ticker] = f"error: {e}"
-                print(f"[GDELT-BACKFILL] {ticker} error: {e}")
+                print(f"[HN-BACKFILL] {ticker} error: {e}")
     finally:
         db.close()
     total = sum(v for v in summary.values() if isinstance(v, int))
-    print(f"[GDELT-BACKFILL] done — +{total} new headlines across {len(summary)} tickers")
+    print(f"[HN-BACKFILL] done — +{total} new headlines across {len(summary)} tickers")
 
 
-@app.post("/backfill/gdelt")
-@app.post("/backfill")   # legacy alias — GNews-backed backfill is gone, GDELT is the only path now
-def backfill_gdelt(
+@app.post("/backfill/hn")
+@app.post("/backfill")   # default backfill path is now HN Algolia (GDELT was retired — see CLAUDE.md)
+def backfill_hn(
     background_tasks: BackgroundTasks,
     tickers: str = "all",
-    days: int = 30,
-    windows_per_day: int = 4,
+    days: int = 365,
+    chunk_days: int = 14,
     start_days_ago: int = 0,
-    cooldown_s: int = 0,
     admin=Depends(require_admin),
 ):
     if tickers.lower() == "all":
-        ticker_list = list(GDELT_QUERIES.keys())
+        ticker_list = list(HN_QUERIES.keys())
     else:
         ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
 
-    unknown = [t for t in ticker_list if t not in GDELT_QUERIES]
+    unknown = [t for t in ticker_list if t not in HN_QUERIES]
     if unknown:
         raise HTTPException(status_code=404, detail=f"Unknown tickers: {','.join(unknown)}")
 
-    windows_per_day = max(1, min(windows_per_day, 24))
-    start_days_ago  = max(0, min(start_days_ago, 3650))   # 10y back, plenty
-    cooldown_s      = max(0, min(cooldown_s, 600))        # 10 min cap; longer would block the worker pointlessly
+    chunk_days     = max(1, min(chunk_days, 90))
+    start_days_ago = max(0, min(start_days_ago, 3650))   # 10y back, plenty
+    days           = max(1, min(days, 3650))
     background_tasks.add_task(
-        _run_gdelt_backfill, ticker_list, days, windows_per_day, start_days_ago, cooldown_s,
+        _run_hn_backfill, ticker_list, days, chunk_days, start_days_ago,
     )
     range_label = (
         f"{start_days_ago}d–{start_days_ago + days}d ago"
         if start_days_ago else f"last {days} days"
     )
     return {
-        "message": f"GDELT backfill queued for {len(ticker_list)} ticker(s) over {range_label} "
-                   f"({windows_per_day} windows/day, {cooldown_s}s cool-down) — check Railway logs for progress",
+        "message": f"HN backfill queued for {len(ticker_list)} ticker(s) over {range_label} "
+                   f"({chunk_days}d chunks) — check Railway logs for progress",
         "tickers": ticker_list,
         "days": days,
         "start_days_ago": start_days_ago,
-        "windows_per_day": windows_per_day,
-        "cooldown_s": cooldown_s,
+        "chunk_days": chunk_days,
     }
 
 
 @app.get("/admin/coverage")
 def admin_coverage(secret: str = None, db: Session = Depends(get_db)):
     """Per-ticker oldest/newest headline + count.  Used to decide what gap to
-    backfill: if BTC's oldest is 180 days ago, run /backfill/gdelt with
+    backfill: if BTC's oldest is 180 days ago, run /backfill with
     start_days_ago=180 to extend backward without re-fetching what's covered.
     Token-gated via the existing ADMIN_SECRET so it stays out of the public API.
     """
