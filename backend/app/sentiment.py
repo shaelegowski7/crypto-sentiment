@@ -1,4 +1,5 @@
 from transformers import pipeline
+import math
 import torch
 
 device = 0 if torch.cuda.is_available() else -1
@@ -19,6 +20,12 @@ def analyse_sentiment(text: str) -> dict:
 
     score = probs["positive"] - probs["negative"]  # -1 to +1
     label = max(probs, key=probs.get)  # whichever class won
+
+    # FinBERT can emit NaN on degenerate inputs (all-symbol titles, broken
+    # unicode).  Storing NaN in the DB later blows up Starlette's JSON encoder
+    # — coerce to neutral/0 at the boundary instead.
+    if not isinstance(score, (int, float)) or not math.isfinite(score):
+        return {"label": "neutral", "score": 0.0}
 
     return {
         "label": label,

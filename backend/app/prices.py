@@ -1,4 +1,5 @@
 import yfinance as yf
+import math
 import requests
 from datetime import datetime, timezone
 
@@ -73,6 +74,14 @@ def fetch_prices(ticker: str) -> list:
         try:
             close = float(row["Close"].iloc[0]) if hasattr(row["Close"], 'iloc') else float(row["Close"])
             volume = 0.0 if is_fx else (float(row["Volume"].iloc[0]) if hasattr(row["Volume"], 'iloc') else float(row["Volume"]))
+            # yfinance returns NaN for holiday/halt rows on equities — those NaN
+            # rows would later crash Starlette's strict JSON encoder.  Drop the
+            # row entirely; an unknown close is more useful as a gap than as a
+            # silent zero, and the frontend already pads missing dates.
+            if not math.isfinite(close):
+                continue
+            if not math.isfinite(volume):
+                volume = 0.0
             prices.append({
                 "ticker": ticker,
                 "close_price": round(close * gbp_rate, 6 if is_fx else 8),

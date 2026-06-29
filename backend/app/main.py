@@ -53,7 +53,31 @@ def get_api_key_value(request: Request) -> str:
 
 limiter = Limiter(key_func=get_api_key_value)
 
-app = FastAPI()
+# ---------------------------------------------------------------------------
+# NaN-safe JSON response
+# ---------------------------------------------------------------------------
+# Starlette's JSONResponse encodes with allow_nan=False, so any float('nan')
+# or inf bubbling up from a handler (numpy stats, empty-bucket averages, etc.)
+# crashes the request with "Out of range float values are not JSON compliant".
+# Strict JSON has no representation for NaN/Inf, so the standard fix is to
+# coerce to None at the boundary.  Registered as the FastAPI default so every
+# endpoint gets the safety net without per-route changes.
+def _scrub_non_finite(obj):
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _scrub_non_finite(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_scrub_non_finite(v) for v in obj]
+    return obj
+
+
+class SafeJSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return super().render(_scrub_non_finite(content))
+
+
+app = FastAPI(default_response_class=SafeJSONResponse)
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics
