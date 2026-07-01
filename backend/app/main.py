@@ -3931,3 +3931,27 @@ async def delete_account(authorization: str = Header(None), db: Session = Depend
     supabase_client.auth.admin.delete_user(user.id)
 
     return {"message": "Account deleted"}
+
+
+# ---------------------------------------------------------------------------
+# MCP server mount
+# ---------------------------------------------------------------------------
+# The MCP server exposes the same read endpoints as /v1/* but as Model Context
+# Protocol tools, so partners can wire SentimentFX straight into Claude Code /
+# Claude.ai desktop / Claude API apps / Cursor / Cline as native functions.
+#
+# Mounted at /mcp on the existing FastAPI app so it shares TLS, DNS, and the
+# Railway deploy — no separate service.  Auth reuses the X-API-Key header +
+# APIKey table + track_usage() billing hook (see mcp_server.py for detail),
+# so partner usage bills identically whether they call /v1/* over HTTP or
+# invoke the MCP tools through Claude.
+#
+# Late import: mcp_server imports back into main.py for `_hash_key` +
+# `track_usage`, so this line has to sit at the end of main.py — after every
+# name mcp_server dereferences at call-time has been defined.
+from .mcp_server import mcp as _mcp_server  # noqa: E402
+
+# streamable-http is the modern MCP transport (superseded SSE mid-2025).  The
+# returned Starlette sub-app handles the /mcp POST endpoint clients hit for
+# every tool call; FastMCP takes care of the JSON-RPC framing internally.
+app.mount("/mcp", _mcp_server.streamable_http_app())

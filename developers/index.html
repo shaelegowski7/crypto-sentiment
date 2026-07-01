@@ -162,6 +162,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('summary');return false;" data-section="summary">Summary</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('prices');return false;" data-section="prices">Prices</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('correlation');return false;" data-section="correlation">Correlation</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('mcp');return false;" data-section="mcp">MCP (Claude / Cursor)</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('errors');return false;" data-section="errors">Error Codes</a>
                 </div>
                 <div class="sidebar-section">
@@ -445,6 +446,59 @@ const res = await fetch(
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <div id="mcp" class="scroll-section">
+                        <h2>MCP — Claude, Cursor &amp; other AI clients</h2>
+                        <p>SentimentFX also speaks the <a href="https://modelcontextprotocol.io" target="_blank" style="color:var(--accent2);text-decoration:none;">Model Context Protocol</a>, so Claude Code, Claude.ai desktop, Cursor, Cline and any other MCP-compatible client can call the sentiment tools natively without you writing HTTP-plumbing code. Same X-API-Key, same billing, same rate limits — you just point the client at a URL.</p>
+                        <p><strong>Endpoint:</strong> <code>https://api.sentimentfx.org/mcp</code></p>
+                        <p><strong>Auth:</strong> <code>X-API-Key: sfx_...</code> header (generate from the <a href="https://app.sentimentfx.org" target="_blank" style="color:var(--accent2);text-decoration:none;">dashboard</a>).</p>
+
+                        <h3 style="margin-top:20px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Tools exposed</h3>
+                        <table class="param-table" style="margin-top:8px;">
+                            <thead><tr><th>Tool</th><th>Args</th><th>Cost</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>list_tickers</code></td><td>—</td><td>free</td></tr>
+                                <tr><td><code>get_sentiment</code></td><td>ticker, limit (≤100)</td><td>ceil(limit/25) credits</td></tr>
+                                <tr><td><code>get_summary</code></td><td>ticker, days (≤365)</td><td>1 credit / day</td></tr>
+                                <tr><td><code>get_prices</code></td><td>ticker, days (≤365)</td><td>1 credit / day</td></tr>
+                                <tr><td><code>get_correlation</code></td><td>ticker</td><td>1 credit</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Claude Code</h3>
+                        <p>Add to <code>~/.claude/settings.json</code> (or your project's <code>.claude/settings.json</code>):</p>
+                        <pre>{
+  "mcpServers": {
+    "sentimentfx": {
+      "type": "http",
+      "url": "https://api.sentimentfx.org/mcp",
+      "headers": { "X-API-Key": "sfx_your_key_here" }
+    }
+  }
+}</pre>
+                        <p style="margin-top:8px;">Restart Claude Code and Claude will discover the five tools. Try <em>"What's Bitcoin sentiment looking like this week?"</em>.</p>
+
+                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Cursor / Cline / Windsurf</h3>
+                        <p>Same JSON block under whatever MCP config panel the editor exposes — Cursor is <code>Settings → MCP → Add new server</code>, Cline lives in its side panel. The only field that ever changes is the URL/auth combo above.</p>
+
+                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Claude API (custom apps)</h3>
+                        <p>Use the Anthropic SDK's MCP client to attach the server to your <code>messages.create</code> call:</p>
+                        <pre>from anthropic import Anthropic
+client = Anthropic()
+resp = client.beta.messages.create(
+    model="claude-opus-4-7",
+    max_tokens=1024,
+    mcp_servers=[{
+        "type": "url",
+        "url": "https://api.sentimentfx.org/mcp",
+        "name": "sentimentfx",
+        "authorization_token": "sfx_your_key_here",
+    }],
+    messages=[{"role": "user", "content": "Rank the top 5 tickers by 7-day sentiment shift."}],
+)</pre>
+
+                        <p style="margin-top:16px;color:var(--muted);font-size:13px;">Every MCP tool call bills the same meter as the equivalent <code>/v1/*</code> HTTP call — check usage on the dashboard's API Access panel.</p>
                     </div>
 
                     <div id="errors" class="scroll-section">
