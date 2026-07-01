@@ -148,6 +148,12 @@ class APIKey(Base):
     calls_this_month = Column(Integer, default=0)
     free_calls = Column(Integer, default=100)
     monthly_allowance = Column(Integer, default=0)
+    # Internal / dogfood / partner keys.  When True, track_usage still increments
+    # the counters (useful for observability) but skips the Stripe meter event
+    # entirely — the key never bills regardless of volume.  Rate limits still
+    # apply (30/min on /v1/*), which is 43k calls/day and plenty for any
+    # realistic dogfood workload.  Grant via POST /admin/keys/mint-unlimited.
+    unlimited = Column(Boolean, default=False, nullable=False)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -47,6 +47,29 @@ METRICS_TOKEN = os.getenv("METRICS_TOKEN")
 
 models.Base.metadata.create_all(bind=engine)
 
+# Idempotent schema patches for tables that already exist in prod.  We don't
+# use Alembic here, and `create_all` doesn't add columns to existing tables,
+# so any new APIKey/etc. column we introduce needs a hand-rolled ALTER guarded
+# by `IF NOT EXISTS` (Postgres 9.6+).  Failure to add doesn't crash startup —
+# the column may already be there or the DB user may lack DDL rights; we log
+# and continue, and the app will 500 loudly on first use if the schema is
+# genuinely wrong.
+def _apply_startup_ddl_patches():
+    from sqlalchemy import text as _text
+    patches = [
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS unlimited BOOLEAN DEFAULT FALSE NOT NULL",
+    ]
+    try:
+        with engine.begin() as conn:
+            for stmt in patches:
+                try:
+                    conn.execute(_text(stmt))
+                except Exception as e:
+                    print(f"[STARTUP-DDL] skipped '{stmt}': {e}")
+    except Exception as e:
+        print(f"[STARTUP-DDL] transaction failed: {e}")
+_apply_startup_ddl_patches()
+
 def get_api_key_value(request: Request) -> str:
     """Rate limit by API key header, fall back to IP."""
     return request.headers.get("x-api-key") or get_remote_address(request)
@@ -1983,6 +2006,7 @@ async def get_key_info(request: Request, db: Session = Depends(get_db)):
         "calls_used": existing.calls_used,
         "free_remaining": max(0, existing.free_calls - existing.calls_used),
         "active": existing.active,
+        "unlimited": bool(getattr(existing, "unlimited", False)),
     }
 
 
@@ -2069,6 +2093,7 @@ async def get_my_key_info(db: Session = Depends(get_db), user=Depends(require_pr
         "monthly_allowance": existing.monthly_allowance,
         "total_monthly": total_allowance,
         "active": existing.active,
+        "unlimited": bool(getattr(existing, "unlimited", False)),
     }
 
 
@@ -2105,6 +2130,14 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
     api_key.calls_used += count
     api_key.calls_this_month += count
     API_CALLS.labels(endpoint=endpoint).inc(count)
+
+    # Internal / dogfood keys skip metering entirely — counters still tick for
+    # observability (calls_used, calls_this_month, Prometheus API_CALLS) so we
+    # can see internal traffic on the same dashboards.  What they DON'T do is
+    # emit the Stripe MeterEvent, so they never bill regardless of volume.
+    if getattr(api_key, "unlimited", False):
+        db.commit()
+        return
 
     total_allowance = api_key.free_calls + api_key.monthly_allowance
     if api_key.calls_this_month > total_allowance and api_key.stripe_customer_id:
@@ -3707,6 +3740,94 @@ def admin_signal_quality_refresh(
     """
     background_tasks.add_task(_run_signal_quality_refresh)
     return {"message": "Signal-quality refresh queued — check logs for progress"}
+
+
+@app.post("/admin/keys/mint-unlimited")
+def admin_mint_unlimited_key(
+    email: str,
+    rotate: bool = False,
+    db: Session = Depends(get_db),
+    admin=Depends(require_super_admin),
+):
+    """Mint (or upgrade) an unlimited API key for `email`.
+
+    Behaviour:
+      • No existing key for the email → generate a fresh one, mark unlimited,
+        return the raw value (only chance to see it — we only store the hash).
+      • Existing key + rotate=False → flip `unlimited=True` in place and return
+        just the prefix.  The raw key can't be recovered — the owner should
+        already have it.  Use this to grant unlimited to someone whose key is
+        already deployed.
+      • Existing key + rotate=True → rotate the raw value, mark unlimited,
+        return the new raw value.  Old key stops working immediately.
+
+    All variants: `active=True`, `stripe_customer_id/subscription_id` left
+    untouched (so a paying user's Stripe link isn't nuked when they get a
+    dogfood upgrade), `monthly_allowance` unchanged (irrelevant while
+    unlimited is on, but preserved so removing the flag restores previous
+    limits cleanly).
+
+    Guarded by require_super_admin — Supabase JWT for an email on the
+    ADMIN_EMAILS allow-list, same gate as the backtest board.
+    """
+    email = (email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email is required")
+
+    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
+
+    if existing is None:
+        raw = _make_key()
+        row = models.APIKey(
+            email=email,
+            key_hash=_hash_key(raw),
+            key_prefix=raw[:12],   # sfx_ + first 8 hex chars
+            free_calls=0,
+            monthly_allowance=0,
+            unlimited=True,
+            active=True,
+        )
+        db.add(row)
+        db.commit()
+        return {
+            "message": f"Minted new unlimited key for {email}",
+            "email": email,
+            "key": raw,               # only returned once — store it now
+            "key_prefix": row.key_prefix,
+            "unlimited": True,
+            "note": "Save the `key` value — it is not recoverable from the DB.",
+        }
+
+    if not rotate:
+        existing.unlimited = True
+        existing.active = True
+        db.commit()
+        return {
+            "message": f"Upgraded existing key for {email} to unlimited",
+            "email": email,
+            "key_prefix": existing.key_prefix,
+            "unlimited": True,
+            "note": (
+                "Raw key value not returned — owner already has it. "
+                "Pass ?rotate=true if they've lost it and need a new one."
+            ),
+        }
+
+    # rotate=True: replace the raw value, mark unlimited, return the new raw
+    raw = _make_key()
+    existing.key_hash  = _hash_key(raw)
+    existing.key_prefix = raw[:12]
+    existing.unlimited = True
+    existing.active    = True
+    db.commit()
+    return {
+        "message": f"Rotated + marked unlimited for {email}",
+        "email": email,
+        "key": raw,
+        "key_prefix": existing.key_prefix,
+        "unlimited": True,
+        "note": "Old key value has been invalidated. Save the new `key` — not recoverable.",
+    }
 
 
 @app.get("/admin/track-record")
