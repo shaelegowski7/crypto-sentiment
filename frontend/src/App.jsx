@@ -2187,6 +2187,59 @@ const ADMIN_BOARD_COLS = [
   { key: "costs_pct_per_trade", label: "Cost/trade", align: "right", hint: "Round-trip transaction cost assumed for this ticker (per trade)",
     val: (r) => r.costs_pct_per_trade == null ? "—" : `${r.costs_pct_per_trade.toFixed(2)}%`,
     sort: (r) => r.costs_pct_per_trade },
+
+  // Regime breakdown — tags each trade by its entry-day trailing-60d trend
+  // (bull / bear / chop, ±15% annualised). Shows net total return per bucket
+  // so a strategy that's blended-positive but loses in bears can't hide.
+  // Trade counts pop in the tooltip; the cell shows the headline pct.
+  { key: "regime_bull", label: "Bull NR%", align: "right",
+    hint: "Net total return on trades entered during bull regimes (trailing 60d >= +15% annualised). Hover for trade count.",
+    val: (r) => {
+      const b = _g("by_regime.bull")(r)
+      if (!b) return "—"
+      return _pct(b.total_return_pct)
+    },
+    sort: (r) => _g("by_regime.bull.total_return_pct")(r),
+    color: (r) => _g("by_regime.bull.total_return_pct")(r) },
+  { key: "regime_bear", label: "Bear NR%", align: "right",
+    hint: "Net total return on trades entered during bear regimes (trailing 60d <= -15% annualised). Hover for trade count.",
+    val: (r) => {
+      const b = _g("by_regime.bear")(r)
+      if (!b) return "—"
+      return _pct(b.total_return_pct)
+    },
+    sort: (r) => _g("by_regime.bear.total_return_pct")(r),
+    color: (r) => _g("by_regime.bear.total_return_pct")(r) },
+  { key: "regime_chop", label: "Chop NR%", align: "right",
+    hint: "Net total return on trades entered during chop regimes (trailing 60d between ±15% annualised). Hover for trade count.",
+    val: (r) => {
+      const b = _g("by_regime.chop")(r)
+      if (!b) return "—"
+      return _pct(b.total_return_pct)
+    },
+    sort: (r) => _g("by_regime.chop.total_return_pct")(r),
+    color: (r) => _g("by_regime.chop.total_return_pct")(r) },
+
+  // Walk-forward stability: how many sliding-window folds came back positive.
+  // "7/10 σ12%" means 7 of 10 folds were net-positive; the standard deviation
+  // of fold net returns was 12%. High σ relative to mean = regime-dependent.
+  // A strategy with high OOS net but low pct positive folds is suspect.
+  { key: "wf_stability", label: "WF +folds", align: "right",
+    hint: "Walk-forward stability: positive folds / total folds (σ = standard deviation of fold net returns). Across all folds the SAME static thresholds run on a sliding window. >70% positive with low σ = the edge survives regime changes. Sortable by % positive.",
+    val: (r) => {
+      const s = _g("walk_forward.stability")(r)
+      if (!s || !s.folds_with_trades) return "—"
+      return `${s.folds_positive}/${s.folds_with_trades} σ${s.std_net_return_pct?.toFixed(0) ?? "?"}%`
+    },
+    sort: (r) => _g("walk_forward.stability.pct_folds_positive")(r),
+    color: (r) => {
+      // Colour the cell by % positive folds: >=70% green, <=30% red, else neutral.
+      const pct = _g("walk_forward.stability.pct_folds_positive")(r)
+      if (pct == null) return null
+      if (pct >= 0.7) return 1
+      if (pct <= 0.3) return -1
+      return 0
+    } },
 ]
 
 // Pill-toggle helper used by the admin control bar.  Tiny, intentionally
@@ -2258,6 +2311,12 @@ function AdminBacktestBoard({ board, sortKey, onSort, params, onParamsChange, lo
         {" "}<strong style={{ color: "var(--text)" }}>Read OOS Net first.</strong>
         {" "}If it's broadly positive across tickers, edge probably survives a regime change AND transaction costs.
         If broadly negative or near zero, the full-window numbers are likely backtest artifacts.
+        {" "}<strong style={{ color: "var(--text)" }}>Then check WF +folds and the regime split.</strong>
+        {" "}WF runs the same static thresholds across overlapping
+        {" "}{board?.walk_forward_params?.window_days ?? 45}-day windows (step
+        {" "}{board?.walk_forward_params?.step_days ?? 15}d); ≥70% positive folds with low σ means the edge holds
+        across regimes. Bull/Bear/Chop NR% bucket each trade by trailing-60d trend (±15% annualised) so you can see
+        if the strategy makes its money in one regime and bleeds in another.
       </p>
 
       {/* Strategy knobs.  Flipping any of these re-probes the endpoint; backend

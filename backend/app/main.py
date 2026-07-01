@@ -2834,6 +2834,17 @@ def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db
             "buy_hold": round(100.0 * price / first_price, 2),
         })
 
+    # Optional depth blocks: regime breakdown + walk-forward stability.
+    # Both reuse the helpers used by the admin board so a single bug-fix on
+    # either keeps the public single-ticker endpoint in sync.  Cost is one
+    # extra simulation pass each; cheap relative to the headline/price queries
+    # we already did.
+    costs_pct_default = _costs_pct_for(ticker, None)
+    by_regime = _regime_split_stats(
+        daily_sentiment, daily_price, common, signal, hold_days, costs_pct_default)
+    walk_fwd  = _walk_forward(
+        daily_sentiment, daily_price, common, signal, hold_days, costs_pct_default)
+
     return {
         "ticker": ticker.upper(),
         "signal": signal,
@@ -2850,6 +2861,8 @@ def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db
             "alpha_pct": alpha,
             "sharpe": sharpe,
         },
+        "by_regime": by_regime,
+        "walk_forward": walk_fwd,
         "trades": trades,
         "equity_curve": equity_curve,
     }
@@ -3006,6 +3019,228 @@ def _compact_backtest_summary(
     }
 
 
+# ---------------------------------------------------------------------------
+# Backtest depth helpers — walk-forward + regime tagging
+# ---------------------------------------------------------------------------
+# A single IS/OOS split is one number that can luck out on a friendly regime.
+# Walk-forward slides a fixed-size test window through history so we get N
+# stability points instead.  Regime tagging buckets trade returns by the
+# trailing 60-day market trend so a strategy that's positive on average but
+# bleeds in bears can't hide behind the average.
+#
+# Neither feature retrains anything — the strategy thresholds (THRESHOLD_S,
+# THRESHOLD_P, SHIFT_THRESH) are static.  We're measuring stability of a
+# fixed rule across time, not optimising it.
+
+# Regime definition: log-return slope over `lookback` days, annualised.
+# We classify a day as bull/bear/chop based on the trailing trend, then tag
+# each TRADE by its entry-day regime.  Thresholds are deliberately generous
+# (±15% annualised) so most days fall into bull/bear, not chop.
+_REGIME_LOOKBACK_DAYS  = 60
+_REGIME_BULL_THRESHOLD =  0.15    # annualised log-return
+_REGIME_BEAR_THRESHOLD = -0.15
+
+
+def _regime_for_date(daily_price: dict, sorted_price_dates: list, d) -> str | None:
+    """Classify date `d` as 'bull'/'bear'/'chop' based on trailing 60d trend.
+
+    Returns None if we don't have enough lookback (early window edge).  We use
+    log returns so the threshold is scale-free across BTC (£70k) and DOGE (£0.05);
+    the same +15% annualised drift means the same thing on both.
+    """
+    if d not in daily_price:
+        return None
+    end_idx = sorted_price_dates.index(d) if d in sorted_price_dates else None
+    if end_idx is None or end_idx < _REGIME_LOOKBACK_DAYS:
+        return None
+    start_date = sorted_price_dates[end_idx - _REGIME_LOOKBACK_DAYS]
+    start_p = daily_price[start_date]
+    end_p   = daily_price[d]
+    if start_p <= 0 or end_p <= 0:
+        return None
+    days = (d - start_date).days or 1
+    # log-return over the lookback, annualised to 252 trading-day equivalents
+    log_ret = math.log(end_p / start_p)
+    annualised = log_ret * (252 / days)
+    if annualised >= _REGIME_BULL_THRESHOLD:
+        return "bull"
+    if annualised <= _REGIME_BEAR_THRESHOLD:
+        return "bear"
+    return "chop"
+
+
+def _regime_split_stats(
+    daily_sentiment: dict,
+    daily_price: dict,
+    common: list,
+    signal: str,
+    hold_days: int,
+    costs_pct: float,
+    direction_mode: str = "momentum",
+) -> dict | None:
+    """Replay the same long-only sim as _compact_backtest_summary, but bucket
+    each trade by its entry-day regime so the per-regime net stats are visible.
+
+    Returns {'bull': {...}, 'bear': {...}, 'chop': {...}} where each value is
+    a stats dict like the `net` block of _compact_backtest_summary, or None
+    if no trades fired in that regime.  Returns None overall if the window
+    can't generate any trades at all (matches _compact_backtest_summary).
+    """
+    if len(common) < 14:
+        return None
+    sorted_price_dates = sorted(daily_price.keys())
+    THRESHOLD_S, THRESHOLD_P = 0.02, 0.5
+    SHIFT_THRESH = 0.05
+
+    # Mirror the signal-generation pass exactly.  Marker:
+    # BACKTEST_THRESHOLDS_DUPLICATED — change here, change _compact_backtest_summary too.
+    signal_series = {}
+    if signal == "divergence":
+        for i in range(14, len(common) + 1):
+            window = common[i - 14:i]
+            p7, r7 = window[:7], window[7:]
+            ps = sum(daily_sentiment[d] for d in p7) / 7
+            rs = sum(daily_sentiment[d] for d in r7) / 7
+            pp = sum(daily_price[d] for d in p7) / 7
+            rp = sum(daily_price[d] for d in r7) / 7
+            sc = rs - ps
+            pc = (rp - pp) / pp * 100 if pp > 0 else 0
+            if sc > THRESHOLD_S and pc < -THRESHOLD_P:
+                signal_series[common[i - 1]] = "bullish"
+            elif sc < -THRESHOLD_S and pc > THRESHOLD_P:
+                signal_series[common[i - 1]] = "bearish"
+    else:
+        for i, d in enumerate(common):
+            prior = [daily_sentiment[common[j]] for j in range(max(0, i - 7), i)]
+            if len(prior) >= 3:
+                shift = daily_sentiment[d] - sum(prior) / len(prior)
+                if shift > SHIFT_THRESH:
+                    signal_series[d] = "bullish"
+                elif shift < -SHIFT_THRESH:
+                    signal_series[d] = "bearish"
+
+    entry_trigger = "bearish" if direction_mode == "contrarian" else "bullish"
+    buckets = {"bull": [], "bear": [], "chop": [], "unknown": []}
+    in_trade_until = None
+    any_trade = False
+    for d in sorted(signal_series.keys()):
+        if in_trade_until and d <= in_trade_until:
+            continue
+        if signal_series[d] != entry_trigger:
+            continue
+        entry_date = next((pd for pd in sorted_price_dates if pd > d), None)
+        if not entry_date:
+            continue
+        entry_price = daily_price[entry_date]
+        target = entry_date + timedelta(days=hold_days)
+        exit_date = next((pd for pd in sorted_price_dates if pd >= target), sorted_price_dates[-1])
+        exit_price = daily_price[exit_date]
+        gross_ret = (exit_price - entry_price) / entry_price * 100
+        regime = _regime_for_date(daily_price, sorted_price_dates, entry_date) or "unknown"
+        buckets[regime].append(gross_ret)
+        in_trade_until = exit_date
+        any_trade = True
+
+    if not any_trade:
+        return None
+
+    def _stats(returns):
+        if not returns:
+            return None
+        n = len(returns)
+        winning = sum(1 for r in returns if r > 0)
+        compounded = 100.0
+        for r in returns:
+            compounded *= (1 + (r - costs_pct) / 100)
+        return {
+            "trades": n,
+            "win_rate": round(winning / n, 3),
+            "avg_return_pct": round(sum(returns) / n, 2),
+            "total_return_pct": round(compounded - 100, 2),
+        }
+
+    return {regime: _stats(rs) for regime, rs in buckets.items() if rs}
+
+
+def _walk_forward(
+    daily_sentiment: dict,
+    daily_price: dict,
+    common: list,
+    signal: str,
+    hold_days: int,
+    costs_pct: float,
+    direction_mode: str = "momentum",
+    window_days: int = 45,
+    step_days: int = 15,
+) -> dict | None:
+    """Slide a fixed-size test window through `common` and report per-fold net
+    stats + stability summary.
+
+    Unlike train/test ML walk-forward, we don't retrain anything: thresholds
+    are static, we're measuring stability of a fixed rule across regimes.
+    A flat-positive ribbon across folds is the credibility signal; alternating
+    +30% / -25% folds means the edge depends on which window you start from.
+
+    `window_days` must be ≥ 30 — anything shorter and the signal-detection
+    14-day burn-in dominates.  `step_days` controls overlap; step < window
+    means folds share data (typical), step ≥ window means disjoint.
+
+    Returns None if we can't fit even one fold.
+    """
+    if len(common) < window_days:
+        return None
+    window_days = max(30, window_days)
+    step_days   = max(1, step_days)
+
+    folds = []
+    fold_returns = []
+    i = 0
+    while i + window_days <= len(common):
+        fold_window = common[i : i + window_days]
+        fold = _compact_backtest_summary(
+            daily_sentiment, daily_price, fold_window,
+            signal, hold_days, costs_pct, direction_mode,
+        )
+        if fold is not None:
+            folds.append({
+                "start": str(fold_window[0]),
+                "end":   str(fold_window[-1]),
+                "net":   fold["net"],
+                "gross": fold["gross"],
+            })
+            fold_returns.append(fold["net"]["total_return_pct"])
+        else:
+            # Track empty folds too — a strategy that fires nothing for 3
+            # consecutive folds is also a stability signal.
+            folds.append({
+                "start": str(fold_window[0]),
+                "end":   str(fold_window[-1]),
+                "net":   None,
+                "gross": None,
+            })
+        i += step_days
+
+    if not fold_returns:
+        return {"folds": folds, "stability": None}
+
+    arr = np.array(fold_returns)
+    pos_folds = int((arr > 0).sum())
+    stability = {
+        "fold_window_days": window_days,
+        "fold_step_days":   step_days,
+        "folds_total":      len(folds),
+        "folds_with_trades": len(fold_returns),
+        "folds_positive":   pos_folds,
+        "folds_negative":   len(fold_returns) - pos_folds,
+        "pct_folds_positive": round(pos_folds / len(fold_returns), 3) if fold_returns else 0,
+        "mean_net_return_pct": round(float(arr.mean()), 2),
+        "std_net_return_pct":  round(float(arr.std()), 2) if len(arr) >= 2 else 0.0,
+        "best_fold_pct":  round(float(arr.max()), 2),
+        "worst_fold_pct": round(float(arr.min()), 2),
+    }
+    return {"folds": folds, "stability": stability}
+
+
 def _build_daily_series(headlines, prices):
     """Build the (daily_sentiment, daily_price, common_dates) triple used by
     every backtest variant.  Pulled out so admin-board doesn't redo the work
@@ -3036,6 +3271,8 @@ def admin_backtest_board(
     hold_days: int = 7,
     costs_bps: int | None = None,
     direction_mode: str = "momentum",
+    wf_window: int = 45,
+    wf_step:   int = 15,
     refresh: bool = False,
     db: Session = Depends(get_db),
     admin=Depends(require_super_admin),
@@ -3081,8 +3318,10 @@ def admin_backtest_board(
     hold_days = max(1, min(hold_days, 30))
     if costs_bps is not None:
         costs_bps = max(0, min(costs_bps, 500))   # 5% RT is already absurd
+    wf_window = max(30, min(wf_window, 180))      # any narrower and the 14d burn-in dominates
+    wf_step   = max(5,  min(wf_step,    90))
 
-    cache_key = (signal, hold_days, costs_bps, direction_mode)
+    cache_key = (signal, hold_days, costs_bps, direction_mode, wf_window, wf_step)
     now = datetime.utcnow()
     cached = _BACKTEST_BOARD_CACHE
     if (not refresh
@@ -3127,7 +3366,7 @@ def admin_backtest_board(
 
             # 2/3 IS, 1/3 OOS — conventional split.  We don't slide the boundary
             # because the thresholds are static, so any split point works the
-            # same way.  Walk-forward analysis is a separate tool (#3 on roadmap).
+            # same way.  For sliding-window stability, see `walk_forward` below.
             split = (len(common) * 2) // 3
             is_window  = common[:split]
             oos_window = common[split:]
@@ -3139,12 +3378,19 @@ def admin_backtest_board(
                 daily_sentiment, daily_price, is_window, signal, hold_days, costs_pct, direction_mode)
             oos_summary  = _compact_backtest_summary(
                 daily_sentiment, daily_price, oos_window, signal, hold_days, costs_pct, direction_mode)
+            by_regime    = _regime_split_stats(
+                daily_sentiment, daily_price, common, signal, hold_days, costs_pct, direction_mode)
+            walk_fwd     = _walk_forward(
+                daily_sentiment, daily_price, common, signal, hold_days, costs_pct, direction_mode,
+                window_days=wf_window, step_days=wf_step)
 
             rows.append({
                 "ticker": t, "category": _category_for(t),
                 "full": full_summary,
                 "in_sample": is_summary,
                 "out_of_sample": oos_summary,
+                "by_regime":    by_regime,
+                "walk_forward": walk_fwd,
                 "costs_pct_per_trade": costs_pct,
                 "window_days": (max(common) - min(common)).days if common else 0,
             })
@@ -3171,6 +3417,12 @@ def admin_backtest_board(
         "costs_bps_override": costs_bps,
         "costs_defaults_by_category_bps": _TICKER_COSTS_BPS_DEFAULT,
         "split_ratio": "2/3 IS · 1/3 OOS",
+        "walk_forward_params": {"window_days": wf_window, "step_days": wf_step},
+        "regime_thresholds": {
+            "lookback_days": _REGIME_LOOKBACK_DAYS,
+            "bull_min_annualised": _REGIME_BULL_THRESHOLD,
+            "bear_max_annualised": _REGIME_BEAR_THRESHOLD,
+        },
         "rows": rows,
     }
     _BACKTEST_BOARD_CACHE.update({
