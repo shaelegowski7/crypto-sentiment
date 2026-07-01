@@ -101,6 +101,39 @@ class Brief(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SignalQuality(Base):
+    """Per-ticker cached snapshot of the production backtest.
+
+    Refreshed once daily by _refresh_signal_quality().  Consulted by
+    check_alerts() before firing an alert: if `gate_ok` is False the alert
+    is suppressed (with the reason logged), so users only receive signals
+    on tickers where our own backtest says the strategy actually earns money
+    net of transaction costs.
+
+    Config the numbers are computed against is fixed to the production alert
+    settings — signal='shift', hold_days=7, direction_mode='momentum', default
+    per-category costs.  If you change alert generation to use a different
+    signal, update _refresh_signal_quality to match, otherwise the gate will
+    be measuring the wrong strategy.
+
+    `oos_net_pct` and `wf_pct_folds_positive` are stored so admin/dashboard
+    surfaces can render "why is this ticker (or not) firing?" without
+    recomputing.  `reason` is a short human-readable string for the same
+    purpose — e.g. "OOS net -4.2%" or "Insufficient data (12 headlines)".
+    """
+    __tablename__ = "signal_quality"
+
+    ticker = Column(String, primary_key=True, index=True)
+    gate_ok = Column(Boolean, default=False, index=True)
+    oos_net_pct = Column(Float, nullable=True)
+    wf_pct_folds_positive = Column(Float, nullable=True)
+    wf_folds_total = Column(Integer, nullable=True)
+    wf_folds_positive = Column(Integer, nullable=True)
+    n_trades_full = Column(Integer, nullable=True)
+    reason = Column(String, nullable=True)
+    computed_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class APIKey(Base):
     __tablename__ = "api_keys"
 

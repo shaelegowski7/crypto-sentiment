@@ -179,6 +179,30 @@ def build_trade_card(db: Session, ticker: str, hold_days: int = 7) -> dict:
     ).order_by(models.Price.date).all()
 
     notes = []
+    # Backtest-gated alerts (see main._signal_quality_gate): every card carries
+    # the same SignalQuality snapshot check_alerts consulted before firing.
+    # For a passing gate the recipient sees the OOS-net + walk-forward evidence
+    # for why this ticker was allowed to fire.  For a failing gate the card
+    # renderer will hide the trade recommendation (defense-in-depth against
+    # ever displaying a signal the gate rejected).
+    quality_gate_row = db.query(models.SignalQuality).filter(
+        models.SignalQuality.ticker == ticker
+    ).first()
+    quality_gate = None
+    if quality_gate_row is not None:
+        quality_gate = {
+            "gate_ok": bool(quality_gate_row.gate_ok),
+            "oos_net_pct": quality_gate_row.oos_net_pct,
+            "wf_pct_folds_positive": quality_gate_row.wf_pct_folds_positive,
+            "wf_folds_total": quality_gate_row.wf_folds_total,
+            "wf_folds_positive": quality_gate_row.wf_folds_positive,
+            "reason": quality_gate_row.reason,
+            "computed_at": (
+                quality_gate_row.computed_at.isoformat() + "Z"
+                if quality_gate_row.computed_at else None
+            ),
+        }
+
     card_skeleton = {
         "ticker": ticker,
         "generated_at": datetime.utcnow().isoformat() + "Z",
@@ -192,6 +216,7 @@ def build_trade_card(db: Session, ticker: str, hold_days: int = 7) -> dict:
         "days_since_similar": None,
         "divergence": None,
         "backtest": None,
+        "quality_gate": quality_gate,
         "entry": None,
         "exit_in_days": None,
         "notes": notes,
@@ -281,6 +306,7 @@ def build_trade_card(db: Session, ticker: str, hold_days: int = 7) -> dict:
         "days_since_similar": days_since_similar,
         "divergence": divergence,
         "backtest": backtest,
+        "quality_gate": quality_gate,
         "entry": "now" if direction != "NEUTRAL" else None,
         "exit_in_days": hold_days if direction != "NEUTRAL" else None,
         "notes": notes,
@@ -329,6 +355,21 @@ def format_trade_card_text(card: dict) -> str:
             f"Historical edge: {int(bt['win_rate']*100)}% win rate · "
             f"avg {bt['avg_return_pct']:+.2f}% over {bt['hold_days']}d (n={bt['sample_size']})"
         )
+
+    # Backtest-gated evidence — this is the "why did we let this fire" line.
+    # Only rendered when the gate is present AND passed; a passing gate is a
+    # trust signal, a failing gate should never reach here (check_alerts drops
+    # the fire before build_trade_card sees it), so we're defensive-neutral.
+    if card.get("quality_gate") and card["quality_gate"].get("gate_ok"):
+        qg = card["quality_gate"]
+        oos = qg.get("oos_net_pct")
+        wf_p = qg.get("wf_folds_positive")
+        wf_t = qg.get("wf_folds_total")
+        parts = []
+        if oos is not None: parts.append(f"OOS net {oos:+.2f}%")
+        if wf_p is not None and wf_t: parts.append(f"WF {wf_p}/{wf_t} folds")
+        if parts:
+            lines.append("Backtest-validated: " + " · ".join(parts))
 
     if card["entry"]:
         lines.append(f"Entry: {card['entry']} · Exit: in {card['exit_in_days']}d · "
@@ -422,6 +463,38 @@ def format_trade_card_html(card: dict) -> str:
     else:
         edge_html = ""
 
+    # Backtest-gated evidence strip — the "why we let this fire" panel.  Only
+    # rendered when the SignalQuality snapshot passed the gate, matching what
+    # check_alerts required before allowing the alert to trigger.  Cheap trust
+    # signal — a recipient can see the OOS net and walk-forward positive-fold
+    # count without having to open the admin board.
+    qg = card.get("quality_gate")
+    if qg and qg.get("gate_ok"):
+        oos = qg.get("oos_net_pct")
+        wf_p = qg.get("wf_folds_positive")
+        wf_t = qg.get("wf_folds_total")
+        oos_color = _direction_color("LONG" if (oos or 0) >= 0 else "SHORT")
+        gate_html = f"""
+        <table cellpadding="0" cellspacing="0" style="width:100%;background:#0d1117;border:1px solid #21262d;border-radius:2px;margin:8px 0;">
+          <tr>
+            <td style="padding:14px 18px;">
+              <p style="font-size:10px;letter-spacing:0.15em;color:#3fb950;text-transform:uppercase;margin:0 0 8px;">Backtest-validated · why this alert fired</p>
+              <table cellpadding="0" cellspacing="0" style="width:100%;">
+                <tr>
+                  <td style="font-size:16px;font-weight:600;color:{oos_color};">{"—" if oos is None else f"{oos:+.2f}%"}</td>
+                  <td style="font-size:16px;font-weight:600;color:#e6edf3;text-align:right;">{"—" if not wf_t else f"{wf_p}/{wf_t}"}</td>
+                </tr>
+                <tr>
+                  <td style="font-size:9px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;padding-top:4px;">OOS net (post-cost)</td>
+                  <td style="font-size:9px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;padding-top:4px;text-align:right;">Walk-fwd positive folds</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>"""
+    else:
+        gate_html = ""
+
     # Trade-plan strip
     if card["direction"] != "NEUTRAL":
         plan_html = f"""
@@ -462,6 +535,7 @@ def format_trade_card_html(card: dict) -> str:
           <h1 style="font-size:26px;font-weight:600;color:{dir_color};margin:0 0 24px;line-height:1.2;">{headline}</h1>
           <table cellpadding="0" cellspacing="0" style="width:100%;border-top:1px solid #21262d;border-bottom:1px solid #21262d;">{rows_html}</table>
           {plan_html}
+          {gate_html}
           {edge_html}
           {notes_html}
           <table cellpadding="0" cellspacing="0" style="margin:24px 0 8px;">

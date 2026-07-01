@@ -368,6 +368,43 @@ def get_api_key(x_api_key: str = Header(None), db: Session = Depends(get_db)):
 # Scheduled jobs
 # ---------------------------------------------------------------------------
 
+# Backtest-gated alerts: two thresholds a ticker must clear for an alert to
+# fire.  A ticker whose OOS net is ≤0 or whose walk-forward positive-fold
+# ratio is <70% is deemed to lack "our own backtest thinks the edge is real"
+# — we suppress the alert rather than deliver a signal we cannot defend.
+# The numbers are refreshed daily by _refresh_signal_quality(); check_alerts
+# just reads the cached SignalQuality row (hot path stays fast).
+_SIGNAL_QUALITY_MIN_OOS_NET_PCT   = 0.0    # strictly positive
+_SIGNAL_QUALITY_MIN_WF_POS_RATIO  = 0.7    # ≥70% of walk-forward folds net-positive
+
+
+def _signal_quality_gate(db, ticker: str) -> tuple[bool, str, dict | None]:
+    """Consult the cached SignalQuality snapshot for `ticker`.
+
+    Returns (gate_ok, reason, snapshot_dict).  When no row exists (fresh
+    ticker, first-day-of-deploy, refresh crashed), we fail CLOSED with a
+    reason of "no snapshot yet" so alerts don't fire on unvalidated tickers.
+    Startup runs _refresh_signal_quality once so this only happens for
+    genuinely-new tickers or after a wiped DB.
+    """
+    row = db.query(models.SignalQuality).filter(
+        models.SignalQuality.ticker == ticker.upper()
+    ).first()
+    if row is None:
+        return False, "no snapshot yet — will retry after next daily refresh", None
+    snapshot = {
+        "gate_ok": row.gate_ok,
+        "oos_net_pct": row.oos_net_pct,
+        "wf_pct_folds_positive": row.wf_pct_folds_positive,
+        "wf_folds_total": row.wf_folds_total,
+        "wf_folds_positive": row.wf_folds_positive,
+        "n_trades_full": row.n_trades_full,
+        "reason": row.reason,
+        "computed_at": row.computed_at.isoformat() + "Z" if row.computed_at else None,
+    }
+    return bool(row.gate_ok), row.reason or ("gate passed" if row.gate_ok else "gate failed"), snapshot
+
+
 def check_alerts(db):
     alerts = db.query(models.Alert).filter(models.Alert.active == True).all()
 
@@ -391,6 +428,14 @@ def check_alerts(db):
         )
 
         if triggered:
+            # Backtest gate — suppress alerts on tickers our own backtest can't
+            # validate.  A user who set an alert on a gated ticker gets nothing
+            # this cycle; the log entry names the reason so we can inspect via
+            # /admin/signal-quality and (eventually) surface it in the UI.
+            gate_ok, gate_reason, gate_snapshot = _signal_quality_gate(db, alert.ticker)
+            if not gate_ok:
+                print(f"[ALERT-GATE] {alert.ticker}: suppressing alert — {gate_reason}")
+                continue
             # Build the full trade card BEFORE sending — if the card fails to
             # build (eg. backtest DB queries crash), we'd rather log and skip
             # than fall back to a bare-data email that under-delivers value.
@@ -735,7 +780,33 @@ scheduler.add_job(reset_monthly_api_usage, CronTrigger(day=1, hour=0, minute=0, 
 # Settle ripened alert outcomes once a day.  06:00 UTC = after crypto close in
 # all timezones we care about and well after equity weekly opens have settled.
 scheduler.add_job(settle_alert_outcomes, CronTrigger(hour=6, minute=15, timezone="UTC"))
+# Refresh SignalQuality daily at 05:00 UTC — before the 06:15 outcome-settlement
+# job and well before the first business-hours alerts so gate decisions are
+# never more than 24h stale.  See _run_signal_quality_refresh docstring.
+scheduler.add_job(_run_signal_quality_refresh, CronTrigger(hour=5, minute=0, timezone="UTC"))
 scheduler.start()
+
+# First-deploy safety net: if the SignalQuality table is empty (fresh table on
+# first release, or DB wipe), populate it once in the background so alerts
+# don't fail-closed on every ticker until tomorrow's 05:00 UTC job.  Uses the
+# same background task machinery as the admin refresh route.
+def _bootstrap_signal_quality_if_empty():
+    db = SessionLocal()
+    try:
+        has_any = db.query(models.SignalQuality).first() is not None
+    finally:
+        db.close()
+    if not has_any:
+        print("[SIGNAL-QUALITY] table empty — running one-time bootstrap")
+        _run_signal_quality_refresh()
+    else:
+        print("[SIGNAL-QUALITY] table populated — scheduler will refresh at 05:00 UTC daily")
+
+# Kick the bootstrap in a scheduler one-shot so app start-up doesn't block on
+# a 30-60s backtest sweep.  If the process dies mid-bootstrap, the next start
+# just tries again; the refresh is idempotent (upsert semantics).
+scheduler.add_job(_bootstrap_signal_quality_if_empty, "date",
+                  run_date=datetime.utcnow() + timedelta(seconds=30))
 
 
 # ---------------------------------------------------------------------------
@@ -3265,6 +3336,148 @@ def _build_daily_series(headlines, prices):
     return daily_sentiment, daily_price, common
 
 
+# ---------------------------------------------------------------------------
+# Signal-quality refresh — writes the SignalQuality gate consulted by check_alerts
+# ---------------------------------------------------------------------------
+# Runs the same helpers as /admin/backtest-board but pinned to the production
+# alert config (shift signal, 7d hold, momentum, default per-category costs).
+# Writes one SignalQuality row per ticker.  Registered as a daily scheduler job
+# so alerts always fire against evidence <=24h old, and re-run on startup if
+# the table is empty (first deploy after this feature ships).
+#
+# Not exposed as an endpoint — admin can force a refresh via
+# POST /admin/signal-quality/refresh (below), but the scheduler is the normal
+# operator.  Deliberately sequential (not concurrent) — 42 tickers times ~1s
+# each is under a minute and avoids DB session juggling.
+
+def _run_signal_quality_refresh() -> dict:
+    """Compute + upsert SignalQuality for every tracked ticker.
+
+    Returns a summary dict with per-ticker outcomes so the admin endpoint can
+    show what changed.  Callers get their own SessionLocal so the function can
+    be invoked from both the scheduler thread and a FastAPI BackgroundTask.
+    """
+    from sqlalchemy import func as _f  # noqa: F401 — kept for parity with other refreshers
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+
+    # Production alert config, pinned.  Change here + on the alert side
+    # together — mismatched configs would gate the wrong strategy.
+    SIGNAL = "shift"
+    HOLD_DAYS = 7
+    DIRECTION_MODE = "momentum"
+
+    since = datetime.utcnow() - timedelta(days=180)
+    db = SessionLocal()
+    outcomes = {}
+    try:
+        for t in all_tickers:
+            try:
+                costs_pct = _costs_pct_for(t, None)
+                headlines = db.query(models.Headline).filter(
+                    models.Headline.ticker == t,
+                    models.Headline.published_at >= since,
+                ).order_by(models.Headline.published_at).all()
+                prices = db.query(models.Price).filter(
+                    models.Price.ticker == t,
+                    models.Price.date >= since,
+                ).order_by(models.Price.date).all()
+
+                if len(headlines) < 20 or len(prices) < 30:
+                    _upsert_signal_quality(db, t, gate_ok=False,
+                        reason=f"Insufficient data ({len(headlines)} headlines, {len(prices)} prices)",
+                    )
+                    outcomes[t] = "insufficient data"
+                    continue
+
+                daily_sentiment, daily_price, common = _build_daily_series(headlines, prices)
+                if len(common) < 20:
+                    _upsert_signal_quality(db, t, gate_ok=False,
+                        reason=f"Only {len(common)} overlapping day-pairs (need 20)",
+                    )
+                    outcomes[t] = "insufficient overlap"
+                    continue
+
+                # 2/3 IS · 1/3 OOS — same split as the admin board.
+                split = (len(common) * 2) // 3
+                oos_window = common[split:]
+
+                oos = _compact_backtest_summary(
+                    daily_sentiment, daily_price, oos_window,
+                    SIGNAL, HOLD_DAYS, costs_pct, DIRECTION_MODE,
+                )
+                full = _compact_backtest_summary(
+                    daily_sentiment, daily_price, common,
+                    SIGNAL, HOLD_DAYS, costs_pct, DIRECTION_MODE,
+                )
+                wf = _walk_forward(
+                    daily_sentiment, daily_price, common,
+                    SIGNAL, HOLD_DAYS, costs_pct, DIRECTION_MODE,
+                )
+
+                oos_net = oos["net"]["total_return_pct"] if oos else None
+                wf_stab = wf.get("stability") if wf else None
+                wf_pct  = wf_stab["pct_folds_positive"] if wf_stab else None
+
+                # Both gates must clear.  Missing values = gate fails with the
+                # specific missing-piece as the reason.
+                if oos_net is None:
+                    reason = "No OOS trades — strategy didn't fire in test window"
+                    passed = False
+                elif oos_net <= _SIGNAL_QUALITY_MIN_OOS_NET_PCT:
+                    reason = f"OOS net {oos_net:+.2f}% ≤ {_SIGNAL_QUALITY_MIN_OOS_NET_PCT:+.2f}%"
+                    passed = False
+                elif wf_pct is None:
+                    reason = "No walk-forward folds — window too short"
+                    passed = False
+                elif wf_pct < _SIGNAL_QUALITY_MIN_WF_POS_RATIO:
+                    reason = f"WF positive ratio {wf_pct:.2f} < {_SIGNAL_QUALITY_MIN_WF_POS_RATIO:.2f}"
+                    passed = False
+                else:
+                    reason = f"Passed (OOS net {oos_net:+.2f}%, WF {wf_stab['folds_positive']}/{wf_stab['folds_with_trades']})"
+                    passed = True
+
+                _upsert_signal_quality(
+                    db, t,
+                    gate_ok=passed,
+                    oos_net_pct=oos_net,
+                    wf_pct_folds_positive=wf_pct,
+                    wf_folds_total=(wf_stab or {}).get("folds_with_trades"),
+                    wf_folds_positive=(wf_stab or {}).get("folds_positive"),
+                    n_trades_full=(full or {}).get("gross", {}).get("trades"),
+                    reason=reason,
+                )
+                outcomes[t] = "pass" if passed else "fail"
+            except Exception as e:
+                # Never let one ticker crash the whole refresh — log + continue.
+                # A ticker with no row keeps whatever it had; check_alerts will
+                # still consult that (possibly stale) row until the next pass.
+                db.rollback()
+                outcomes[t] = f"error: {e}"
+                print(f"[SIGNAL-QUALITY] {t}: error — {e}")
+        db.commit()
+    finally:
+        db.close()
+
+    passed = sum(1 for v in outcomes.values() if v == "pass")
+    failed = sum(1 for v in outcomes.values() if v == "fail")
+    print(f"[SIGNAL-QUALITY] refresh done — {passed} pass, {failed} fail, "
+          f"{len(outcomes) - passed - failed} other")
+    return {"passed": passed, "failed": failed, "outcomes": outcomes}
+
+
+def _upsert_signal_quality(db: Session, ticker: str, **fields) -> None:
+    """Insert-or-update the SignalQuality row for `ticker`."""
+    row = db.query(models.SignalQuality).filter(
+        models.SignalQuality.ticker == ticker
+    ).first()
+    fields.setdefault("computed_at", datetime.utcnow())
+    if row is None:
+        db.add(models.SignalQuality(ticker=ticker, **fields))
+    else:
+        for k, v in fields.items():
+            setattr(row, k, v)
+
+
 @app.get("/admin/backtest-board")
 def admin_backtest_board(
     signal: str = "shift",
@@ -3429,6 +3642,71 @@ def admin_backtest_board(
         "key": cache_key, "computed_at": now, "data": response,
     })
     return response
+
+
+@app.get("/admin/signal-quality")
+def admin_signal_quality(
+    db: Session = Depends(get_db),
+    admin=Depends(require_super_admin),
+):
+    """Inspect the current SignalQuality gate state per ticker.
+
+    Returns every tracked ticker's most-recent snapshot: whether the gate
+    passed, the OOS-net-per-cent and walk-forward positive-fold ratio it
+    passed/failed on, and a human-readable `reason`.  Sorted with passing
+    tickers first (by OOS-net descending) so the "why isn't my alert
+    firing?" investigation goes fastest.
+
+    Read-only — the daily scheduler writes.  Trigger a manual refresh via
+    POST /admin/signal-quality/refresh if you need fresher numbers.
+    """
+    rows = db.query(models.SignalQuality).all()
+    out = []
+    for r in rows:
+        out.append({
+            "ticker": r.ticker,
+            "gate_ok": bool(r.gate_ok),
+            "oos_net_pct": r.oos_net_pct,
+            "wf_pct_folds_positive": r.wf_pct_folds_positive,
+            "wf_folds_total": r.wf_folds_total,
+            "wf_folds_positive": r.wf_folds_positive,
+            "n_trades_full": r.n_trades_full,
+            "reason": r.reason,
+            "computed_at": r.computed_at.isoformat() + "Z" if r.computed_at else None,
+        })
+    # Passing tickers first; among each group sort by OOS net desc so the
+    # sharpest edges lead.  A gate_ok=True with oos_net_pct=None can't happen
+    # (see the "No OOS trades" path in _run_signal_quality_refresh), but we
+    # guard anyway to keep the sort deterministic if that ever changes.
+    out.sort(key=lambda r: (
+        not r["gate_ok"],
+        -(r["oos_net_pct"] if r["oos_net_pct"] is not None else -1e9),
+    ))
+    return {
+        "computed_at": datetime.utcnow().isoformat() + "Z",
+        "gate_thresholds": {
+            "min_oos_net_pct":       _SIGNAL_QUALITY_MIN_OOS_NET_PCT,
+            "min_wf_pos_fold_ratio": _SIGNAL_QUALITY_MIN_WF_POS_RATIO,
+        },
+        "passing": sum(1 for r in out if r["gate_ok"]),
+        "failing": sum(1 for r in out if not r["gate_ok"]),
+        "rows": out,
+    }
+
+
+@app.post("/admin/signal-quality/refresh")
+def admin_signal_quality_refresh(
+    background_tasks: BackgroundTasks,
+    admin=Depends(require_super_admin),
+):
+    """Force a synchronous recompute of every ticker's SignalQuality row.
+
+    Queued as a BackgroundTask so the HTTP call returns immediately — the
+    actual refresh takes 30-60s for all 42 tickers.  Log lines land in the
+    Railway console under [SIGNAL-QUALITY].
+    """
+    background_tasks.add_task(_run_signal_quality_refresh)
+    return {"message": "Signal-quality refresh queued — check logs for progress"}
 
 
 @app.get("/admin/track-record")
