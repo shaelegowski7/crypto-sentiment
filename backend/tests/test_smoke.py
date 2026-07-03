@@ -40,6 +40,19 @@ def test_v1_route_requires_api_key():
     assert resp.status_code == 401
 
 
-def test_unknown_route_is_404_not_500():
+def test_v1_error_uses_envelope():
+    # /v1/* errors use {"error": {"type", "message"}} (Stripe/Anthropic-style)
+    # so SDKs can branch on error.type instead of parsing prose.
+    resp = client.get("/v1/usage")
+    body = resp.json()
+    assert body["error"]["type"] == "authentication_error"
+    assert "message" in body["error"]
+
+
+def test_non_v1_error_keeps_default_shape():
+    # Dashboard/admin routes are untouched — the frontend already parses
+    # the plain {"detail": ...} shape for these.
     resp = client.get("/this-route-does-not-exist")
     assert resp.status_code == 404
+    assert resp.json() == {"detail": "Not Found"}
+    assert "error" not in resp.json()

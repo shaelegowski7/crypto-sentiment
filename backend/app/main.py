@@ -22,6 +22,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from collections import defaultdict
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Gauge, Histogram
@@ -222,12 +224,66 @@ async def add_request_id(request: Request, call_next):
     return response
 
 
+# ---------------------------------------------------------------------------
+# /v1 error envelope
+# ---------------------------------------------------------------------------
+# Every /v1 error responds with the same shape — {"error": {"type", "message"}}
+# — instead of FastAPI's bare {"detail": "..."}, so SDKs can branch on
+# `error.type` (Stripe/Anthropic-style) rather than parsing prose. Scoped to
+# /v1/* only: dashboard/admin/webhook routes keep their existing {"detail"}
+# shape since the frontend already parses that.
+
+def _v1_error_type(status_code: int) -> str:
+    return {
+        400: "invalid_request_error",
+        401: "authentication_error",
+        403: "permission_error",
+        404: "not_found_error",
+        422: "invalid_request_error",
+        429: "rate_limit_error",
+    }.get(status_code, "api_error")
+
+
+def _is_v1_path(request: Request) -> bool:
+    return request.url.path.startswith("/v1/")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if not _is_v1_path(request):
+        # Preserve FastAPI's default shape for every non-/v1 route.
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"type": _v1_error_type(exc.status_code), "message": exc.detail}},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if not _is_v1_path(request):
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    # exc.errors() is a list of pydantic error dicts — collapse to one
+    # readable message rather than exposing the raw structure.
+    first = exc.errors()[0] if exc.errors() else {}
+    loc = " -> ".join(str(p) for p in first.get("loc", []) if p != "query")
+    message = f"{loc}: {first.get('msg')}" if loc else (first.get("msg") or "Invalid request")
+    return JSONResponse(
+        status_code=422,
+        content={"error": {"type": "invalid_request_error", "message": message}},
+    )
+
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    response = JSONResponse(
-        status_code=429,
-        content={"detail": f"Rate limit exceeded. {exc.detail}"}
+    message = f"Rate limit exceeded. {exc.detail}"
+    content = (
+        {"error": {"type": "rate_limit_error", "message": message}}
+        if _is_v1_path(request)
+        else {"detail": message}
     )
+    response = JSONResponse(status_code=429, content=content)
     # Our custom handler bypasses slowapi's default, so re-inject the
     # X-RateLimit-*/Retry-After headers it would have set.
     try:
