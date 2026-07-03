@@ -33,6 +33,16 @@
   min-height: 100vh;
   color: var(--text);
   text-align: left;
+  /* never let an overwide child (charts, mono strings) widen the page */
+  overflow-x: clip;
+}
+
+/* grid/flex children may shrink below their content width */
+.stat-row > *,
+.grid-2 > *,
+.signal-metrics > *,
+.main > * {
+  min-width: 0;
 }
 
 .dashboard ::selection { background: rgba(240, 180, 41, 0.25); }
@@ -363,6 +373,44 @@
   width: 1px;
   height: 16px;
   background: var(--border2);
+}
+
+/* Segmented control chips — chart range/currency, backtest knobs, export */
+.seg-btn {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.seg-btn:hover:not(.locked):not(.active):not(.active-blue) {
+  color: var(--text);
+  border-color: var(--border2);
+}
+
+.seg-btn.active {
+  color: var(--accent);
+  border-color: rgba(240, 180, 41, 0.45);
+  background: rgba(240, 180, 41, 0.08);
+}
+
+.seg-btn.active-blue {
+  color: var(--accent2);
+  border-color: rgba(108, 178, 255, 0.4);
+  background: rgba(108, 178, 255, 0.08);
+}
+
+.seg-btn.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .correlation-panel {
@@ -1383,6 +1431,7 @@
 
 @media (max-width: 768px) {
   .topbar { padding: 10px 16px; }
+  .topbar-right { gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .category-bar { padding: 12px 16px 8px; }
   .ticker-bar { padding: 0 12px; }
   .main { padding: 16px; gap: 14px; }
@@ -1391,4 +1440,32 @@
   .tagline { display: none; }
   .logo-divider { display: none; }
   .upgrade-banner { flex-direction: column; align-items: flex-start; }
+
+  /* panels: let wide tables scroll instead of breaking layout */
+  .panel { overflow-x: auto; }
+  .panel-body { padding: 14px; }
+  .panel-header {
+    padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .panel-controls { flex-wrap: wrap; }
+
+  .signal-card { padding: 16px; }
+  .signal-narrative { font-size: 13.5px; }
+  .signal-metrics { gap: 16px; }
+  .signal-divider { display: none; }
+  .signal-metric { min-width: calc(50% - 8px); }
+
+  .correlation-value { font-size: 28px; }
+  .stat-value { font-size: 22px; }
+
+  .auth-modal { padding: 26px 20px; }
+}
+
+@media (max-width: 480px) {
+  .stat-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card { padding: 14px; }
+  .live-indicator { display: none; }
+  .headline-item { padding: 12px 14px; }
 }
