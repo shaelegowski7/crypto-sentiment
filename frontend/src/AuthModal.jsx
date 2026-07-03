@@ -72,116 +72,49 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
     })
   }
 
-  const styles = {
-    overlay: {
-      position: "fixed", inset: 0, background: "rgba(8,12,16,0.85)",
-      backdropFilter: "blur(4px)", zIndex: 200,
-      display: "flex", alignItems: "center", justifyContent: "center",
-    },
-    modal: {
-      background: "#0d1117", border: "1px solid #21262d", borderRadius: "4px",
-      padding: "40px", width: "100%", maxWidth: "400px", position: "relative",
-    },
-    close: {
-      position: "absolute", top: "16px", right: "16px",
-      background: "transparent", border: "none", color: "#7d8590",
-      cursor: "pointer", fontFamily: "IBM Plex Mono", fontSize: "18px",
-    },
-    logo: {
-      fontFamily: "IBM Plex Mono", fontSize: "13px", fontWeight: 600,
-      letterSpacing: "0.2em", color: "#f0b429", textTransform: "uppercase",
-      marginBottom: "8px",
-    },
-    subtitle: {
-      fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590",
-      letterSpacing: "0.1em", marginBottom: "32px",
-    },
-    input: {
-      width: "100%", background: "#161b22", border: "1px solid #30363d",
-      borderRadius: "2px", padding: "10px 14px", fontFamily: "IBM Plex Mono",
-      fontSize: "12px", color: "#e6edf3", outline: "none", marginBottom: "10px",
-      boxSizing: "border-box",
-    },
-    btnPrimary: {
-      width: "100%", background: "#f0b429", border: "none", borderRadius: "2px",
-      padding: "12px", fontFamily: "IBM Plex Mono", fontSize: "11px",
-      fontWeight: 600, letterSpacing: "0.1em", color: "#080c10",
-      cursor: "pointer", textTransform: "uppercase", marginBottom: "10px",
-    },
-    btnGoogle: {
-      width: "100%", background: "transparent", border: "1px solid #30363d",
-      borderRadius: "2px", padding: "12px", fontFamily: "IBM Plex Mono",
-      fontSize: "11px", letterSpacing: "0.1em", color: "#e6edf3",
-      cursor: "pointer", textTransform: "uppercase", marginBottom: "24px",
-    },
-    toggle: {
-      fontFamily: "IBM Plex Mono", fontSize: "11px", color: "#7d8590",
-      textAlign: "center",
-    },
-    toggleLink: {
-      color: "#f0b429", cursor: "pointer", textDecoration: "underline",
-    },
-    error: {
-      fontFamily: "IBM Plex Mono", fontSize: "11px", color: "#f85149",
-      marginBottom: "12px", letterSpacing: "0.05em",
-    },
-    divider: {
-      display: "flex", alignItems: "center", gap: "12px", margin: "16px 0",
-    },
-    dividerLine: {
-      flex: 1, height: "1px", background: "#21262d",
-    },
-    dividerText: {
-      fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590",
-      letterSpacing: "0.1em",
-    },
-  }
-
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <button style={styles.close} onClick={onClose}>×</button>
+    <div className="auth-overlay" onClick={onClose}>
+      <div className="auth-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Authentication">
+        <button className="auth-close" onClick={onClose} aria-label="Close">×</button>
 
-        <div style={styles.logo}>SentimentFX</div>
-        <div style={styles.subtitle}>
-          {mode === "login" ? "SIGN IN TO YOUR ACCOUNT" : mode === "signup" ? "CREATE AN ACCOUNT" : "RESET PASSWORD"}
+        <div className="auth-logo">SentimentFX</div>
+        <div className="auth-subtitle">
+          {mode === "login" ? "Sign in to your account" : mode === "signup" ? "Create an account" : "Reset password"}
         </div>
 
         {mode === "reset" ? (
           resetSent ? (
-            <div style={{ fontFamily: "IBM Plex Mono", fontSize: "11px", color: "#3fb950", marginBottom: "24px" }}>
-              Reset link sent — check your inbox.
-            </div>
+            <div className="auth-success">Reset link sent — check your inbox.</div>
           ) : (
             <>
               <input
-                style={styles.input}
+                className="auth-input"
                 type="email"
                 placeholder="your@email.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handlePasswordReset()}
               />
-              {error && <div style={styles.error}>{error}</div>}
-              <button style={styles.btnPrimary} onClick={handlePasswordReset} disabled={loading}>
+              {error && <div className="auth-error">{error}</div>}
+              <button className="auth-btn-primary" onClick={handlePasswordReset} disabled={loading}>
                 {loading ? "..." : "Send reset link"}
               </button>
             </>
           )
         ) : (
           <>
-            <button style={styles.btnGoogle} onClick={handleGoogle}>
+            <button className="auth-btn-google" onClick={handleGoogle}>
               Continue with Google
             </button>
 
-            <div style={styles.divider}>
-              <div style={styles.dividerLine} />
-              <span style={styles.dividerText}>OR</span>
-              <div style={styles.dividerLine} />
+            <div className="auth-divider">
+              <div className="auth-divider-line" />
+              <span className="auth-divider-text">OR</span>
+              <div className="auth-divider-line" />
             </div>
 
             <input
-              style={styles.input}
+              className="auth-input"
               type="email"
               placeholder="your@email.com"
               value={email}
@@ -189,7 +122,7 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
               onKeyDown={e => e.key === "Enter" && handleEmailAuth()}
             />
             <input
-              style={styles.input}
+              className="auth-input"
               type="password"
               placeholder="password"
               value={password}
@@ -198,36 +131,33 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
             />
 
             {mode === "login" && (
-              <div style={{ textAlign: "right", marginBottom: "4px" }}>
-                <span
-                  style={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", cursor: "pointer" }}
-                  onClick={() => { setError(null); setMode("reset") }}
-                >
+              <div className="auth-forgot-row">
+                <span className="auth-forgot" onClick={() => { setError(null); setMode("reset") }}>
                   Forgot password?
                 </span>
               </div>
             )}
 
-            {error && <div style={styles.error}>{error}</div>}
+            {error && <div className="auth-error">{error}</div>}
 
-            <button style={styles.btnPrimary} onClick={handleEmailAuth} disabled={loading}>
+            <button className="auth-btn-primary" onClick={handleEmailAuth} disabled={loading}>
               {loading ? "..." : mode === "login" ? "Sign In" : "Create Account"}
             </button>
           </>
         )}
 
-        <div style={styles.toggle}>
+        <div className="auth-toggle">
           {mode === "reset" ? (
-            <span style={styles.toggleLink} onClick={() => { setMode("login"); setResetSent(false); setError(null) }}>
+            <span className="auth-toggle-link" onClick={() => { setMode("login"); setResetSent(false); setError(null) }}>
               Back to sign in
             </span>
           ) : mode === "login" ? (
             <>No account?{" "}
-              <span style={styles.toggleLink} onClick={() => setMode("signup")}>Sign up</span>
+              <span className="auth-toggle-link" onClick={() => setMode("signup")}>Sign up</span>
             </>
           ) : (
             <>Already have an account?{" "}
-              <span style={styles.toggleLink} onClick={() => setMode("login")}>Sign in</span>
+              <span className="auth-toggle-link" onClick={() => setMode("login")}>Sign in</span>
             </>
           )}
         </div>

@@ -3,108 +3,6 @@ import { supabase } from "./supabaseClient"
 
 const API = "https://api.sentimentfx.org"
 
-const s = {
-  overlay: {
-    position: "fixed", inset: 0, background: "rgba(8,12,16,0.85)",
-    backdropFilter: "blur(4px)", zIndex: 200,
-    display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  modal: {
-    background: "#0d1117", border: "1px solid #21262d", borderRadius: "4px",
-    padding: "40px", width: "100%", maxWidth: "440px", position: "relative",
-    maxHeight: "90vh", overflowY: "auto",
-  },
-  close: {
-    position: "absolute", top: "16px", right: "16px",
-    background: "transparent", border: "none", color: "#7d8590",
-    cursor: "pointer", fontFamily: "IBM Plex Mono", fontSize: "18px",
-  },
-  logo: {
-    fontFamily: "IBM Plex Mono", fontSize: "13px", fontWeight: 600,
-    letterSpacing: "0.2em", color: "#f0b429", textTransform: "uppercase",
-    marginBottom: "4px",
-  },
-  subtitle: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590",
-    letterSpacing: "0.1em", marginBottom: "32px",
-  },
-  section: {
-    borderTop: "1px solid #21262d", paddingTop: "20px", marginTop: "20px",
-  },
-  sectionLabel: {
-    fontFamily: "IBM Plex Mono", fontSize: "9px", letterSpacing: "0.15em",
-    color: "#7d8590", textTransform: "uppercase", marginBottom: "12px",
-  },
-  row: {
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-    fontFamily: "IBM Plex Mono", fontSize: "11px", color: "#e6edf3",
-  },
-  muted: { color: "#7d8590" },
-  tierBadge: (tier) => ({
-    fontFamily: "IBM Plex Mono", fontSize: "9px", letterSpacing: "0.12em",
-    padding: "2px 8px", borderRadius: "2px", textTransform: "uppercase",
-    background: tier === "pro" || tier === "data" ? "rgba(88,166,255,0.1)" : "rgba(139,148,158,0.1)",
-    color: tier === "pro" || tier === "data" ? "#58a6ff" : "#7d8590",
-    border: tier === "pro" || tier === "data" ? "1px solid rgba(88,166,255,0.3)" : "1px solid rgba(139,148,158,0.2)",
-  }),
-  btn: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", letterSpacing: "0.08em",
-    padding: "6px 14px", border: "1px solid #30363d", borderRadius: "2px",
-    background: "transparent", color: "#e6edf3", cursor: "pointer",
-    textTransform: "uppercase",
-  },
-  btnAccent: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", letterSpacing: "0.08em",
-    padding: "6px 14px", border: "1px solid rgba(240,180,41,0.4)", borderRadius: "2px",
-    background: "rgba(240,180,41,0.06)", color: "#f0b429", cursor: "pointer",
-    textTransform: "uppercase",
-  },
-  btnDanger: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", letterSpacing: "0.08em",
-    padding: "6px 14px", border: "1px solid rgba(248,81,73,0.4)", borderRadius: "2px",
-    background: "transparent", color: "#f85149", cursor: "pointer",
-    textTransform: "uppercase",
-  },
-  btnDangerSolid: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", letterSpacing: "0.08em",
-    padding: "8px 16px", border: "none", borderRadius: "2px",
-    background: "#f85149", color: "#fff", cursor: "pointer",
-    textTransform: "uppercase", fontWeight: 600,
-  },
-  toggle: (on) => ({
-    width: "36px", height: "20px", borderRadius: "10px", cursor: "pointer",
-    background: on ? "#3fb950" : "#30363d", position: "relative",
-    border: "none", flexShrink: 0, transition: "background 0.15s",
-  }),
-  toggleKnob: (on) => ({
-    position: "absolute", top: "3px", left: on ? "19px" : "3px",
-    width: "14px", height: "14px", borderRadius: "50%",
-    background: "#fff", transition: "left 0.15s",
-  }),
-  success: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#3fb950",
-    letterSpacing: "0.05em", marginTop: "8px",
-  },
-  warn: {
-    fontFamily: "IBM Plex Mono", fontSize: "11px", color: "#e6edf3",
-    lineHeight: 1.7, marginBottom: "20px",
-  },
-  warnNote: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#f85149",
-    marginBottom: "20px",
-  },
-  footer: {
-    borderTop: "1px solid #21262d", paddingTop: "20px", marginTop: "20px",
-    display: "flex", justifyContent: "flex-end",
-  },
-  btnSignOut: {
-    fontFamily: "IBM Plex Mono", fontSize: "10px", letterSpacing: "0.08em",
-    padding: "6px 14px", border: "1px solid #21262d", borderRadius: "2px",
-    background: "transparent", color: "#7d8590", cursor: "pointer",
-    textTransform: "uppercase",
-  },
-}
-
 export default function AccountModal({ user, session, profile, onClose, onSignOut, onProfileUpdate }) {
   const [view, setView] = useState("main")
   const [briefEnabled, setBriefEnabled] = useState(profile?.morning_brief_enabled ?? false)
@@ -183,25 +81,23 @@ export default function AccountModal({ user, session, profile, onClose, onSignOu
 
   if (view === "confirm-delete") {
     return (
-      <div style={s.overlay} onClick={onClose}>
-        <div style={s.modal} onClick={e => e.stopPropagation()}>
-          <button style={s.close} onClick={onClose}>×</button>
-          <div style={s.logo}>SentimentFX</div>
-          <div style={s.subtitle}>DELETE ACCOUNT</div>
+      <div className="auth-overlay" onClick={onClose}>
+        <div className="auth-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Delete account">
+          <button className="auth-close" onClick={onClose} aria-label="Close">×</button>
+          <div className="auth-logo">SentimentFX</div>
+          <div className="auth-subtitle">Delete account</div>
 
-          <div style={s.warn}>
+          <div className="acct-warn">
             This will cancel your subscription, delete your alerts and API key, and permanently remove your account.
             This action cannot be undone.
           </div>
-          <div style={s.warnNote}>Your data will be permanently deleted.</div>
+          <div className="acct-warn-note">Your data will be permanently deleted.</div>
 
-          {error && (
-            <div style={{ ...s.warnNote, marginBottom: "16px" }}>{error}</div>
-          )}
+          {error && <div className="auth-error">{error}</div>}
 
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button style={s.btn} onClick={() => { setView("main"); setError(null) }}>Cancel</button>
-            <button style={s.btnDangerSolid} onClick={handleDeleteAccount} disabled={deleteLoading}>
+          <div className="acct-btn-row">
+            <button className="acct-btn" onClick={() => { setView("main"); setError(null) }}>Cancel</button>
+            <button className="acct-btn-danger-solid" onClick={handleDeleteAccount} disabled={deleteLoading}>
               {deleteLoading ? "Deleting..." : "Delete Account"}
             </button>
           </div>
@@ -211,36 +107,36 @@ export default function AccountModal({ user, session, profile, onClose, onSignOu
   }
 
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
-        <button style={s.close} onClick={onClose}>×</button>
-        <div style={s.logo}>SentimentFX</div>
-        <div style={s.subtitle}>ACCOUNT SETTINGS</div>
+    <div className="auth-overlay" onClick={onClose}>
+      <div className="auth-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Account settings">
+        <button className="auth-close" onClick={onClose} aria-label="Close">×</button>
+        <div className="auth-logo">SentimentFX</div>
+        <div className="auth-subtitle">Account settings</div>
 
         {/* Profile */}
-        <div style={s.row}>
-          <span style={s.muted}>{user.email}</span>
-          <span style={s.tierBadge(tier)}>{tier}</span>
+        <div className="acct-row">
+          <span className="acct-muted">{user.email}</span>
+          <span className={`tier-badge tier-${tier}`}>{tier}</span>
         </div>
 
         {/* Subscription */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Subscription</div>
+        <div className="acct-section">
+          <div className="acct-section-label">Subscription</div>
           {isPro ? (
-            <div style={s.row}>
-              <span style={s.muted}>Pro plan active</span>
-              <button style={s.btnAccent} onClick={handleBilling} disabled={billingLoading}>
+            <div className="acct-row">
+              <span className="acct-muted">Pro plan active</span>
+              <button className="acct-btn-accent" onClick={handleBilling} disabled={billingLoading}>
                 {billingLoading ? "..." : "Manage Billing →"}
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <span style={{ ...s.muted, fontFamily: "IBM Plex Mono", fontSize: "11px" }}>
+            <div className="acct-stack">
+              <span className="acct-muted">
                 Upgrade to Pro for all tickers, full history, alerts, and CSV export.
               </span>
-              <div style={{ display: "flex", gap: "8px" }}>
+              <div className="acct-btn-row">
                 <button
-                  style={s.btnAccent}
+                  className="acct-btn-accent"
                   onClick={() => {
                     window.location.href = `${window.location.origin}?upgrade=monthly`
                     onClose()
@@ -249,7 +145,7 @@ export default function AccountModal({ user, session, profile, onClose, onSignOu
                   £11.99 / mo
                 </button>
                 <button
-                  style={s.btnAccent}
+                  className="acct-btn-accent"
                   onClick={() => {
                     window.location.href = `${window.location.origin}?upgrade=annual`
                     onClose()
@@ -263,47 +159,49 @@ export default function AccountModal({ user, session, profile, onClose, onSignOu
         </div>
 
         {/* Preferences */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Preferences</div>
-          <div style={s.row}>
+        <div className="acct-section">
+          <div className="acct-section-label">Preferences</div>
+          <div className="acct-row">
             <div>
-              <div style={{ fontFamily: "IBM Plex Mono", fontSize: "11px", marginBottom: "2px" }}>Morning Brief</div>
-              <div style={{ ...s.muted, fontFamily: "IBM Plex Mono", fontSize: "10px" }}>Daily 7am email digest</div>
+              <div className="acct-pref-title">Morning Brief</div>
+              <div className="acct-pref-sub">Daily 7am email digest</div>
             </div>
             <button
-              style={s.toggle(briefEnabled)}
+              className={`acct-toggle ${briefEnabled ? "on" : ""}`}
               onClick={handleBriefToggle}
               disabled={briefLoading}
+              role="switch"
+              aria-checked={briefEnabled}
               aria-label="Toggle morning brief"
             >
-              <div style={s.toggleKnob(briefEnabled)} />
+              <div className="acct-toggle-knob" />
             </button>
           </div>
         </div>
 
         {/* Security */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Security</div>
+        <div className="acct-section">
+          <div className="acct-section-label">Security</div>
           {resetSent ? (
-            <div style={s.success}>Reset link sent — check your inbox.</div>
+            <div className="auth-success">Reset link sent — check your inbox.</div>
           ) : (
-            <button style={s.btn} onClick={handlePasswordReset} disabled={resetLoading}>
+            <button className="acct-btn" onClick={handlePasswordReset} disabled={resetLoading}>
               {resetLoading ? "Sending..." : "Send password reset email"}
             </button>
           )}
         </div>
 
         {/* Danger zone */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Danger zone</div>
-          <button style={s.btnDanger} onClick={() => setView("confirm-delete")}>
+        <div className="acct-section">
+          <div className="acct-section-label">Danger zone</div>
+          <button className="acct-btn-danger" onClick={() => setView("confirm-delete")}>
             Delete account
           </button>
         </div>
 
         {/* Footer */}
-        <div style={s.footer}>
-          <button style={s.btnSignOut} onClick={onSignOut}>Sign Out</button>
+        <div className="acct-footer">
+          <button className="acct-btn-signout" onClick={onSignOut}>Sign Out</button>
         </div>
       </div>
     </div>

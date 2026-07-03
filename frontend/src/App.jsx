@@ -7,6 +7,7 @@ import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
+import "./dashboard.css"
 
 const CATEGORIES = {
   Crypto: ["BTC", "ETH", "SOL", "XRP", "DOGE"],
@@ -404,63 +405,32 @@ function TrendArrow({ trend }) {
 function TodaysSignalCard({ signal, trend, loading }) {
   if (loading) {
     return (
-      <div style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "4px",
-        padding: "20px 24px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "12px",
-      }}>
-        <div className="skeleton" style={{ height: "12px", width: "120px", borderRadius: "2px" }} />
-        <div className="skeleton" style={{ height: "28px", width: "200px", borderRadius: "2px" }} />
-        <div className="skeleton" style={{ height: "40px", width: "90%", borderRadius: "2px" }} />
+      <div className="signal-card signal-neutral">
+        <div className="skeleton" style={{ height: "12px", width: "120px" }} />
+        <div className="skeleton" style={{ height: "28px", width: "200px" }} />
+        <div className="skeleton" style={{ height: "40px", width: "90%" }} />
       </div>
     )
   }
 
   if (!signal) return null
 
-  const directionColors = {
-    BULLISH: { border: "rgba(63,185,80,0.4)", bg: "rgba(63,185,80,0.04)", text: "var(--positive)", badge: "rgba(63,185,80,0.12)", badgeBorder: "rgba(63,185,80,0.3)" },
-    BEARISH: { border: "rgba(248,81,73,0.4)", bg: "rgba(248,81,73,0.04)", text: "var(--negative)", badge: "rgba(248,81,73,0.12)", badgeBorder: "rgba(248,81,73,0.3)" },
-    NEUTRAL: { border: "rgba(139,148,158,0.4)", bg: "rgba(139,148,158,0.04)", text: "var(--neutral)", badge: "rgba(139,148,158,0.12)", badgeBorder: "rgba(139,148,158,0.3)" },
-  }
-  const dc = directionColors[signal.direction]
+  const tone = {
+    BULLISH: "signal-bullish",
+    BEARISH: "signal-bearish",
+    NEUTRAL: "signal-neutral",
+  }[signal.direction] ?? "signal-neutral"
 
   return (
-    <div style={{
-      background: dc.bg,
-      border: `1px solid ${dc.border}`,
-      borderLeft: `4px solid ${dc.text}`,
-      borderRadius: "4px",
-      padding: "20px 24px",
-      display: "flex",
-      flexDirection: "column",
-      gap: "14px",
-    }}>
+    <div className={`signal-card ${tone}`}>
       {/* Header row */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.15em", color: "var(--muted)", textTransform: "uppercase" }}>
-            TODAY'S SIGNAL
-          </span>
-          <span style={{
-            fontFamily: "var(--mono)", fontSize: "10px", fontWeight: 700,
-            letterSpacing: "0.12em", padding: "3px 10px", borderRadius: "2px",
-            background: dc.badge, color: dc.text, border: `1px solid ${dc.badgeBorder}`,
-          }}>
-            {signal.direction}
-          </span>
+      <div className="signal-header">
+        <div className="signal-header-left">
+          <span className="signal-eyebrow">Today's Signal</span>
+          <span className="signal-badge">{signal.direction}</span>
           {signal.isMomentum !== null && signal.strength !== "inconclusive" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span style={{
-                fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
-                padding: "2px 8px", borderRadius: "2px",
-                background: "var(--surface2)", color: "var(--muted)",
-                border: "1px solid var(--border2)",
-              }}>
+            <span className="signal-chip-wrap">
+              <span className="signal-chip">
                 {signal.isMomentum ? "MOMENTUM" : "CONTRARIAN"}
               </span>
               <InfoTip text={signal.isMomentum
@@ -469,15 +439,8 @@ function TodaysSignalCard({ signal, trend, loading }) {
             </span>
           )}
           {signal.beatsMomentum === true && signal.strength !== "inconclusive" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span style={{
-                fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.08em",
-                padding: "2px 8px", borderRadius: "2px",
-                background: "rgba(63,185,80,0.1)", color: "var(--positive)",
-                border: "1px solid rgba(63,185,80,0.3)",
-              }}>
-                BEATS BASELINE
-              </span>
+            <span className="signal-chip-wrap">
+              <span className="signal-chip signal-chip-positive">BEATS BASELINE</span>
               <InfoTip text="The sentiment signal has historically outperformed a simple price momentum strategy over the last 180 days." />
             </span>
           )}
@@ -486,32 +449,25 @@ function TodaysSignalCard({ signal, trend, loading }) {
       </div>
 
       {/* Narrative */}
-      <p style={{
-        fontFamily: "var(--sans)", fontSize: "14px", lineHeight: "1.65",
-        color: "var(--text)", margin: 0,
-      }}>
-        {signal.narrative}
-      </p>
+      <p className="signal-narrative">{signal.narrative}</p>
 
       {/* Bottom row: score + trend + correlation */}
-      <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start", borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
-        <div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
+      <div className="signal-metrics">
+        <div className="signal-metric">
+          <div className="signal-metric-label">
             Sentiment Score
             <InfoTip text="Average FinBERT score across today's headlines. Ranges from -1 (very negative) to +1 (very positive). Scored using a financial-domain AI model." />
           </div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: dc.text, lineHeight: 1 }}>
+          <div className="signal-metric-value signal-tone-text">
             {signal.score > 0 ? "+" : ""}{signal.score}
           </div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
-            range: −1.0 to +1.0
-          </div>
+          <div className="signal-metric-sub">range: −1.0 to +1.0</div>
         </div>
 
-        <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
+        <div className="signal-divider" />
 
-        <div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
+        <div className="signal-metric">
+          <div className="signal-metric-label">
             7-Day Trend
             <InfoTip text="Average sentiment over the last 7 days vs the 7 days before that. Shows whether the overall news tone is improving or deteriorating." />
           </div>
@@ -520,36 +476,32 @@ function TodaysSignalCard({ signal, trend, loading }) {
 
         {signal.correlation !== null && (
           <>
-            <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
-            <div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
+            <div className="signal-divider" />
+            <div className="signal-metric">
+              <div className="signal-metric-label">
                 Correlation (r)
                 <InfoTip text="Pearson correlation between daily sentiment shifts and next-day price returns over the last 180 days. +1 = perfect positive link, -1 = perfect inverse link, 0 = no relationship." />
               </div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: "var(--accent2)", lineHeight: 1 }}>
+              <div className="signal-metric-value accent2-text">
                 {signal.correlation > 0 ? "+" : ""}{signal.correlation}
               </div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
-                next-day return · n={signal.sampleSize ?? "?"}
-              </div>
+              <div className="signal-metric-sub">next-day return · n={signal.sampleSize ?? "?"}</div>
             </div>
           </>
         )}
 
         {signal.shiftPercentile !== undefined && signal.shiftPercentile !== null && (
           <>
-            <div style={{ width: "1px", background: "var(--border)", alignSelf: "stretch" }} />
-            <div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "6px", display: "flex", alignItems: "center" }}>
+            <div className="signal-divider" />
+            <div className="signal-metric">
+              <div className="signal-metric-label">
                 Shift Percentile
                 <InfoTip text="How large today's sentiment shift is compared to all historical daily shifts. 90th percentile = larger move than 90% of recorded days. Higher = rarer, potentially more significant." />
               </div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: signal.shiftPercentile >= 75 ? "var(--accent)" : "var(--muted)", lineHeight: 1 }}>
+              <div className={`signal-metric-value ${signal.shiftPercentile >= 75 ? "accent-text" : "neutral-text"}`}>
                 {signal.shiftPercentile}th
               </div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
-                {signal.shiftMagnitude} · {signal.articleCount} articles
-              </div>
+              <div className="signal-metric-sub">{signal.shiftMagnitude} · {signal.articleCount} articles</div>
             </div>
           </>
         )}
@@ -560,843 +512,10 @@ function TodaysSignalCard({ signal, trend, loading }) {
 }
       
 
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #080c10;
-    --surface: #0d1117;
-    --surface2: #161b22;
-    --border: #21262d;
-    --border2: #30363d;
-    --text: #e6edf3;
-    --muted: #7d8590;
-    --accent: #f0b429;
-    --accent2: #58a6ff;
-    --positive: #3fb950;
-    --negative: #f85149;
-    --neutral: #8b949e;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
-  }
-
-  body { background: var(--bg); }
-
-  .dashboard {
-    font-family: var(--sans);
-    background: var(--bg);
-    min-height: 100vh;
-    color: var(--text);
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0;
-  }
-
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .logo {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    color: var(--accent);
-    text-transform: uppercase;
-  }
-
-  .logo-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--border2);
-  }
-
-  .tagline {
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-    font-family: var(--mono);
-  }
-
-  .topbar-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .live-indicator {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--positive);
-    letter-spacing: 0.08em;
-  }
-
-  .live-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--positive);
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  .category-bar {
-    display: flex;
-    gap: 4px;
-    padding: 10px 24px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .category-bar::-webkit-scrollbar { display: none; }
-
-  .category-btn {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 6px 16px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    cursor: pointer;
-    background: var(--surface);
-    color: var(--muted);
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-
-  .category-btn:hover {
-    color: var(--text);
-    border-color: var(--border2);
-  }
-
-  .category-btn.active {
-    color: var(--bg);
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-
-  .ticker-bar {
-    display: flex;
-    gap: 2px;
-    padding: 12px 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .ticker-bar::-webkit-scrollbar { display: none; }
-
-  .ticker-btn {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    padding: 6px 14px;
-    border: 1px solid transparent;
-    border-radius: 2px;
-    cursor: pointer;
-    background: transparent;
-    color: var(--muted);
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-
-  .ticker-btn:hover:not(.locked) {
-    color: var(--text);
-    border-color: var(--border2);
-    background: var(--surface2);
-  }
-
-  .ticker-btn.active {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: rgba(240, 180, 41, 0.06);
-  }
-
-  .ticker-btn.locked {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .ticker-btn.locked::after {
-    content: ' 🔒';
-    font-size: 9px;
-  }
-
-  .main {
-    padding: 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .stat-row {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 12px;
-  }
-
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 16px;
-  }
-
-  .stat-label {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-
-  .stat-value {
-    font-family: var(--mono);
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--text);
-    line-height: 1;
-  }
-
-  .stat-sub {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-
-  .positive-text { color: var(--positive); }
-  .negative-text { color: var(--negative); }
-  .neutral-text { color: var(--neutral); }
-  .accent-text { color: var(--accent); }
-  .accent2-text { color: var(--accent2); }
-
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface2);
-  }
-
-  .panel-title {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-
-  .panel-body {
-    padding: 16px;
-  }
-
-  .panel-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .control-divider {
-    width: 1px;
-    height: 16px;
-    background: var(--border2);
-  }
-
-  .correlation-panel {
-    border-left: 3px solid var(--accent);
-  }
-
-  .correlation-value {
-    font-family: var(--mono);
-    font-size: 32px;
-    font-weight: 600;
-    line-height: 1;
-    margin-bottom: 8px;
-  }
-
-  .correlation-detail {
-    font-size: 13px;
-    color: var(--muted);
-    line-height: 1.6;
-  }
-
-  .correlation-detail strong {
-    color: var(--text);
-    font-weight: 500;
-  }
-
-  .stat-block {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    padding: 10px 14px;
-    margin-bottom: 10px;
-  }
-
-  .stat-block-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 4px 0;
-  }
-
-  .stat-block-key {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-
-  .stat-block-val {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text);
-    font-weight: 500;
-  }
-
-  .grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-
-  .headlines-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: var(--border);
-  }
-
-  .headline-item {
-    background: var(--surface);
-    padding: 12px 16px;
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    transition: background 0.1s;
-  }
-
-  .headline-item:hover { background: var(--surface2); }
-
-  .sentiment-pill {
-    font-family: var(--mono);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    padding: 2px 6px;
-    border-radius: 2px;
-    white-space: nowrap;
-    margin-top: 2px;
-    flex-shrink: 0;
-  }
-
-  .pill-positive { background: rgba(63, 185, 80, 0.12); color: var(--positive); border: 1px solid rgba(63, 185, 80, 0.3); }
-  .pill-negative { background: rgba(248, 81, 73, 0.12); color: var(--negative); border: 1px solid rgba(248, 81, 73, 0.3); }
-  .pill-neutral  { background: rgba(139, 148, 158, 0.12); color: var(--neutral); border: 1px solid rgba(139, 148, 158, 0.3); }
-
-  .headline-title {
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--text);
-    flex: 1;
-  }
-
-  .headline-score {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--muted);
-    white-space: nowrap;
-    margin-top: 2px;
-    flex-shrink: 0;
-  }
-
-  .pagination {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 10px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--surface2);
-  }
-
-  .page-btn {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    padding: 4px 9px;
-    border-radius: 2px;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    transition: all 0.15s;
-    min-width: 28px;
-    text-align: center;
-  }
-
-  .page-btn:hover:not(:disabled) {
-    color: var(--text);
-    border-color: var(--border2);
-    background: var(--surface);
-  }
-
-  .page-btn.active {
-    color: var(--accent2);
-    border-color: var(--accent2);
-    background: rgba(88, 166, 255, 0.08);
-  }
-
-  .page-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-
-  .upgrade-banner {
-    background: rgba(240, 180, 41, 0.04);
-    border: 1px solid rgba(240, 180, 41, 0.2);
-    border-radius: 4px;
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-
-  .upgrade-text {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-  }
-
-  .upgrade-text strong {
-    color: var(--accent);
-    font-weight: 600;
-  }
-
-  .upgrade-btn {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    padding: 6px 16px;
-    background: var(--accent);
-    border: none;
-    border-radius: 2px;
-    color: #080c10;
-    cursor: pointer;
-    text-transform: uppercase;
-    white-space: nowrap;
-    transition: opacity 0.15s;
-    flex-shrink: 0;
-  }
-
-  .upgrade-btn:hover { opacity: 0.85; }
-
-  .tier-badge {
-    font-family: var(--mono);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    padding: 2px 8px;
-    border-radius: 2px;
-    text-transform: uppercase;
-  }
-
-  .tier-free { background: rgba(139,148,158,0.12); color: var(--muted); border: 1px solid rgba(139,148,158,0.3); }
-  .tier-pro { background: rgba(240,180,41,0.12); color: var(--accent); border: 1px solid rgba(240,180,41,0.3); }
-  .tier-data { background: rgba(88,166,255,0.12); color: var(--accent2); border: 1px solid rgba(88,166,255,0.3); }
-
-  /* Skeleton */
-  @keyframes shimmer {
-    0% { background-position: -600px 0; }
-    100% { background-position: 600px 0; }
-  }
-
-  .skeleton {
-    background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
-    background-size: 600px 100%;
-    animation: shimmer 1.4s infinite;
-    border-radius: 2px;
-  }
-
-  .skeleton-headline {
-    padding: 12px 16px;
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    border-bottom: 1px solid var(--border);
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .custom-tooltip {
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    padding: 10px 14px;
-    font-family: var(--mono);
-    font-size: 11px;
-    border-radius: 2px;
-  }
-
-  .tooltip-label {
-    color: var(--muted);
-    margin-bottom: 6px;
-    font-size: 10px;
-    letter-spacing: 0.06em;
-  }
-
-  .tooltip-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 2px;
-  }
-
-  .tooltip-key { color: var(--muted); }
-  .tooltip-val { color: var(--text); font-weight: 500; }
-
-  .alert-select {
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 6px 10px;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 2px;
-    color: var(--text);
-    cursor: pointer;
-  }
-
-  .alert-input {
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 6px 10px;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 2px;
-    color: var(--text);
-    width: 80px;
-  }
-
-  .alert-section-label {
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.15em;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-
-  .alerts-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: var(--border);
-  }
-
-  .alert-item {
-    background: var(--surface);
-    padding: 10px 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .explainer-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-  }
-
-  .explainer-card { padding-left: 12px; }
-
-  .explainer-label {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-
-  .explainer-text {
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.7;
-  }
-
-  .disclaimer {
-    background: rgba(240,180,41,0.04);
-    border: 1px solid rgba(240,180,41,0.15);
-    border-radius: 2px;
-    padding: 10px 14px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    line-height: 1.6;
-  }
-
-  /* Heatmap */
-  .heatmap-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .heatmap-months {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .heatmap-months::-webkit-scrollbar { display: none; }
-
-  .heatmap-week {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-
-  .heatmap-cell {
-    width: 14px;
-    height: 14px;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: transform 0.1s, opacity 0.1s;
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  .heatmap-cell:hover {
-    transform: scale(1.3);
-    z-index: 10;
-  }
-
-  .heatmap-cell.empty {
-    background: transparent;
-    cursor: default;
-  }
-
-  .heatmap-cell.no-data {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-  }
-
-  .heatmap-cell.selected {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-
-  .heatmap-legend {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 12px;
-  }
-
-  .heatmap-legend-label {
-    font-family: var(--mono);
-    font-size: 9px;
-    color: var(--muted);
-    letter-spacing: 0.08em;
-  }
-
-  .heatmap-legend-cells {
-    display: flex;
-    gap: 3px;
-    align-items: center;
-  }
-
-  .heatmap-legend-cell {
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
-  }
-
-  .heatmap-day-detail {
-    margin-top: 16px;
-    border-top: 1px solid var(--border);
-    padding-top: 16px;
-  }
-
-  .heatmap-day-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
-  .heatmap-day-date {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text);
-    letter-spacing: 0.08em;
-  }
-
-  .heatmap-day-score {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .heatmap-day-headlines {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: var(--border);
-    max-height: 200px;
-    overflow-y: auto;
-  }
-
-  .heatmap-day-headline {
-    background: var(--surface);
-    padding: 8px 12px;
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-  }
-
-  .dow-labels {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-right: 4px;
-    flex-shrink: 0;
-  }
-
-  .dow-label {
-    font-family: var(--mono);
-    font-size: 9px;
-    color: var(--muted);
-    height: 14px;
-    display: flex;
-    align-items: center;
-    letter-spacing: 0.05em;
-  }
-
-  .api-key-display {
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 2px;
-    padding: 10px 14px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent);
-    letter-spacing: 0.04em;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    word-break: break-all;
-    gap: 12px;
-  }
-
-  .api-key-masked {
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .api-usage-bar {
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-    margin: 8px 0 4px;
-  }
-
-  .api-usage-bar-fill {
-    height: 100%;
-    background: var(--accent2);
-    border-radius: 2px;
-    transition: width 0.3s;
-  }
-
-  .api-copy-btn {
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    padding: 3px 8px;
-    background: transparent;
-    border: 1px solid var(--border2);
-    border-radius: 2px;
-    color: var(--muted);
-    cursor: pointer;
-    text-transform: uppercase;
-    flex-shrink: 0;
-    transition: all 0.15s;
-  }
-
-  .api-copy-btn:hover { color: var(--accent); border-color: var(--accent); }
-
-  .api-warn-box {
-    background: rgba(240,180,41,0.05);
-    border: 1px solid rgba(240,180,41,0.25);
-    border-radius: 2px;
-    padding: 10px 12px;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--accent);
-    letter-spacing: 0.04em;
-    margin-bottom: 12px;
-  }
-
-  @media (max-width: 768px) {
-    .topbar { padding: 10px 16px; }
-    .ticker-bar { padding: 10px 16px; }
-    .main { padding: 12px 16px; gap: 12px; }
-    .grid-2 { grid-template-columns: 1fr; }
-    .stat-row { grid-template-columns: repeat(2, 1fr); }
-    .tagline { display: none; }
-    .logo-divider { display: none; }
-    .upgrade-banner { flex-direction: column; align-items: flex-start; }
-  }
-`
+// All dashboard styling lives in dashboard.css (imported at the top of this
+// file). `styles` is kept as an empty string so the legacy <style>{styles}</style>
+// injection points in Dashboard/Leaderboard/TrackRecord stay valid.
+const styles = ""
 
 const CustomTooltip = ({ active, payload, label, symbol }) => {
   if (!active || !payload || !payload.length) return null
@@ -2615,42 +1734,20 @@ function Leaderboard() {
       <div className="dashboard">
         <header className="topbar">
           <div className="topbar-left">
-            <a href="https://sentimentfx.org" className="logo" style={{ textDecoration: "none" }}>SentimentFX</a>
+            <a href="https://sentimentfx.org" className="logo">SentimentFX</a>
             <div className="logo-divider" />
             <span className="tagline">SENTIMENT LEADERBOARD</span>
           </div>
           <div className="topbar-right">
-            <a href="/" style={{
-              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-              color: "var(--muted)", textDecoration: "none",
-            }}>DASHBOARD</a>
-            <a href="/track-record" style={{
-              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-              color: "var(--muted)", textDecoration: "none",
-            }}>TRACK RECORD</a>
-            <a href="https://developers.sentimentfx.org" target="_blank" rel="noreferrer" style={{
-              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-              color: "var(--muted)", textDecoration: "none",
-            }}>DEVELOPERS</a>
+            <a href="/" className="topbar-link">DASHBOARD</a>
+            <a href="/track-record" className="topbar-link">TRACK RECORD</a>
+            <a href="https://developers.sentimentfx.org" target="_blank" rel="noreferrer" className="topbar-link">DEVELOPERS</a>
             {session ? (
-              <a href="/" style={{
-                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                padding: "4px 10px", border: "1px solid var(--border2)", borderRadius: "2px",
-                color: "var(--text)", textDecoration: "none",
-              }}>{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>
+              <a href="/" className="topbar-btn">{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>
             ) : (
               <>
-                <button onClick={() => openAuth("login")} style={{
-                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                  background: "transparent", border: "none", color: "var(--muted)",
-                  cursor: "pointer", padding: 0,
-                }}>LOG IN</button>
-                <button onClick={() => openAuth("signup")} style={{
-                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                  padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
-                  background: "rgba(240,180,41,0.06)", color: "var(--accent)",
-                  cursor: "pointer",
-                }}>SIGN UP</button>
+                <button onClick={() => openAuth("login")} className="topbar-link">LOG IN</button>
+                <button onClick={() => openAuth("signup")} className="topbar-btn-accent">SIGN UP</button>
               </>
             )}
             <div className="live-indicator">
@@ -2955,38 +2052,19 @@ function TrackRecord() {
       <div className="dashboard">
         <header className="topbar">
           <div className="topbar-left">
-            <a href="https://sentimentfx.org" className="logo" style={{ textDecoration: "none" }}>SentimentFX</a>
+            <a href="https://sentimentfx.org" className="logo">SentimentFX</a>
             <div className="logo-divider" />
             <span className="tagline">TRACK RECORD</span>
           </div>
           <div className="topbar-right">
-            <a href="/" style={{
-              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-              color: "var(--muted)", textDecoration: "none",
-            }}>DASHBOARD</a>
-            <a href="/leaderboard" style={{
-              fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-              color: "var(--muted)", textDecoration: "none",
-            }}>LEADERBOARD</a>
+            <a href="/" className="topbar-link">DASHBOARD</a>
+            <a href="/leaderboard" className="topbar-link">LEADERBOARD</a>
             {session ? (
-              <a href="/" style={{
-                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                padding: "4px 10px", border: "1px solid var(--border2)", borderRadius: "2px",
-                color: "var(--text)", textDecoration: "none",
-              }}>{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>
+              <a href="/" className="topbar-btn">{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>
             ) : (
               <>
-                <button onClick={() => openAuth("login")} style={{
-                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                  background: "transparent", border: "none", color: "var(--muted)",
-                  cursor: "pointer", padding: 0,
-                }}>LOG IN</button>
-                <button onClick={() => openAuth("signup")} style={{
-                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                  padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
-                  background: "rgba(240,180,41,0.06)", color: "var(--accent)",
-                  cursor: "pointer",
-                }}>SIGN UP</button>
+                <button onClick={() => openAuth("login")} className="topbar-link">LOG IN</button>
+                <button onClick={() => openAuth("signup")} className="topbar-btn-accent">SIGN UP</button>
               </>
             )}
             <div className="live-indicator">
@@ -3810,19 +2888,14 @@ function Dashboard() {
       <div className="dashboard">
         <header className="topbar">
           <div className="topbar-left">
-            <a href="https://sentimentfx.org" className="logo" style={{ textDecoration: "none" }}>SentimentFX</a>
+            <a href="https://sentimentfx.org" className="logo">SentimentFX</a>
             <div className="logo-divider" />
             <span className="tagline">CRYPTO SENTIMENT INTELLIGENCE</span>
           </div>
           <div className="topbar-right">
             <a
               href="/leaderboard"
-              style={{
-                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                color: "var(--muted)", textDecoration: "none", transition: "color 0.15s"
-              }}
-              onMouseOver={e => e.currentTarget.style.color = "var(--text)"}
-              onMouseOut={e => e.currentTarget.style.color = "var(--muted)"}
+              className="topbar-link"
             >
               LEADERBOARD
             </a>
@@ -3830,12 +2903,7 @@ function Dashboard() {
               href="https://developers.sentimentfx.org"
               target="_blank"
               rel="noreferrer"
-              style={{
-                fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                color: "var(--muted)", textDecoration: "none", transition: "color 0.15s"
-              }}
-              onMouseOver={e => e.currentTarget.style.color = "var(--text)"}
-              onMouseOut={e => e.currentTarget.style.color = "var(--muted)"}
+              className="topbar-link"
             >
               DEVELOPERS
             </a>
@@ -3844,11 +2912,7 @@ function Dashboard() {
                 <span className={tierBadgeClass}>{profile?.tier ?? "free"}</span>
                 <button
                   onClick={() => setShowAccount(true)}
-                  style={{
-                    fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                    padding: "4px 10px", border: "1px solid var(--border)", borderRadius: "2px",
-                    cursor: "pointer", background: "transparent", color: "var(--muted)",
-                  }}
+                  className="topbar-btn"
                 >
                   ACCOUNT
                 </button>
@@ -3856,11 +2920,7 @@ function Dashboard() {
             ) : (
               <button
                 onClick={() => { setAuthMode("login"); setShowAuth(true) }}
-                style={{
-                  fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "0.08em",
-                  padding: "4px 10px", border: "1px solid var(--accent)", borderRadius: "2px",
-                  cursor: "pointer", background: "rgba(240,180,41,0.06)", color: "var(--accent)",
-                }}
+                className="topbar-btn-accent"
               >
                 SIGN IN
               </button>
@@ -4107,8 +3167,8 @@ function Dashboard() {
                     />
                     <Tooltip content={<CustomTooltip symbol={symbol} />} />
                     <Legend wrapperStyle={{ fontFamily: "IBM Plex Mono", fontSize: "10px", color: "#7d8590", paddingTop: "12px" }} />
-                    <Bar yAxisId="sentiment" dataKey="sentiment" name="Sentiment" fill="#f0b429" opacity={0.6} radius={[1, 1, 0, 0]} />
-                    <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke="#58a6ff" dot={false} strokeWidth={1.5} connectNulls={false} />
+                    <Bar yAxisId="sentiment" dataKey="sentiment" name="Sentiment" fill="#f0b429" opacity={0.6} radius={[1, 1, 0, 0]} isAnimationActive={false} />
+                    <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke="#6cb2ff" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
