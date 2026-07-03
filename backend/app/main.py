@@ -28,6 +28,7 @@ from prometheus_client import Counter, Gauge, Histogram
 import numpy as np
 import resend
 import os
+import uuid
 import json
 import requests
 import stripe
@@ -74,7 +75,10 @@ def get_api_key_value(request: Request) -> str:
     """Rate limit by API key header, fall back to IP."""
     return request.headers.get("x-api-key") or get_remote_address(request)
 
-limiter = Limiter(key_func=get_api_key_value)
+# headers_enabled=True → SlowAPIMiddleware stamps X-RateLimit-Limit /
+# X-RateLimit-Remaining / X-RateLimit-Reset (+ Retry-After on 429) onto every
+# rate-limited route's response — standard developer-API behaviour.
+limiter = Limiter(key_func=get_api_key_value, headers_enabled=True)
 
 # ---------------------------------------------------------------------------
 # NaN-safe JSON response
@@ -208,12 +212,29 @@ app.state.limiter = limiter
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    """Stamp every response with a request id so support tickets and logs can
+    be correlated ("what happened to req_ab12…?").  Cheap: one uuid per hit."""
+    request.state.request_id = f"req_{uuid.uuid4().hex[:16]}"
+    response = await call_next(request)
+    response.headers["X-Request-Id"] = request.state.request_id
+    return response
+
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
+    response = JSONResponse(
         status_code=429,
         content={"detail": f"Rate limit exceeded. {exc.detail}"}
     )
+    # Our custom handler bypasses slowapi's default, so re-inject the
+    # X-RateLimit-*/Retry-After headers it would have set.
+    try:
+        response = request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
+    except Exception:
+        pass
+    return response
 
 app.add_middleware(SlowAPIMiddleware)
 
@@ -229,6 +250,11 @@ app.add_middleware(
     ],
     allow_methods=["*"],
     allow_headers=["*"],
+    # Let browser-based API clients read the rate-limit and correlation headers.
+    expose_headers=[
+        "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+        "Retry-After", "X-Request-Id",
+    ],
 )
 
 TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
@@ -2175,9 +2201,52 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
 # Public v1 API
 # ---------------------------------------------------------------------------
 
+# Per-endpoint rate limits, surfaced in /v1/usage so integrators can discover
+# them programmatically.  KEEP IN SYNC with the @limiter.limit decorators below.
+_V1_RATE_LIMITS = {
+    "/v1/sentiment/{ticker}":   "30/minute",
+    "/v1/summary/{ticker}":     "20/minute",
+    "/v1/prices/{ticker}":      "20/minute",
+    "/v1/correlation/{ticker}": "10/minute",
+    "/v1/usage":                "60/minute",
+}
+
+
+@app.get("/v1/usage", summary="Get API key usage", description="Introspect the calling API key: consumption this month, included allowance, overage billing status, and rate limits. Free — does not consume API credits.")
+@limiter.limit("60/minute")
+def api_usage(request: Request, response: Response, api_key=Depends(get_api_key)):
+    now = datetime.utcnow()
+    # Counters reset by the monthly cron at 00:00 UTC on the 1st.
+    resets_at = datetime(now.year + (1 if now.month == 12 else 0),
+                         1 if now.month == 12 else now.month + 1, 1)
+
+    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
+    used = api_key.calls_this_month or 0
+
+    if api_key.unlimited:
+        plan = "unlimited"
+    elif api_key.stripe_customer_id:
+        plan = "metered"          # overage bills via Stripe after the allowance
+    else:
+        plan = "free"
+
+    return {
+        "key_prefix": api_key.key_prefix,
+        "plan": plan,
+        "calls_this_month": used,
+        "calls_total": api_key.calls_used or 0,
+        "included_allowance": included,
+        "included_remaining": None if api_key.unlimited else max(included - used, 0),
+        "overage_billing": bool(api_key.stripe_customer_id) and not api_key.unlimited,
+        "resets_at": resets_at.isoformat() + "Z",
+        "rate_limits": _V1_RATE_LIMITS,
+        "key_created_at": api_key.created_at.isoformat() + "Z" if api_key.created_at else None,
+    }
+
+
 @app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored headlines for a given ticker. Use `limit` to control how many results are returned (max 100). Each call costs 1 API credit per 25 headlines.")
 @limiter.limit("30/minute")
-def api_sentiment(request: Request, ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+def api_sentiment(request: Request, response: Response, ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
     calls = math.ceil(limit / 25)
     track_usage(api_key, db, calls, endpoint="sentiment")
@@ -2207,7 +2276,7 @@ def api_sentiment(request: Request, ticker: str, limit: int = 25, db: Session = 
 
 @app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily sentiment scores for a given ticker over the specified number of days. Each day costs 1 API credit.")
 @limiter.limit("20/minute")
-def api_summary(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+def api_summary(request: Request, response: Response, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, days, endpoint="summary")
 
     since = datetime.utcnow() - timedelta(days=days)
@@ -2248,7 +2317,7 @@ def api_summary(request: Request, ticker: str, days: int = 30, db: Session = Dep
 
 @app.get("/v1/prices/{ticker}", summary="Get historical prices", description="Returns daily close prices in GBP for a given ticker over the specified number of days. Each day costs 1 API credit.")
 @limiter.limit("20/minute")
-def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+def api_prices(request: Request, response: Response, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, days, endpoint="prices")
 
     since = datetime.utcnow() - timedelta(days=days)
@@ -2276,7 +2345,7 @@ def api_prices(request: Request, ticker: str, days: int = 30, db: Session = Depe
 
 @app.get("/v1/correlation/{ticker}", summary="Get sentiment-price correlation", description="Returns a 180-day Pearson correlation analysis between sentiment shifts and next-day price returns, including signal strength, direction, and 95% confidence interval. Costs 1 API credit.")
 @limiter.limit("10/minute")
-def api_correlation(request: Request, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+def api_correlation(request: Request, response: Response, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, endpoint="correlation")
     since = datetime.utcnow() - timedelta(days=180)
 
@@ -2416,8 +2485,42 @@ def get_status(db: Session = Depends(get_db)):
     }
 
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health(db: Session = Depends(get_db)):
+    """Liveness + readiness for uptime monitors and Railway health checks.
+
+    503 when the DB is unreachable or the scheduler died (both mean the
+    service can't do its job even if HTTP still answers).  `scrape_age_s`
+    is informational — stale scrapes degrade freshness but don't merit a
+    restart, so they don't flip the status code.
+    """
+    from sqlalchemy import text as _sql_text
+
+    checks = {"db": "ok", "scheduler": "ok"}
+    status_code = 200
+
+    try:
+        db.execute(_sql_text("SELECT 1"))
+    except Exception as e:
+        checks["db"] = f"error: {type(e).__name__}"
+        status_code = 503
+
+    if not scheduler.running:
+        checks["scheduler"] = "not running"
+        status_code = 503
+
+    scrape_age_s = None
+    if last_scrape_time:
+        try:
+            _last = datetime.fromisoformat(last_scrape_time)
+            scrape_age_s = int((datetime.now(timezone.utc) - _last).total_seconds())
+        except Exception:
+            pass
+
+    return JSONResponse(status_code=status_code, content={
+        "status": "ok" if status_code == 200 else "degraded",
+        "checks": checks,
+        "scrape_age_s": scrape_age_s,
+    })
 
 @app.post("/api/keys/regenerate/request")
 async def request_key_regenerate(request: Request, db: Session = Depends(get_db)):

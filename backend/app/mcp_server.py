@@ -127,6 +127,47 @@ def list_tickers() -> dict[str, Any]:
 
 
 @mcp.tool()
+def get_usage(ctx: Context) -> dict[str, Any]:
+    """Introspect your API key: calls used this month, included allowance,
+    remaining credits, and when the counter resets.
+
+    Free — doesn't hit the billing meter.  Mirrors `GET /v1/usage`
+    (MCP_MIRRORS_V1: change both together).  Useful before a large batch of
+    `get_sentiment`/`get_summary` calls to check you have credit headroom.
+    """
+    from datetime import datetime
+
+    api_key, db = _open_authed_session(ctx)
+    try:
+        now = datetime.utcnow()
+        resets_at = datetime(now.year + (1 if now.month == 12 else 0),
+                             1 if now.month == 12 else now.month + 1, 1)
+
+        included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
+        used = api_key.calls_this_month or 0
+
+        if api_key.unlimited:
+            plan = "unlimited"
+        elif api_key.stripe_customer_id:
+            plan = "metered"
+        else:
+            plan = "free"
+
+        return {
+            "key_prefix": api_key.key_prefix,
+            "plan": plan,
+            "calls_this_month": used,
+            "calls_total": api_key.calls_used or 0,
+            "included_allowance": included,
+            "included_remaining": None if api_key.unlimited else max(included - used, 0),
+            "overage_billing": bool(api_key.stripe_customer_id) and not api_key.unlimited,
+            "resets_at": resets_at.isoformat() + "Z",
+        }
+    finally:
+        db.close()
+
+
+@mcp.tool()
 def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
     """Return the most recent FinBERT-scored headlines for `ticker`.
 
