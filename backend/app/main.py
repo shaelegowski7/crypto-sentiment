@@ -806,7 +806,16 @@ scheduler.add_job(settle_alert_outcomes, CronTrigger(hour=6, minute=15, timezone
 # Refresh SignalQuality daily at 05:00 UTC — before the 06:15 outcome-settlement
 # job and well before the first business-hours alerts so gate decisions are
 # never more than 24h stale.  See _run_signal_quality_refresh docstring.
-scheduler.add_job(_run_signal_quality_refresh, CronTrigger(hour=5, minute=0, timezone="UTC"))
+#
+# Wrapped in a lambda so the name lookup happens at call time, not at import
+# time — `_run_signal_quality_refresh` and its helpers live near the admin
+# endpoints ~2600 lines below, so a bare reference here would NameError at
+# module load.  (morning_brief above also wraps in a lambda, though for a
+# different reason — it passes a DB session argument.)
+scheduler.add_job(lambda: _run_signal_quality_refresh(),
+                  CronTrigger(hour=5, minute=0, timezone="UTC"),
+                  id="signal_quality_refresh",
+                  replace_existing=True)
 scheduler.start()
 
 # First-deploy safety net: if the SignalQuality table is empty (fresh table on
@@ -828,8 +837,15 @@ def _bootstrap_signal_quality_if_empty():
 # Kick the bootstrap in a scheduler one-shot so app start-up doesn't block on
 # a 30-60s backtest sweep.  If the process dies mid-bootstrap, the next start
 # just tries again; the refresh is idempotent (upsert semantics).
+# _bootstrap_signal_quality_if_empty is defined above so passing it directly
+# is fine; the name it references inside its body (_run_signal_quality_refresh)
+# is only resolved when the scheduler actually fires the job 30s later.
+# run_date must be timezone-aware: APScheduler interprets naive datetimes in
+# the scheduler's *local* timezone, so a naive utcnow() on a non-UTC machine
+# (e.g. local dev on BST) lands in the past and the one-shot is silently
+# dropped as a misfire.
 scheduler.add_job(_bootstrap_signal_quality_if_empty, "date",
-                  run_date=datetime.utcnow() + timedelta(seconds=30))
+                  run_date=datetime.now(timezone.utc) + timedelta(seconds=30))
 
 
 # ---------------------------------------------------------------------------
