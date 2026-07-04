@@ -2044,7 +2044,6 @@ async def generate_api_key(request: Request, db: Session = Depends(get_db)):
 
     key = _make_key()
     api_key = models.APIKey(
-        key=key,  # kept for safety during transition - remove after dropping column
         key_hash=_hash_key(key),
         key_prefix=key[:12],
         email=email,
@@ -2075,7 +2074,6 @@ async def regenerate_api_key(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No key found for this email")
 
     new_key = _make_key()
-    existing.key = new_key  # kept for safety during transition - remove after dropping column
     existing.key_hash = _hash_key(new_key)
     existing.key_prefix = new_key[:12]
     existing.active = True
@@ -2137,7 +2135,6 @@ async def generate_linked_api_key(db: Session = Depends(get_db), user=Depends(re
 
     key = _make_key()
     api_key = models.APIKey(
-        key=key,
         key_hash=_hash_key(key),
         key_prefix=key[:12],
         email=email,
@@ -2207,7 +2204,6 @@ async def regenerate_linked_api_key(db: Session = Depends(get_db), user=Depends(
         raise HTTPException(status_code=404, detail="No key found. Generate one first.")
 
     new_key = _make_key()
-    existing.key = new_key
     existing.key_hash = _hash_key(new_key)
     existing.key_prefix = new_key[:12]
     existing.active = True
@@ -2707,7 +2703,6 @@ async def confirm_key_regenerate(request: Request, db: Session = Depends(get_db)
 
     # Regenerate key
     new_key = _make_key()
-    existing.key = new_key
     existing.key_hash = _hash_key(new_key)
     existing.key_prefix = new_key[:12]
     existing.active = True

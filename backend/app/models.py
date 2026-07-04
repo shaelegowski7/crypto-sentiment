@@ -138,7 +138,7 @@ class APIKey(Base):
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True, nullable=True)  # kept for safety, can drop later
+    key = Column(String, unique=True, index=True, nullable=True)  # dead column, no longer written to; auth runs on key_hash. Drop in a future migration.
     key_hash = Column(String, unique=True, index=True, nullable=True)
     key_prefix = Column(String, nullable=True)  # e.g. "sfx_7b83463a"
     email = Column(String, index=True)
