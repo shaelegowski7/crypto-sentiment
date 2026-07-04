@@ -1135,10 +1135,10 @@ function BacktestPanel({ ticker }) {
                         }}>
                           <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.entry_date)}</span>
                           <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.exit_date)}</span>
-                          <span style={{ color: "var(--text)" }}>{t.entry_price.toLocaleString()}</span>
-                          <span style={{ color: "var(--text)" }}>{t.exit_price.toLocaleString()}</span>
+                          <span style={{ color: "var(--text)" }}>{t.entry_price != null ? t.entry_price.toLocaleString() : "—"}</span>
+                          <span style={{ color: "var(--text)" }}>{t.exit_price != null ? t.exit_price.toLocaleString() : "—"}</span>
                           <span style={{ color: retColor(t.return_pct), textAlign: "right", fontWeight: 600 }}>
-                            {t.return_pct > 0 ? "+" : ""}{t.return_pct}%
+                            {t.return_pct != null ? `${t.return_pct > 0 ? "+" : ""}${t.return_pct}%` : "—"}
                           </span>
                         </div>
                       ))}
