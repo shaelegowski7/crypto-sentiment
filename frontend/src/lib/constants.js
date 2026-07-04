@@ -26,3 +26,11 @@ export function _formatPrice(v, ticker) {
   if (v >= 1)    return `£${v.toFixed(2)}`
   return `£${v.toFixed(4)}`
 }
+
+export const redirectToCheckout = async (priceId) => {
+  const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, {
+    method: "POST",
+  })
+  const data = await res.json()
+  window.location.href = data.url
+}

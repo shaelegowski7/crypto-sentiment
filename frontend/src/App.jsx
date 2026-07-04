@@ -8,11 +8,12 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
 import "./dashboard.css"
-import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS } from "./lib/constants"
+import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, redirectToCheckout } from "./lib/constants"
 
 // Standalone pages are code-split — they only load on their own routes.
 const Leaderboard = lazy(() => import("./pages/Leaderboard"))
 const TrackRecord = lazy(() => import("./pages/TrackRecord"))
+const Brief = lazy(() => import("./pages/Brief"))
 
 const CATEGORIES = {
   Crypto: ["BTC", "ETH", "SOL", "XRP", "DOGE"],
@@ -37,14 +38,6 @@ const FREE_TICKERS = [
 // frontend bundles independently of the landing repo.  Used by the leaderboard
 // row links to deep-link into the per-ticker SEO landing page on sentimentfx.org.
 const HEADLINES_PER_PAGE = 10
-
-const redirectToCheckout = async (priceId) => {
-  const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, {
-    method: "POST",
-  })
-  const data = await res.json()
-  window.location.href = data.url
-}
 
 const exportData = async (type, ticker, session, days) => {
   try {
@@ -1180,8 +1173,8 @@ function BacktestPanel({ ticker }) {
 // run when we're on /leaderboard — no conditional hook calls inside either.
 export default function App() {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "/"
-  if (pathname === "/leaderboard" || pathname === "/track-record") {
-    const Page = pathname === "/leaderboard" ? Leaderboard : TrackRecord
+  if (pathname === "/leaderboard" || pathname === "/track-record" || pathname === "/brief" || pathname.startsWith("/brief/")) {
+    const Page = pathname === "/leaderboard" ? Leaderboard : pathname === "/track-record" ? TrackRecord : Brief
     return (
       <Suspense fallback={<div className="dashboard" style={{ minHeight: "100vh" }} />}>
         <Page />
@@ -1592,6 +1585,12 @@ function Dashboard() {
               className="topbar-link"
             >
               LEADERBOARD
+            </a>
+            <a
+              href="/brief"
+              className="topbar-link"
+            >
+              BRIEF
             </a>
             <a
               href="https://developers.sentimentfx.org"

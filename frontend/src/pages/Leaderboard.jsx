@@ -553,6 +553,7 @@ function Leaderboard() {
           <div className="topbar-right">
             <a href="/" className="topbar-link">DASHBOARD</a>
             <a href="/track-record" className="topbar-link">TRACK RECORD</a>
+            <a href="/brief" className="topbar-link">BRIEF</a>
             <a href="https://developers.sentimentfx.org" target="_blank" rel="noreferrer" className="topbar-link">DEVELOPERS</a>
             {session ? (
               <a href="/" className="topbar-btn">{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>

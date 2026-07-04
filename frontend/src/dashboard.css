@@ -1423,6 +1423,77 @@
   justify-content: flex-end;
 }
 
+/* ── morning brief archive ───────────────────────────────────────────── */
+
+.ticker-chip {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 2.5px 8px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid var(--border2);
+}
+
+.brief-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.brief-card {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.brief-card:hover {
+  border-color: var(--border2);
+  background: var(--surface2);
+}
+
+.brief-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.brief-card-date {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.brief-card-tickers {
+  display: flex;
+  gap: 6px;
+}
+
+.brief-card-summary {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+.brief-card-readmore {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--accent2);
+}
+
 /* ── responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 1024px) {

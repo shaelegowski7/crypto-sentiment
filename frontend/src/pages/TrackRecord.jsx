@@ -132,6 +132,7 @@ function TrackRecord() {
           <div className="topbar-right">
             <a href="/" className="topbar-link">DASHBOARD</a>
             <a href="/leaderboard" className="topbar-link">LEADERBOARD</a>
+            <a href="/brief" className="topbar-link">BRIEF</a>
             {session ? (
               <a href="/" className="topbar-btn">{(session.user?.email ?? "ACCOUNT").slice(0, 18)} ↗</a>
             ) : (
