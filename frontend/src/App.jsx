@@ -22,7 +22,17 @@ const CATEGORIES = {
   Commodities: ["GC=F", "SI=F", "CL=F", "NG=F"],
 }
 const TICKERS = Object.values(CATEGORIES).flat()
-const FREE_TICKERS = ["BTC"]
+// Top 3 by total headline count in each category (queried 2026-07-04) — the
+// best-covered tickers make the strongest free-tier first impression. Not
+// auto-computed; re-derive periodically as coverage shifts (GROUP BY ticker
+// on the headlines table, ranked within each CATEGORIES bucket).
+const FREE_TICKERS = [
+  "BTC", "ETH", "SOL",               // Crypto
+  "EURUSD", "USDJPY", "AUDUSD",      // FX
+  "GOOGL", "AAPL", "NVDA",           // Stocks
+  "SPY", "QQQ", "USO",               // ETFs
+  "CL=F", "GC=F", "NG=F",            // Commodities
+]
 // Mirror of landing/sentiment-tickers.json — kept in sync manually because the
 // frontend bundles independently of the landing repo.  Used by the leaderboard
 // row links to deep-link into the per-ticker SEO landing page on sentimentfx.org.
@@ -1653,7 +1663,7 @@ function Dashboard() {
           {!isLoggedIn && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Sign in to unlock 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, API access and alerts.
+                <strong>Free tier:</strong> {FREE_TICKERS.length} top tickers across crypto, FX, stocks, ETFs and commodities · 30 day history · Sign in to unlock all 42 tickers, full history, API access and alerts.
               </span>
               <button className="upgrade-btn" onClick={() => { setAuthMode("signup"); setShowAuth(true) }}>
                 Sign In / Sign Up
@@ -1664,7 +1674,7 @@ function Dashboard() {
           {isLoggedIn && !isPro && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> BTC only · 30 day history · Upgrade to Pro for 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, 1,000 API calls/mo, alerts and morning brief.
+                <strong>Free tier:</strong> {FREE_TICKERS.length} top tickers · 30 day history · Upgrade to Pro for all 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, 1,000 API calls/mo, alerts and morning brief.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw")}>
