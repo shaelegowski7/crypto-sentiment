@@ -4407,7 +4407,7 @@ def test_brief(email: str, db: Session = Depends(get_db), admin=Depends(require_
     resend_lib.Emails.send({
         "from": "SentimentFX <hello@sentimentfx.org>",
         "to": email,
-        "subject": f"[TEST] Morning Brief — {datetime.utcnow().strftime('%d %b')}",
+        "subject": f"[TEST] Morning Brief · {datetime.utcnow().strftime('%d %b')}",
         "html": html,
     })
     return {"message": f"Test brief sent to {email}"}

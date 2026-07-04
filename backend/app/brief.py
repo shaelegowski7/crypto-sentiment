@@ -8,8 +8,56 @@ from supabase import create_client
 
 logger = logging.getLogger(__name__)
 
-TICKERS = ["BTC", "ETH", "XRP"]
-TICKER_NAMES = {"BTC": "Bitcoin", "ETH": "Ethereum", "XRP": "XRP"}
+# Mirrors FREE_TICKERS in frontend/src/App.jsx (top 3 by headline count in
+# each of the 5 categories) so the brief's coverage matches what a free-tier
+# user can already see on the dashboard — one consistent "top tickers" set
+# across the product, not a separate curation.
+TICKERS = [
+    "BTC", "ETH", "SOL",             # Crypto
+    "EURUSD", "USDJPY", "AUDUSD",    # FX
+    "GOOGL", "AAPL", "NVDA",         # Stocks
+    "SPY", "QQQ", "USO",             # ETFs
+    "CL=F", "GC=F", "NG=F",          # Commodities
+]
+TICKER_NAMES = {
+    "BTC": "Bitcoin", "ETH": "Ethereum", "SOL": "Solana",
+    "EURUSD": "EUR/USD", "USDJPY": "USD/JPY", "AUDUSD": "AUD/USD",
+    "GOOGL": "Alphabet", "AAPL": "Apple", "NVDA": "Nvidia",
+    "SPY": "S&P 500 (SPY)", "QQQ": "Nasdaq-100 (QQQ)", "USO": "Oil Fund (USO)",
+    "CL=F": "Crude Oil", "GC=F": "Gold", "NG=F": "Natural Gas",
+}
+
+# Local copy, not imported from main.py, to avoid a circular import (main.py
+# imports send_morning_briefs at module level). Only used to pick the right
+# price label below.
+_CRYPTO_TICKERS = {"BTC", "ETH", "SOL", "XRP", "DOGE"}
+_FX_TICKERS = {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"}
+
+
+def _price_currency(ticker: str) -> str:
+    """Crypto prices are stored in GBP — the yfinance ticker itself is
+    GBP-quoted (e.g. BTC-GBP), so no conversion is needed. FX pairs are a
+    raw exchange rate, not a currency amount. Everything else (stocks,
+    ETFs, commodity futures) comes back from yfinance in native USD —
+    prices.py doesn't convert non-crypto tickers (USD_TICKERS is empty) —
+    so labelling those GBP would be wrong."""
+    if ticker in _CRYPTO_TICKERS:
+        return "GBP"
+    if ticker in _FX_TICKERS:
+        return "RATE"
+    return "USD"
+
+
+def _fmt_price(price: float | None, ticker: str) -> str:
+    if price is None:
+        return "N/A"
+    currency = _price_currency(ticker)
+    if currency == "GBP":
+        return f"£{price:,.2f}"
+    if currency == "USD":
+        return f"${price:,.2f}"
+    return f"{price:.2f}" if ticker == "USDJPY" else f"{price:.4f}"  # RATE
+
 
 anthropic_client = Anthropic()  # reads ANTHROPIC_API_KEY from env
 
@@ -81,9 +129,10 @@ def fetch_ticker_data(db_session, ticker: str) -> dict:
     return {
         "ticker": ticker,
         "name": TICKER_NAMES[ticker],
+        "currency": _price_currency(ticker),
         "current_sentiment": current_sentiment,
         "sentiment_delta": sentiment_delta,
-        "current_price_gbp": current_price,
+        "current_price": current_price,
         "price_change_pct": price_change_pct,
         "top_headline": top_headline,
         "divergence": divergence,
@@ -95,23 +144,27 @@ def generate_ai_summary(ticker_data: list[dict]) -> str:
     data_str = "\n".join([
         f"- {d['name']} ({d['ticker']}): sentiment {d['current_sentiment']:+.3f} "
         f"({'↑' if d['sentiment_delta'] >= 0 else '↓'}{abs(d['sentiment_delta']):.3f} vs yesterday), "
-        f"price £{d['current_price_gbp']:,.2f} ({'+' if (d['price_change_pct'] or 0) >= 0 else ''}{d['price_change_pct'] or 0:.2f}%), "
+        f"price {_fmt_price(d['current_price'], d['ticker'])} "
+        f"({'+' if (d['price_change_pct'] or 0) >= 0 else ''}{d['price_change_pct'] or 0:.2f}%), "
         f"{'⚠️ DIVERGENCE DETECTED' if d['divergence'] else 'no divergence'}"
         for d in ticker_data
     ])
 
     response = anthropic_client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=400,
+        max_tokens=500,
         messages=[{
             "role": "user",
-            "content": f"""You are a concise crypto market analyst writing a morning brief for informed retail traders.
+            "content": f"""You are a concise financial market analyst writing a morning brief for informed retail traders, covering crypto, FX, equities, ETFs and commodities.
 
-Here is today's sentiment and price data:
+Here is today's sentiment and price data across {len(ticker_data)} assets:
 {data_str}
 
-Write a 3–4 sentence plain-English summary covering the overall market mood, any notable moves, and one actionable observation. 
-Be direct and specific. Do not use bullet points. Do not repeat the raw numbers — interpret them.
+Write a 4–6 sentence plain-English summary. With this many assets, don't try to mention every one —
+pick out the 2–3 most notable signals (biggest divergences, sharpest sentiment moves, clearest cross-asset theme)
+and interpret them, then close with one actionable observation.
+Be direct and specific. Do not use bullet points. Do not use em dashes or double hyphens as punctuation —
+write plain sentences with commas and periods instead. Do not repeat the raw numbers verbatim — interpret them.
 Do not use phrases like "as of this morning" or "good morning". Start with the most important signal."""
         }]
     )
@@ -139,7 +192,7 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
         if d["divergence"]:
             divergence_banner = f"""
             <div style="background:rgba(240,180,41,0.08);border-left:2px solid #f0b429;padding:8px 10px;margin-top:10px;font-family:{MONO};font-size:10px;color:#f0b429;letter-spacing:0.06em;">
-                &#9888; DIVERGENCE &mdash; SENTIMENT AND PRICE MOVING IN OPPOSITE DIRECTIONS
+                &#9888; DIVERGENCE: SENTIMENT AND PRICE MOVING IN OPPOSITE DIRECTIONS
             </div>"""
 
         headline_block = ""
@@ -152,11 +205,7 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
                 <span style="font-family:{MONO};color:{score_color};margin-left:8px;font-size:11px;">{h['sentiment_score']:+.3f}</span>
             </div>"""
 
-        is_fx = d["current_price_gbp"] is not None and d["ticker"] in ("EURUSD", "GBPUSD", "USDJPY")
-        if d["current_price_gbp"] is not None:
-            price_str = f"{d['current_price_gbp']:.4f}" if is_fx else f"£{d['current_price_gbp']:,.2f}"
-        else:
-            price_str = "N/A"
+        price_str = _fmt_price(d["current_price"], d["ticker"])
         price_change_str = f"{'+' if (d['price_change_pct'] or 0) >= 0 else ''}{d['price_change_pct'] or 0:.2f}%" if d["price_change_pct"] is not None else "N/A"
         price_color = "#3fb950" if (d["price_change_pct"] or 0) >= 0 else "#f85149"
         sent_color = sentiment_color(d["current_sentiment"])
@@ -287,7 +336,7 @@ def send_morning_briefs(db_session):
         ai_summary = generate_ai_summary(ticker_data)
     except Exception as e:
         logger.error(f"Claude API call failed: {e}")
-        ai_summary = "Market data is available in your dashboard. Sentiment and price data for BTC, ETH, and XRP are shown below."
+        ai_summary = "Market data is available in your dashboard. Sentiment and price data for today's tracked assets are shown below."
 
     # Resolve recipients — any tier with morning_brief_enabled=True qualifies.
     # 'brief' and 'pro' and 'data' all get the email; 'free' doesn't.
@@ -321,7 +370,7 @@ def send_morning_briefs(db_session):
             resend.Emails.send({
                 "from": "SentimentFX <hello@sentimentfx.org>",
                 "to": email,
-                "subject": f"☀️ Morning Brief — {datetime.now(timezone.utc).strftime('%d %b')}",
+                "subject": f"☀️ Morning Brief · {datetime.now(timezone.utc).strftime('%d %b')}",
                 "html": html,
             })
             sent += 1
