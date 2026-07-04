@@ -8,7 +8,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
 import "./dashboard.css"
-import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, TICKER_INFO, redirectToCheckout } from "./lib/constants"
+import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, TICKER_INFO, nativeCurrencyFor, _formatPrice, redirectToCheckout } from "./lib/constants"
 
 // Standalone pages are code-split — they only load on their own routes.
 const Leaderboard = lazy(() => import("./pages/Leaderboard"))
@@ -965,6 +965,8 @@ function BacktestPanel({ ticker }) {
 
   const summary = btData?.summary
   const trades = btData?.trades ?? []
+  const btNativeCurrency = nativeCurrencyFor(ticker)
+  const priceUnitLabel = btNativeCurrency === "GBP" ? " (£)" : btNativeCurrency === "USD" ? " ($)" : ""
   const equityCurve = btData?.equity_curve ?? []
 
   const retColor = (v) => v > 0 ? "var(--positive)" : v < 0 ? "var(--negative)" : "var(--muted)"
@@ -1126,7 +1128,7 @@ function BacktestPanel({ ticker }) {
                       padding: "6px 12px", background: "var(--surface2)",
                       borderBottom: "1px solid var(--border)",
                     }}>
-                      <span>ENTRY</span><span>EXIT</span><span>IN (£)</span><span>OUT (£)</span><span style={{ textAlign: "right" }}>RETURN</span>
+                      <span>ENTRY</span><span>EXIT</span><span>IN{priceUnitLabel}</span><span>OUT{priceUnitLabel}</span><span style={{ textAlign: "right" }}>RETURN</span>
                     </div>
                     <div style={{ maxHeight: "200px", overflowY: "auto", background: "var(--border)", display: "flex", flexDirection: "column", gap: "1px" }}>
                       {trades.map((t, i) => (
@@ -1138,8 +1140,8 @@ function BacktestPanel({ ticker }) {
                         }}>
                           <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.entry_date)}</span>
                           <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.exit_date)}</span>
-                          <span style={{ color: "var(--text)" }}>{t.entry_price != null ? t.entry_price.toLocaleString() : "—"}</span>
-                          <span style={{ color: "var(--text)" }}>{t.exit_price != null ? t.exit_price.toLocaleString() : "—"}</span>
+                          <span style={{ color: "var(--text)" }}>{_formatPrice(t.entry_price, ticker)}</span>
+                          <span style={{ color: "var(--text)" }}>{_formatPrice(t.exit_price, ticker)}</span>
                           <span style={{ color: retColor(t.return_pct), textAlign: "right", fontWeight: 600 }}>
                             {t.return_pct != null ? `${t.return_pct > 0 ? "+" : ""}${t.return_pct}%` : "—"}
                           </span>
@@ -1519,7 +1521,14 @@ function Dashboard() {
     return range === 999 ? allData : allData.slice(-range)
   })()
 
-  const rate = !isFX && currency === "USD" && gbpToUsd ? gbpToUsd : 1
+  // Prices are stored in the ticker's *native* currency — GBP for crypto,
+  // raw rate for FX, USD for everything else (stocks/ETFs/commodities;
+  // the backend never converts these — see nativeCurrencyFor()). The GBP/USD
+  // toggle converts FROM that native currency, not always from GBP.
+  const nativeCurrency = nativeCurrencyFor(ticker)
+  const rate = isFX || currency === nativeCurrency || !gbpToUsd
+    ? 1
+    : nativeCurrency === "GBP" ? gbpToUsd : 1 / gbpToUsd
   const symbol = isFX ? "" : (currency === "USD" ? "$" : "£")
 
   const displayData = filteredData.map(d => ({
@@ -1758,7 +1767,13 @@ function Dashboard() {
                   : priceDisplay}
               </div>
               <div className="stat-sub">
-                {isFX ? "exchange rate" : currency === "GBP" ? "British pound" : `USD · rate: ${gbpToUsd?.toFixed(4) ?? "..."}`}
+                {isFX
+                  ? "exchange rate"
+                  : currency === nativeCurrency
+                    ? (nativeCurrency === "GBP" ? "British pound (native)" : "US dollar (native)")
+                    : nativeCurrency === "GBP"
+                      ? `USD · rate: ${gbpToUsd?.toFixed(4) ?? "..."}`
+                      : `GBP · rate: ${gbpToUsd ? (1 / gbpToUsd).toFixed(4) : "..."}`}
               </div>
             </div>
             <div className="stat-card">

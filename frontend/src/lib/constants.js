@@ -76,13 +76,29 @@ export const TICKER_INFO = {
 export const API = "https://api.sentimentfx.org"
 
 export const FX_TICKERS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
+export const CRYPTO_TICKERS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
+
+// Crypto prices are stored in GBP — the yfinance ticker itself is GBP-quoted
+// (e.g. BTC-GBP), so the backend never converts it. FX pairs are a raw
+// exchange rate, not a currency amount. Everything else — stocks, ETFs,
+// commodity futures — comes back from yfinance and is stored in native
+// USD; the backend's non-crypto conversion set is empty, so assuming GBP
+// for these (as this file used to) mislabels the price. Mirrors
+// backend/app/brief.py's _price_currency() — keep both in sync.
+export function nativeCurrencyFor(ticker) {
+  if (CRYPTO_TICKERS.includes(ticker)) return "GBP"
+  if (FX_TICKERS.includes(ticker)) return "RATE"
+  return "USD"
+}
 
 export function _formatPrice(v, ticker) {
   if (v === null || v === undefined) return "—"
-  if (FX_TICKERS.includes(ticker)) return v.toFixed(4)
-  if (v >= 1000) return `£${(v / 1000).toFixed(2)}k`
-  if (v >= 1)    return `£${v.toFixed(2)}`
-  return `£${v.toFixed(4)}`
+  const native = nativeCurrencyFor(ticker)
+  if (native === "RATE") return ticker === "USDJPY" ? v.toFixed(2) : v.toFixed(4)
+  const symbol = native === "GBP" ? "£" : "$"
+  if (v >= 1000) return `${symbol}${(v / 1000).toFixed(2)}k`
+  if (v >= 1)    return `${symbol}${v.toFixed(2)}`
+  return `${symbol}${v.toFixed(4)}`
 }
 
 export const redirectToCheckout = async (priceId) => {
