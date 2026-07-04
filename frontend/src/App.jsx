@@ -8,7 +8,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
 import "./dashboard.css"
-import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, redirectToCheckout } from "./lib/constants"
+import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, TICKER_INFO, redirectToCheckout } from "./lib/constants"
 
 // Standalone pages are code-split — they only load on their own routes.
 const Leaderboard = lazy(() => import("./pages/Leaderboard"))
@@ -1650,6 +1650,7 @@ function Dashboard() {
                 key={t}
                 className={`ticker-btn ${ticker === t ? "active" : ""} ${locked ? "locked" : ""}`}
                 onClick={() => handleTickerClick(t)}
+                title={TICKER_INFO[t] ? `${TICKER_INFO[t].name} — ${TICKER_INFO[t].blurb}` : undefined}
               >
                 {FX_LABELS[t] ?? COMMODITY_LABELS[t] ?? t}
               </button>
@@ -1725,7 +1726,20 @@ function Dashboard() {
             <div className="stat-card">
               <div className="stat-label">Asset</div>
               <div className="stat-value accent-text">{ticker}</div>
-              <div className="stat-sub">Selected ticker</div>
+              {TICKER_INFO[ticker] ? (
+                <a
+                  href={TICKER_INFO[ticker].url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="stat-sub"
+                  style={{ display: "block", color: "var(--accent2)", textDecoration: "none" }}
+                  title={TICKER_INFO[ticker].blurb}
+                >
+                  {TICKER_INFO[ticker].name} ↗
+                </a>
+              ) : (
+                <div className="stat-sub">Selected ticker</div>
+              )}
             </div>
             <div className="stat-card">
               <div className="stat-label">Avg Sentiment</div>

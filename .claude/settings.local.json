@@ -5,7 +5,8 @@
       "Bash(node *)",
       "Bash(python -c \"import ast; ast.parse\\(open\\('backend/app/scraper.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/main.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "WebFetch(domain:en.wikipedia.org)"
     ]
   }
 }
