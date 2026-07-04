@@ -120,7 +120,7 @@ function pageHtml(t) {
     '@context': 'https://schema.org',
     '@type': 'Dataset',
     name: `${t.name} (${t.display}) News Sentiment Dataset`,
-    description: `Hourly FinBERT-scored news sentiment headlines for ${t.name} (${t.display}), with matched daily price data in GBP. Maintained by SentimentFX.`,
+    description: `Hourly FinBERT-scored news sentiment headlines for ${t.name} (${t.display}), with matched daily price data in ${t.category === 'crypto' ? 'GBP' : t.category === 'fx' ? 'raw exchange rate' : 'USD'}. Maintained by SentimentFX.`,
     url,
     keywords: [`${t.display} sentiment`, `${t.name} sentiment analysis`, 'FinBERT', 'financial NLP', 'news sentiment'],
     creator: { '@type': 'Organization', name: 'SentimentFX', url: 'https://sentimentfx.org/' },
@@ -136,7 +136,7 @@ function pageHtml(t) {
   <meta name="description" content="${desc}">
   <meta name="keywords" content="${t.display} sentiment, ${t.name} sentiment analysis, ${t.display} news sentiment, ${t.display} FinBERT, ${t.display} market sentiment, ${t.display} sentiment API">
   <meta name="robots" content="index, follow, max-image-preview:large">
-  <meta name="theme-color" content="#080c10">
+  <meta name="theme-color" content="#0b0e14">
   <link rel="canonical" href="${url}">
 
   <meta property="og:site_name" content="SentimentFX">
@@ -154,7 +154,7 @@ function pageHtml(t) {
 
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <script type="application/ld+json">${JSON.stringify(breadcrumbJsonLd)}</script>
   <script type="application/ld+json">${JSON.stringify(faqJsonLd)}</script>
@@ -163,12 +163,12 @@ function pageHtml(t) {
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
-      --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
-      --border:#21262d;--border2:#30363d;
-      --text:#e6edf3;--muted:#7d8590;
-      --accent:#f0b429;--accent2:#58a6ff;
-      --positive:#3fb950;--negative:#f85149;
-      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+      --bg:#0b0e14;--surface:#11151d;--surface2:#171c26;
+      --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+      --text:#e8ecf3;--muted:#8b95a7;
+      --accent:#f0b429;--accent2:#6cb2ff;
+      --positive:#42c768;--negative:#f26d64;
+      --mono:'IBM Plex Mono',monospace;--sans:'Geist',sans-serif;
     }
     body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
     a{color:var(--accent);text-decoration:none;}
@@ -179,7 +179,7 @@ function pageHtml(t) {
     .nav-links{display:flex;gap:24px;list-style:none;}
     .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
     .nav-links a:hover{color:var(--text);text-decoration:none;}
-    .nav-cta{background:var(--accent);color:#080c10!important;padding:6px 14px;border-radius:2px;font-weight:600;}
+    .nav-cta{background:var(--accent);color:#0b0e14!important;padding:6px 14px;border-radius:8px;font-weight:600;}
 
     main{max-width:880px;margin:0 auto;padding:48px 24px;}
     .breadcrumb{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);margin-bottom:24px;text-transform:uppercase;}
@@ -192,13 +192,13 @@ function pageHtml(t) {
     h1 .sub{color:var(--muted);font-weight:400;}
     .lede{font-size:17px;color:var(--text);max-width:680px;margin-bottom:28px;line-height:1.6;}
 
-    .live-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:24px;margin-bottom:32px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:18px;}
+    .live-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:32px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:18px;}
     .live-cell .live-label{font-family:var(--mono);font-size:9px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
     .live-cell .live-value{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--text);}
     .live-cell.pos .live-value{color:var(--positive);}
     .live-cell.neg .live-value{color:var(--negative);}
 
-    .cta{display:inline-block;background:var(--accent);color:#080c10!important;padding:12px 24px;border-radius:2px;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-right:10px;}
+    .cta{display:inline-block;background:var(--accent);color:#0b0e14!important;padding:12px 24px;border-radius:8px;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-right:10px;}
     .cta-secondary{background:transparent;color:var(--text)!important;border:1px solid var(--border2);}
     .cta:hover{text-decoration:none;}
 
@@ -208,11 +208,11 @@ function pageHtml(t) {
     .related{margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
     .related-title{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;}
     .related-chips{display:flex;flex-wrap:wrap;gap:8px;}
-    .chip{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:2px;}
+    .chip{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:999px;}
     .chip:hover{border-color:var(--accent);text-decoration:none;}
 
     .faq{margin-top:48px;}
-    .faq-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px 22px;margin-bottom:10px;}
+    .faq-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin-bottom:10px;}
     .faq-q{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;}
     .faq-a{font-size:14px;color:#c9d1d9;line-height:1.6;}
 
@@ -305,8 +305,8 @@ function pageHtml(t) {
     All ${t.display} sentiment, price and correlation data is available via the SentimentFX
     REST API. Generate a key on the
     <a href="https://developers.sentimentfx.org">developer portal</a>, then call
-    <code style="font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:2px;font-size:13px;">GET /v1/sentiment/${t.id}</code>
-    with an <code style="font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:2px;font-size:13px;">X-API-Key</code>
+    <code style="font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:6px;font-size:13px;">GET /v1/sentiment/${t.id}</code>
+    with an <code style="font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:6px;font-size:13px;">X-API-Key</code>
     header. Free tier included, metered billing beyond that.
   </p>
 

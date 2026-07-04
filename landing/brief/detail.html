@@ -6,7 +6,7 @@
   <title>SentimentFX Morning Brief Archive</title>
   <meta name="description" content="An archived edition of the SentimentFX Morning Brief — AI-scored market sentiment summary across crypto, FX and equities.">
   <meta name="robots" content="index, follow, max-image-preview:large">
-  <meta name="theme-color" content="#080c10">
+  <meta name="theme-color" content="#0b0e14">
 
   <meta property="og:site_name" content="SentimentFX">
   <meta property="og:title" content="SentimentFX Morning Brief — Archive">
@@ -15,17 +15,17 @@
 
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
-      --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
-      --border:#21262d;--border2:#30363d;
-      --text:#e6edf3;--muted:#7d8590;
-      --accent:#f0b429;--accent2:#58a6ff;
-      --positive:#3fb950;--negative:#f85149;
-      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+      --bg:#0b0e14;--surface:#11151d;--surface2:#171c26;
+      --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+      --text:#e8ecf3;--muted:#8b95a7;
+      --accent:#f0b429;--accent2:#6cb2ff;
+      --positive:#42c768;--negative:#f26d64;
+      --mono:'IBM Plex Mono',monospace;--sans:'Geist',sans-serif;
     }
     body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
     a{color:var(--accent);text-decoration:none;}
@@ -37,7 +37,7 @@
     .nav-links{display:flex;gap:24px;list-style:none;align-items:center;}
     .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
     .nav-links a:hover{color:var(--text);text-decoration:none;}
-    .nav-cta{background:var(--accent);color:#080c10!important;padding:6px 14px;border-radius:2px;font-weight:600;}
+    .nav-cta{background:var(--accent);color:#0b0e14!important;padding:6px 14px;border-radius:8px;font-weight:600;}
 
     main{max-width:680px;margin:0 auto;padding:48px 24px;}
     .breadcrumb{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);margin-bottom:24px;text-transform:uppercase;}
@@ -51,12 +51,12 @@
     .signal-eyebrow{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--accent);letter-spacing:0.12em;margin-bottom:10px;text-transform:uppercase;}
     .signal-text{color:var(--text);font-size:15px;line-height:1.7;}
 
-    .paywall{margin-top:32px;padding:24px 28px;border:1px dashed var(--accent);border-radius:2px;background:rgba(240,180,41,0.04);text-align:center;}
+    .paywall{margin-top:32px;padding:24px 28px;border:1px dashed var(--accent);border-radius:10px;background:rgba(240,180,41,0.04);text-align:center;}
     .paywall-title{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;}
     .paywall-text{font-size:13px;color:#c9d1d9;margin-bottom:16px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.6;}
-    .paywall-cta{display:inline-block;background:var(--accent);color:#080c10!important;padding:10px 20px;border-radius:2px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
+    .paywall-cta{display:inline-block;background:var(--accent);color:#0b0e14!important;padding:10px 20px;border-radius:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
 
-    .ticker-block{background:var(--surface);border:1px solid var(--border);padding:18px 20px;margin-bottom:12px;border-radius:2px;}
+    .ticker-block{background:var(--surface);border:1px solid var(--border);padding:18px 20px;margin-bottom:12px;border-radius:10px;}
     .ticker-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
     .ticker-symbol{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);}
     .ticker-name{font-family:var(--sans);font-size:11px;color:var(--muted);margin-left:8px;}
@@ -123,13 +123,13 @@
       window.location.href = "/brief";
     }
 
-    const fmtPrice = (v, ticker) => {
+    const fmtPrice = (v, ticker, currency) => {
       if (v == null) return "—";
-      const isFx = ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD"].includes(ticker);
-      if (isFx) return v.toFixed(4);
-      if (v >= 1000) return "£" + (v / 1000).toFixed(2) + "k";
-      if (v >= 1) return "£" + v.toFixed(2);
-      return "£" + v.toFixed(4);
+      if (currency === "RATE") return ticker === "USDJPY" ? v.toFixed(2) : v.toFixed(4);
+      const symbol = currency === "GBP" ? "£" : "$";
+      if (v >= 1000) return symbol + (v / 1000).toFixed(2) + "k";
+      if (v >= 1) return symbol + v.toFixed(2);
+      return symbol + v.toFixed(4);
     };
     const fmtPct = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(2) + "%";
     const fmtScore = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(3);
@@ -189,7 +189,7 @@
               <span class="${colorClass(d.top_headline.sentiment_score)}" style="margin-left:8px;font-family:var(--mono);">${fmtScore(d.top_headline.sentiment_score)}</span>
             </div>` : "";
           const divHtml = d.divergence ? `
-            <div class="divergence-flag">⚠ DIVERGENCE — SENTIMENT AND PRICE MOVING OPPOSITE</div>` : "";
+            <div class="divergence-flag">⚠ DIVERGENCE: SENTIMENT AND PRICE MOVING OPPOSITE</div>` : "";
           const deltaSign = (d.sentiment_delta || 0) >= 0 ? "↑" : "↓";
           html += `
             <div class="ticker-block">
@@ -199,7 +199,7 @@
                   <span class="ticker-name">${d.name || ""}</span>
                 </div>
                 <div>
-                  <div class="ticker-price">${fmtPrice(d.current_price_gbp, d.ticker)}</div>
+                  <div class="ticker-price">${fmtPrice(d.current_price, d.ticker, d.currency)}</div>
                   <div class="ticker-change ${priceCls}">${fmtPct(d.price_change_pct)}</div>
                 </div>
               </div>

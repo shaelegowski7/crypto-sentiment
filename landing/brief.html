@@ -7,7 +7,7 @@
   <meta name="description" content="A 60-second daily email decoding overnight market sentiment across crypto, FX, and equities. FinBERT-scored, Claude-summarised, delivered before the London open. £9.99/mo.">
   <meta name="keywords" content="morning brief, crypto sentiment newsletter, daily market brief, FinBERT, market sentiment email">
   <meta name="robots" content="index, follow, max-image-preview:large">
-  <meta name="theme-color" content="#080c10">
+  <meta name="theme-color" content="#0b0e14">
   <link rel="canonical" href="https://sentimentfx.org/brief">
 
   <meta property="og:site_name" content="SentimentFX">
@@ -25,7 +25,7 @@
 
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Morning Brief","item":"https://sentimentfx.org/brief"}]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"SentimentFX Morning Brief","description":"Daily AI-scored market sentiment email covering crypto, FX, and equities, delivered before the London open.","brand":{"@type":"Brand","name":"SentimentFX"},"offers":{"@type":"Offer","price":"9.99","priceCurrency":"GBP","availability":"https://schema.org/InStock","url":"https://sentimentfx.org/brief"}}</script>
@@ -34,12 +34,12 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
-      --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
-      --border:#21262d;--border2:#30363d;
-      --text:#e6edf3;--muted:#7d8590;
-      --accent:#f0b429;--accent2:#58a6ff;
-      --positive:#3fb950;--negative:#f85149;
-      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+      --bg:#0b0e14;--surface:#11151d;--surface2:#171c26;
+      --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+      --text:#e8ecf3;--muted:#8b95a7;
+      --accent:#f0b429;--accent2:#6cb2ff;
+      --positive:#42c768;--negative:#f26d64;
+      --mono:'IBM Plex Mono',monospace;--sans:'Geist',sans-serif;
     }
     body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
     a{color:var(--accent);text-decoration:none;}
@@ -51,7 +51,7 @@
     .nav-links{display:flex;gap:24px;list-style:none;align-items:center;}
     .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
     .nav-links a:hover{color:var(--text);text-decoration:none;}
-    .nav-cta{background:var(--accent);color:#080c10!important;padding:6px 14px;border-radius:2px;font-weight:600;}
+    .nav-cta{background:var(--accent);color:#0b0e14!important;padding:6px 14px;border-radius:8px;font-weight:600;}
 
     main{max-width:880px;margin:0 auto;padding:48px 24px;}
     .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;}
@@ -64,14 +64,14 @@
     .hero-card .summary{font-size:15px;color:#c9d1d9;line-height:1.65;font-family:var(--sans);}
 
     .price-strip{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:40px;}
-    .price-card{flex:1;min-width:220px;background:var(--surface);border:1px solid var(--border);padding:20px 22px;border-radius:2px;}
+    .price-card{flex:1;min-width:220px;background:var(--surface);border:1px solid var(--border);padding:20px 22px;border-radius:10px;}
     .price-card.featured{border-color:var(--accent);background:rgba(240,180,41,0.04);}
     .price-tier{font-family:var(--mono);font-size:10px;letter-spacing:0.18em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
     .price-amount{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--text);margin-bottom:6px;}
     .price-amount .per{color:var(--muted);font-size:12px;font-weight:400;margin-left:4px;}
     .price-list{font-family:var(--sans);font-size:12px;color:#c9d1d9;line-height:1.8;margin:10px 0 16px;list-style:none;}
     .price-list li::before{content:"·  ";color:var(--accent);}
-    .price-cta{display:inline-block;background:var(--accent);color:#080c10!important;padding:10px 18px;border-radius:2px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
+    .price-cta{display:inline-block;background:var(--accent);color:#0b0e14!important;padding:10px 18px;border-radius:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
     .price-cta.secondary{background:transparent;color:var(--text)!important;border:1px solid var(--border2);}
 
     .archive{margin-top:48px;}

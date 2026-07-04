@@ -7,7 +7,7 @@
   <meta name="description" content="Live FinBERT sentiment leaderboard ranking 42 assets by biggest 24-hour news-sentiment movers — crypto, FX, stocks, ETFs and commodities. Updated every 15 minutes by SentimentFX.">
   <meta name="keywords" content="sentiment leaderboard, market sentiment ranking, crypto sentiment movers, FX sentiment, FinBERT leaderboard, news sentiment rank, top sentiment stocks">
   <meta name="robots" content="index, follow, max-image-preview:large">
-  <meta name="theme-color" content="#080c10">
+  <meta name="theme-color" content="#0b0e14">
   <link rel="canonical" href="https://sentimentfx.org/leaderboard">
 
   <meta property="og:site_name" content="SentimentFX">
@@ -25,7 +25,7 @@
 
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Sentiment Leaderboard","item":"https://sentimentfx.org/leaderboard"}]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What does the sentiment leaderboard show?","acceptedAnswer":{"@type":"Answer","text":"The SentimentFX leaderboard ranks 42 tracked assets — across crypto, FX, stocks, ETFs and commodities — by the largest change in news sentiment over the last 24 hours compared with the prior 24 hours. Sentiment is a volume-weighted average of FinBERT scores across recent headlines."}},{"@type":"Question","name":"How often is the leaderboard updated?","acceptedAnswer":{"@type":"Answer","text":"Headline sentiment refreshes every 15 minutes from RSS feeds across major financial publishers, so the leaderboard reflects new movers almost in real time. Prices are refreshed hourly via yfinance."}},{"@type":"Question","name":"How is sentiment scored?","acceptedAnswer":{"@type":"Answer","text":"Each headline is scored by FinBERT, a transformer fine-tuned on financial text. The score for an individual headline is the model's positive probability minus its negative probability, giving a value from -1 (very bearish) to +1 (very bullish). Daily sentiment is a volume-weighted mean across all scored headlines for that ticker."}},{"@type":"Question","name":"Can I get the leaderboard data via API?","acceptedAnswer":{"@type":"Answer","text":"Yes — the GET /leaderboard endpoint on api.sentimentfx.org returns the same data as JSON, with one row per ticker. No authentication is required for the leaderboard endpoint. See developers.sentimentfx.org for full API reference."}}]}</script>
@@ -33,12 +33,12 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
-      --bg:#080c10;--surface:#0d1117;--surface2:#161b22;
-      --border:#21262d;--border2:#30363d;
-      --text:#e6edf3;--muted:#7d8590;
-      --accent:#f0b429;--accent2:#58a6ff;
-      --positive:#3fb950;--negative:#f85149;--neutral:#8b949e;
-      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+      --bg:#0b0e14;--surface:#11151d;--surface2:#171c26;
+      --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+      --text:#e8ecf3;--muted:#8b95a7;
+      --accent:#f0b429;--accent2:#6cb2ff;
+      --positive:#42c768;--negative:#f26d64;--neutral:#8b949e;
+      --mono:'IBM Plex Mono',monospace;--sans:'Geist',sans-serif;
     }
     body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
     a{color:var(--accent);text-decoration:none;}
@@ -50,7 +50,7 @@
     .nav-links{display:flex;gap:24px;list-style:none;align-items:center;}
     .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
     .nav-links a:hover{color:var(--text);text-decoration:none;}
-    .nav-cta{background:var(--accent);color:#080c10!important;padding:6px 14px;border-radius:2px;font-weight:600;}
+    .nav-cta{background:var(--accent);color:#0b0e14!important;padding:6px 14px;border-radius:8px;font-weight:600;}
 
     main{max-width:1100px;margin:0 auto;padding:48px 24px;}
     .breadcrumb{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);margin-bottom:24px;text-transform:uppercase;}
@@ -63,11 +63,11 @@
     .lede{font-size:17px;color:var(--text);max-width:760px;margin-bottom:28px;line-height:1.6;}
 
     .filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
-    .filter-btn{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;padding:6px 12px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;border-radius:2px;text-transform:uppercase;}
+    .filter-btn{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;padding:6px 12px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;border-radius:999px;text-transform:uppercase;}
     .filter-btn:hover{color:var(--text);}
-    .filter-btn.active{color:var(--accent2);border-color:var(--accent2);background:rgba(88,166,255,0.06);}
+    .filter-btn.active{color:var(--accent2);border-color:var(--accent2);background:rgba(108,178,255,0.06);}
 
-    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:2px;}
+    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;}
     table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;}
     thead tr{background:var(--surface);border-bottom:1px solid var(--border);}
     th{padding:10px 12px;text-align:right;color:var(--muted);font-weight:500;letter-spacing:0.08em;text-transform:uppercase;font-size:10px;}
@@ -85,10 +85,10 @@
     .neutral{color:var(--neutral);}
     .empty{text-align:center;padding:32px;color:var(--muted);}
 
-    .cta-card{margin-top:32px;padding:20px 24px;border:1px solid var(--border);border-radius:2px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
+    .cta-card{margin-top:32px;padding:20px 24px;border:1px solid var(--border);border-radius:10px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
     .cta-card .cta-text{font-family:var(--mono);font-size:13px;color:var(--text);margin-bottom:4px;}
     .cta-card .cta-sub{font-family:var(--sans);font-size:12px;color:var(--muted);}
-    .cta{display:inline-block;background:var(--accent);color:#080c10!important;padding:10px 18px;border-radius:2px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
+    .cta{display:inline-block;background:var(--accent);color:#0b0e14!important;padding:10px 18px;border-radius:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
     .cta-secondary{background:transparent;color:var(--text)!important;border:1px solid var(--border2);}
     .cta:hover{text-decoration:none;}
 
@@ -100,7 +100,7 @@
     .related{margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
     .related-title{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;}
     .related ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;}
-    .related a{display:block;padding:8px 12px;border:1px solid var(--border);border-radius:2px;font-family:var(--mono);font-size:11px;color:var(--text);}
+    .related a{display:block;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:11px;color:var(--text);}
     .related a:hover{border-color:var(--accent);text-decoration:none;}
 
     @media (max-width:640px){
@@ -191,7 +191,8 @@
       shift compared with the prior day. <strong>Articles</strong> is how many headlines
       contributed; tickers with very low article counts can swing on a single story, so
       treat thin coverage with caution. <strong>Price</strong> and <strong>24h %</strong>
-      come from yfinance, in GBP.
+      come from yfinance — crypto is priced in GBP, everything else in native USD (FX
+      pairs show the raw exchange rate instead of a price).
     </p>
 
     <h2>API access</h2>
@@ -239,13 +240,19 @@
     };
     const FX_TICKERS = ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD"];
 
+    const CRYPTO_TICKERS = ["BTC","ETH","SOL","XRP","DOGE"];
+    // Crypto is genuinely GBP (yfinance BTC-GBP etc). Stocks/ETFs/commodities
+    // come back from yfinance as raw USD -- the backend never converts them
+    // -- so labelling them GBP is wrong. Mirrors nativeCurrencyFor() in
+    // frontend/src/lib/constants.js -- keep both in sync.
     const label = t => FX_LABELS[t] || COMMODITY_LABELS[t] || t;
     const fmtPrice = (v, t) => {
       if (v == null) return "—";
-      if (FX_TICKERS.indexOf(t) >= 0) return v.toFixed(4);
-      if (v >= 1000) return "£" + (v/1000).toFixed(2) + "k";
-      if (v >= 1) return "£" + v.toFixed(2);
-      return "£" + v.toFixed(4);
+      if (FX_TICKERS.indexOf(t) >= 0) return t === "USDJPY" ? v.toFixed(2) : v.toFixed(4);
+      const symbol = CRYPTO_TICKERS.indexOf(t) >= 0 ? "£" : "$";
+      if (v >= 1000) return symbol + (v/1000).toFixed(2) + "k";
+      if (v >= 1) return symbol + v.toFixed(2);
+      return symbol + v.toFixed(4);
     };
     const fmtPct = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(2) + "%";
     const fmtScore = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(3);
