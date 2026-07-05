@@ -318,11 +318,11 @@ def build_trade_card(db: Session, ticker: str, hold_days: int = 7) -> dict:
 # renderer — no recomputation, no risk of channels drifting on the numbers.
 
 def _direction_color(direction: str) -> str:
-    return {"LONG": "#3fb950", "SHORT": "#f85149"}.get(direction, "#8b949e")
+    return {"LONG": "#42c768", "SHORT": "#f26d64"}.get(direction, "#8b949e")
 
 
 def _confidence_color(confidence: str) -> str:
-    return {"high": "#3fb950", "medium": "#f0b429", "low": "#7d8590"}.get(confidence, "#7d8590")
+    return {"high": "#42c768", "medium": "#f0b429", "low": "#8b95a7"}.get(confidence, "#8b95a7")
 
 
 def format_trade_card_text(card: dict) -> str:
@@ -414,7 +414,7 @@ def format_trade_card_html(card: dict) -> str:
         rows.append((
             "24h shift",
             f"{sign}{card['sentiment_shift_24h']:.3f} "
-            f"<span style=\"color:#7d8590\">· {card['shift_magnitude']} "
+            f"<span style=\"color:#8b95a7\">· {card['shift_magnitude']} "
             f"({card['shift_percentile']}th pct)</span>",
         ))
     if card["article_count_today"] is not None:
@@ -429,9 +429,9 @@ def format_trade_card_html(card: dict) -> str:
         rows.append(("Last similar shift", f"{card['days_since_similar']} days ago"))
 
     rows_html = "".join(
-        f"<tr><td style=\"padding:6px 0;color:#7d8590;font-size:11px;letter-spacing:0.04em;"
+        f"<tr><td style=\"padding:6px 0;color:#8b95a7;font-size:11px;letter-spacing:0.04em;"
         f"text-transform:uppercase;\">{label}</td>"
-        f"<td style=\"padding:6px 0;color:#e6edf3;font-size:13px;text-align:right;\">{value}</td></tr>"
+        f"<td style=\"padding:6px 0;color:#e8ecf3;font-size:13px;text-align:right;\">{value}</td></tr>"
         for label, value in rows
     )
 
@@ -439,22 +439,22 @@ def format_trade_card_html(card: dict) -> str:
     bt = card["backtest"]
     if bt:
         edge_html = f"""
-        <table cellpadding="0" cellspacing="0" style="width:100%;background:#0d1117;border:1px solid #21262d;border-radius:2px;margin:24px 0 8px;">
+        <table cellpadding="0" cellspacing="0" style="width:100%;background:#11151d;border:1px solid #1c1f26;border-radius:2px;margin:24px 0 8px;">
           <tr>
             <td style="padding:16px 18px;">
-              <p style="font-size:10px;letter-spacing:0.15em;color:#58a6ff;text-transform:uppercase;margin:0 0 10px;">Historical edge · shift signal · {bt['hold_days']}d hold</p>
+              <p style="font-size:10px;letter-spacing:0.15em;color:#6cb2ff;text-transform:uppercase;margin:0 0 10px;">Historical edge · shift signal · {bt['hold_days']}d hold</p>
               <table cellpadding="0" cellspacing="0" style="width:100%;">
                 <tr>
-                  <td style="font-size:22px;font-weight:600;color:#e6edf3;">{int(bt['win_rate']*100)}%</td>
+                  <td style="font-size:22px;font-weight:600;color:#e8ecf3;">{int(bt['win_rate']*100)}%</td>
                   <td style="font-size:22px;font-weight:600;color:{_direction_color('LONG' if bt['avg_return_pct']>=0 else 'SHORT')};text-align:center;">
                     {bt['avg_return_pct']:+.2f}%
                   </td>
-                  <td style="font-size:22px;font-weight:600;color:#e6edf3;text-align:right;">n={bt['sample_size']}</td>
+                  <td style="font-size:22px;font-weight:600;color:#e8ecf3;text-align:right;">n={bt['sample_size']}</td>
                 </tr>
                 <tr>
-                  <td style="font-size:9px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;padding-top:4px;">Win rate</td>
-                  <td style="font-size:9px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;padding-top:4px;text-align:center;">Avg return</td>
-                  <td style="font-size:9px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;padding-top:4px;text-align:right;">Sample</td>
+                  <td style="font-size:9px;letter-spacing:0.1em;color:#8b95a7;text-transform:uppercase;padding-top:4px;">Win rate</td>
+                  <td style="font-size:9px;letter-spacing:0.1em;color:#8b95a7;text-transform:uppercase;padding-top:4px;text-align:center;">Avg return</td>
+                  <td style="font-size:9px;letter-spacing:0.1em;color:#8b95a7;text-transform:uppercase;padding-top:4px;text-align:right;">Sample</td>
                 </tr>
               </table>
             </td>
@@ -475,18 +475,18 @@ def format_trade_card_html(card: dict) -> str:
         wf_t = qg.get("wf_folds_total")
         oos_color = _direction_color("LONG" if (oos or 0) >= 0 else "SHORT")
         gate_html = f"""
-        <table cellpadding="0" cellspacing="0" style="width:100%;background:#0d1117;border:1px solid #21262d;border-radius:2px;margin:8px 0;">
+        <table cellpadding="0" cellspacing="0" style="width:100%;background:#11151d;border:1px solid #1c1f26;border-radius:2px;margin:8px 0;">
           <tr>
             <td style="padding:14px 18px;">
-              <p style="font-size:10px;letter-spacing:0.15em;color:#3fb950;text-transform:uppercase;margin:0 0 8px;">Backtest-validated · why this alert fired</p>
+              <p style="font-size:10px;letter-spacing:0.15em;color:#42c768;text-transform:uppercase;margin:0 0 8px;">Backtest-validated · why this alert fired</p>
               <table cellpadding="0" cellspacing="0" style="width:100%;">
                 <tr>
                   <td style="font-size:16px;font-weight:600;color:{oos_color};">{"—" if oos is None else f"{oos:+.2f}%"}</td>
-                  <td style="font-size:16px;font-weight:600;color:#e6edf3;text-align:right;">{"—" if not wf_t else f"{wf_p}/{wf_t}"}</td>
+                  <td style="font-size:16px;font-weight:600;color:#e8ecf3;text-align:right;">{"—" if not wf_t else f"{wf_p}/{wf_t}"}</td>
                 </tr>
                 <tr>
-                  <td style="font-size:9px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;padding-top:4px;">OOS net (post-cost)</td>
-                  <td style="font-size:9px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;padding-top:4px;text-align:right;">Walk-fwd positive folds</td>
+                  <td style="font-size:9px;letter-spacing:0.1em;color:#8b95a7;text-transform:uppercase;padding-top:4px;">OOS net (post-cost)</td>
+                  <td style="font-size:9px;letter-spacing:0.1em;color:#8b95a7;text-transform:uppercase;padding-top:4px;text-align:right;">Walk-fwd positive folds</td>
                 </tr>
               </table>
             </td>
@@ -498,11 +498,11 @@ def format_trade_card_html(card: dict) -> str:
     # Trade-plan strip
     if card["direction"] != "NEUTRAL":
         plan_html = f"""
-        <table cellpadding="0" cellspacing="0" style="width:100%;background:#0d1117;border:1px solid {dir_color};border-radius:2px;margin:8px 0 24px;">
+        <table cellpadding="0" cellspacing="0" style="width:100%;background:#11151d;border:1px solid {dir_color};border-radius:2px;margin:8px 0 24px;">
           <tr>
             <td style="padding:14px 18px;">
               <p style="font-size:10px;letter-spacing:0.15em;color:{dir_color};text-transform:uppercase;margin:0 0 8px;">Suggested trade plan</p>
-              <p style="font-size:13px;color:#e6edf3;margin:0;font-family:'Courier New',monospace;">
+              <p style="font-size:13px;color:#e8ecf3;margin:0;font-family:'Courier New',monospace;">
                 Direction: <strong style="color:{dir_color}">{card['direction']}</strong>
                 · Entry: <strong>{card['entry']}</strong>
                 · Exit: <strong>in {card['exit_in_days']}d</strong>
@@ -518,38 +518,38 @@ def format_trade_card_html(card: dict) -> str:
     if card["notes"]:
         items = "".join(f"<li style=\"margin-bottom:4px;\">{n}</li>" for n in card["notes"])
         notes_html = f"""
-        <p style="font-size:10px;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;margin:24px 0 8px;">Caveats</p>
-        <ul style="font-size:12px;color:#7d8590;margin:0 0 8px 16px;padding:0;line-height:1.6;">{items}</ul>"""
+        <p style="font-size:10px;letter-spacing:0.1em;color:#8b95a7;text-transform:uppercase;margin:24px 0 8px;">Caveats</p>
+        <ul style="font-size:12px;color:#8b95a7;margin:0 0 8px 16px;padding:0;line-height:1.6;">{items}</ul>"""
 
     return f"""<!DOCTYPE html>
 <html>
-<body style="margin:0;padding:0;background:#080c10;font-family:'Courier New',monospace;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#080c10;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#0b0e14;font-family:'Courier New',monospace;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b0e14;padding:40px 20px;">
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-        <tr><td style="border-bottom:1px solid #21262d;padding-bottom:20px;">
+        <tr><td style="border-bottom:1px solid #1c1f26;padding-bottom:20px;">
           <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">SentimentFX</span>
         </td></tr>
         <tr><td style="padding:32px 0 0;">
           <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 14px;">— {eyebrow}</p>
           <h1 style="font-size:26px;font-weight:600;color:{dir_color};margin:0 0 24px;line-height:1.2;">{headline}</h1>
-          <table cellpadding="0" cellspacing="0" style="width:100%;border-top:1px solid #21262d;border-bottom:1px solid #21262d;">{rows_html}</table>
+          <table cellpadding="0" cellspacing="0" style="width:100%;border-top:1px solid #1c1f26;border-bottom:1px solid #1c1f26;">{rows_html}</table>
           {plan_html}
           {gate_html}
           {edge_html}
           {notes_html}
           <table cellpadding="0" cellspacing="0" style="margin:24px 0 8px;">
             <tr><td style="background:#f0b429;border-radius:2px;">
-              <a href="https://app.sentimentfx.org" style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#080c10;text-decoration:none;text-transform:uppercase;">Open Dashboard →</a>
+              <a href="https://app.sentimentfx.org" style="display:inline-block;padding:12px 28px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:#0b0e14;text-decoration:none;text-transform:uppercase;">Open Dashboard →</a>
             </td></tr>
           </table>
-          <p style="font-size:10px;color:#7d8590;margin:24px 0 0;line-height:1.6;">
+          <p style="font-size:10px;color:#8b95a7;margin:24px 0 0;line-height:1.6;">
             ⚠ Sentiment signals are probabilistic, not certain. Past backtest performance does not predict future results.
             Position-size and risk-manage accordingly. Not financial advice.
           </p>
         </td></tr>
-        <tr><td style="border-top:1px solid #21262d;padding-top:20px;margin-top:32px;">
-          <p style="font-size:10px;color:#7d8590;margin:0;letter-spacing:0.05em;line-height:1.7;">
+        <tr><td style="border-top:1px solid #1c1f26;padding-top:20px;margin-top:32px;">
+          <p style="font-size:10px;color:#8b95a7;margin:0;letter-spacing:0.05em;line-height:1.7;">
             SentimentFX · Crypto sentiment intelligence<br>
             <a href="mailto:hello@sentimentfx.org" style="color:#f0b429;text-decoration:none;">hello@sentimentfx.org</a>
           </p>

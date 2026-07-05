@@ -178,9 +178,9 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
 
     def sentiment_color(score):
         if score >= 0.1:
-            return "#3fb950"
+            return "#42c768"
         elif score <= -0.1:
-            return "#f85149"
+            return "#f26d64"
         return "#f0b429"
 
     def arrow(val):
@@ -200,32 +200,32 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
             h = d["top_headline"]
             score_color = sentiment_color(h["sentiment_score"])
             headline_block = f"""
-            <div style="margin-top:10px;padding:8px 10px;background:#161b22;font-size:12px;color:#7d8590;font-family:{SANS};">
-                <a href="{h['url']}" style="color:#58a6ff;text-decoration:none;">{h['title'][:90]}{'...' if len(h['title']) > 90 else ''}</a>
+            <div style="margin-top:10px;padding:8px 10px;background:#171c26;font-size:12px;color:#8b95a7;font-family:{SANS};">
+                <a href="{h['url']}" style="color:#6cb2ff;text-decoration:none;">{h['title'][:90]}{'...' if len(h['title']) > 90 else ''}</a>
                 <span style="font-family:{MONO};color:{score_color};margin-left:8px;font-size:11px;">{h['sentiment_score']:+.3f}</span>
             </div>"""
 
         price_str = _fmt_price(d["current_price"], d["ticker"])
         price_change_str = f"{'+' if (d['price_change_pct'] or 0) >= 0 else ''}{d['price_change_pct'] or 0:.2f}%" if d["price_change_pct"] is not None else "N/A"
-        price_color = "#3fb950" if (d["price_change_pct"] or 0) >= 0 else "#f85149"
+        price_color = "#42c768" if (d["price_change_pct"] or 0) >= 0 else "#f26d64"
         sent_color = sentiment_color(d["current_sentiment"])
 
         ticker_blocks += f"""
-        <div style="background:#0d1117;border:1px solid #21262d;padding:16px;margin-bottom:10px;">
+        <div style="background:#11151d;border:1px solid #1c1f26;padding:16px;margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
                 <div>
-                    <span style="font-family:{MONO};font-size:13px;font-weight:600;color:#e6edf3;">{d['ticker']}</span>
-                    <span style="font-family:{SANS};font-size:11px;color:#7d8590;margin-left:8px;">{d['name']}</span>
+                    <span style="font-family:{MONO};font-size:13px;font-weight:600;color:#e8ecf3;">{d['ticker']}</span>
+                    <span style="font-family:{SANS};font-size:11px;color:#8b95a7;margin-left:8px;">{d['name']}</span>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-family:{MONO};font-size:13px;font-weight:500;color:#e6edf3;">{price_str}</div>
+                    <div style="font-family:{MONO};font-size:13px;font-weight:500;color:#e8ecf3;">{price_str}</div>
                     <div style="font-family:{MONO};font-size:11px;color:{price_color};">{price_change_str}</div>
                 </div>
             </div>
-            <div style="background:#161b22;padding:8px 10px;display:inline-block;">
-                <span style="font-family:{MONO};font-size:10px;color:#7d8590;letter-spacing:0.08em;">SENTIMENT</span>
+            <div style="background:#171c26;padding:8px 10px;display:inline-block;">
+                <span style="font-family:{MONO};font-size:10px;color:#8b95a7;letter-spacing:0.08em;">SENTIMENT</span>
                 <span style="font-family:{MONO};font-size:13px;font-weight:600;color:{sent_color};margin-left:8px;">{d['current_sentiment']:+.3f}</span>
-                <span style="font-family:{MONO};font-size:11px;color:#7d8590;margin-left:6px;">{arrow(d['sentiment_delta'])}{abs(d['sentiment_delta']):.3f}</span>
+                <span style="font-family:{MONO};font-size:11px;color:#8b95a7;margin-left:6px;">{arrow(d['sentiment_delta'])}{abs(d['sentiment_delta']):.3f}</span>
             </div>
             {headline_block}
             {divergence_banner}
@@ -240,28 +240,28 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 </head>
-<body style="margin:0;padding:0;background:#080c10;font-family:{SANS};">
+<body style="margin:0;padding:0;background:#0b0e14;font-family:{SANS};">
   <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
 
-    <div style="border-bottom:1px solid #21262d;padding-bottom:20px;margin-bottom:24px;">
+    <div style="border-bottom:1px solid #1c1f26;padding-bottom:20px;margin-bottom:24px;">
       <div style="font-family:{MONO};font-size:16px;font-weight:600;color:#f0b429;letter-spacing:0.06em;">SENTIMENTFX</div>
-      <div style="font-family:{MONO};font-size:10px;color:#7d8590;margin-top:4px;letter-spacing:0.1em;">MORNING BRIEF &middot; {today}</div>
+      <div style="font-family:{MONO};font-size:10px;color:#8b95a7;margin-top:4px;letter-spacing:0.1em;">MORNING BRIEF &middot; {today}</div>
     </div>
 
-    <div style="background:#0d1117;border:1px solid #30363d;border-left:3px solid #f0b429;padding:16px 18px;margin-bottom:24px;">
+    <div style="background:#11151d;border:1px solid #2a2f3a;border-left:3px solid #f0b429;padding:16px 18px;margin-bottom:24px;">
       <div style="font-family:{MONO};font-size:9px;font-weight:600;color:#f0b429;letter-spacing:0.12em;margin-bottom:10px;">TODAY&#39;S SIGNAL</div>
-      <div style="color:#e6edf3;font-size:14px;line-height:1.7;font-weight:300;">{ai_summary}</div>
+      <div style="color:#e8ecf3;font-size:14px;line-height:1.7;font-weight:300;">{ai_summary}</div>
     </div>
 
     {ticker_blocks}
 
-    <div style="border-top:1px solid #21262d;padding-top:20px;margin-top:8px;">
-      <div style="font-family:{MONO};font-size:10px;color:#7d8590;letter-spacing:0.06em;">
-        <a href="https://app.sentimentfx.org" style="color:#58a6ff;text-decoration:none;">OPEN DASHBOARD</a>
+    <div style="border-top:1px solid #1c1f26;padding-top:20px;margin-top:8px;">
+      <div style="font-family:{MONO};font-size:10px;color:#8b95a7;letter-spacing:0.06em;">
+        <a href="https://app.sentimentfx.org" style="color:#6cb2ff;text-decoration:none;">OPEN DASHBOARD</a>
         &nbsp;&middot;&nbsp;
-        <a href="{unsubscribe_url}" style="color:#7d8590;text-decoration:none;">UNSUBSCRIBE</a>
+        <a href="{unsubscribe_url}" style="color:#8b95a7;text-decoration:none;">UNSUBSCRIBE</a>
       </div>
-      <div style="font-family:{MONO};font-size:9px;color:#30363d;margin-top:8px;letter-spacing:0.05em;">NOT FINANCIAL ADVICE</div>
+      <div style="font-family:{MONO};font-size:9px;color:#2a2f3a;margin-top:8px;letter-spacing:0.05em;">NOT FINANCIAL ADVICE</div>
     </div>
 
   </div>
