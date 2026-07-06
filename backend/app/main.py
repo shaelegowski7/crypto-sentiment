@@ -1565,9 +1565,16 @@ async def export_prices(ticker: str, days: int = 90, db: Session = Depends(get_d
     if not prices:
         raise HTTPException(status_code=404, detail="No data found")
 
+    # Crypto is genuinely GBP (yfinance BTC-GBP etc). FX pairs are a raw
+    # exchange rate, not a currency amount. Everything else (stocks, ETFs,
+    # commodity futures) is stored in native USD -- prices.py never converts
+    # non-crypto tickers. Mirrors brief.py's _price_currency() -- keep in sync.
+    category = _category_for(ticker.upper())
+    price_column = "close_price_gbp" if category == "crypto" else "close_price_rate" if category == "fx" else "close_price_usd"
+
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["date", "ticker", "close_price_gbp", "volume"])
+    writer.writerow(["date", "ticker", price_column, "volume"])
     for p in prices:
         writer.writerow([
             p.date.isoformat(),
