@@ -258,12 +258,14 @@ def get_summary(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
 
 @mcp.tool()
 def get_prices(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
-    """Return daily GBP close prices for `ticker` over the last `days`.
+    """Return daily close prices for `ticker` over the last `days`, in the
+    ticker's native currency -- see the `currency` field on the response.
 
     Costs `days` API credits — same as GET /v1/prices/{ticker}.  Prices come
-    back reverse-chronological.  FX pairs are quoted in the pair's native
-    convention (e.g. USDJPY is yen per dollar); equity / ETF / commodity /
-    crypto tickers are converted to GBP via the current USD/GBP rate.
+    back reverse-chronological.  Crypto is GBP (yfinance BTC-GBP etc.), FX
+    pairs are a raw exchange rate in the pair's native convention (e.g.
+    USDJPY is yen per dollar), and everything else (stocks/ETFs/commodity
+    futures) is native USD -- there is no currency conversion.
     """
     days = max(1, min(days, 365))
     api_key, db = _open_authed_session(ctx)
@@ -278,14 +280,19 @@ def get_prices(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
         if not rows:
             return {"ticker": ticker.upper(), "data": [], "note": "No data in window."}
 
+        from .main import _category_for
+        category = _category_for(ticker.upper())
+        currency = "GBP" if category == "crypto" else "RATE" if category == "fx" else "USD"
+
         return {
             "ticker": ticker.upper(),
             "days": days,
             "calls_used": days,
+            "currency": currency,
             "data": [
                 {
                     "date": p.date.isoformat() if p.date else None,
-                    "close_price_gbp": p.close_price,
+                    "close_price": p.close_price,
                     "volume": p.volume,
                 } for p in rows
             ],

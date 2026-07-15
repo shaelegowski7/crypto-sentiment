@@ -2374,7 +2374,7 @@ def api_summary(request: Request, response: Response, ticker: str, days: int = 3
     }
 
 
-@app.get("/v1/prices/{ticker}", summary="Get historical prices", description="Returns daily close prices in GBP for a given ticker over the specified number of days. Each day costs 1 API credit.")
+@app.get("/v1/prices/{ticker}", summary="Get historical prices", description="Returns daily close prices for a given ticker over the specified number of days, in the ticker's native currency (GBP for crypto, USD for stocks/ETFs/commodities, or a raw exchange rate for FX pairs) -- see the `currency` field on each row. Each day costs 1 API credit.")
 @limiter.limit("20/minute")
 def api_prices(request: Request, response: Response, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     track_usage(api_key, db, days, endpoint="prices")
@@ -2388,14 +2388,22 @@ def api_prices(request: Request, response: Response, ticker: str, days: int = 30
     if not prices:
         raise HTTPException(status_code=404, detail="No data found")
 
+    # Crypto is genuinely GBP (yfinance BTC-GBP etc). FX pairs are a raw
+    # exchange rate, not a currency amount. Everything else (stocks, ETFs,
+    # commodity futures) is stored in native USD -- prices.py never converts
+    # non-crypto tickers. Mirrors brief.py's _price_currency() -- keep in sync.
+    category = _category_for(ticker.upper())
+    currency = "GBP" if category == "crypto" else "RATE" if category == "fx" else "USD"
+
     return {
         "ticker": ticker.upper(),
         "days": days,
         "calls_used": days,
+        "currency": currency,
         "data": [
             {
                 "date": p.date,
-                "close_price_gbp": p.close_price,
+                "close_price": p.close_price,
                 "volume": p.volume,
             } for p in prices
         ]

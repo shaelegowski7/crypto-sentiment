@@ -360,10 +360,11 @@ const res = await fetch(
   <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
   <span class="c-key">"days"</span>: <span class="c-num">30</span>,
   <span class="c-key">"calls_used"</span>: <span class="c-num">30</span>,
+  <span class="c-key">"currency"</span>: <span class="c-str">"GBP"</span>,
   <span class="c-key">"data"</span>: [
     {
       <span class="c-key">"date"</span>: <span class="c-str">"2026-04-27T00:00:00"</span>,
-      <span class="c-key">"close_price_gbp"</span>: <span class="c-num">72841.50</span>,
+      <span class="c-key">"close_price"</span>: <span class="c-num">72841.50</span>,
       <span class="c-key">"volume"</span>: <span class="c-num">18294830293.0</span>
     }
   ]
@@ -551,7 +552,7 @@ resp = client.beta.messages.create(
 
                     <div id="m-correlation" class="scroll-section">
                         <h2>Correlation Analysis</h2>
-                        <p>We compute a <strong style="color:var(--text)">Pearson correlation</strong> between daily sentiment shifts and the <em>next-day</em> price return (close-to-close in GBP) over a rolling 180-day window. A minimum of 30 overlapping data points is required to return a result.</p>
+                        <p>We compute a <strong style="color:var(--text)">Pearson correlation</strong> between daily sentiment shifts and the <em>next-day</em> price return (close-to-close, in the ticker's native currency) over a rolling 180-day window. A minimum of 30 overlapping data points is required to return a result.</p>
                         <pre>r = corr(sentiment_shift[d], price_return[d+1])</pre>
                         <p>The result includes:</p>
                         <table class="param-table">
