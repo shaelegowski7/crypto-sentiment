@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES
+from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES, fetch_stocktwits_headlines, fetch_x_headlines
+from .ai_sources import fetch_ai_headlines
 from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from datetime import datetime, timedelta, timezone
@@ -61,6 +62,11 @@ def _apply_startup_ddl_patches():
     from sqlalchemy import text as _text
     patches = [
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS unlimited BOOLEAN DEFAULT FALSE NOT NULL",
+        # Widened deal sources (ScraperAI / StockTwits / X): body holds full
+        # article text where available, source_type tags the origin.  Both
+        # nullable so existing rows are unaffected.
+        "ALTER TABLE headlines ADD COLUMN IF NOT EXISTS body TEXT",
+        "ALTER TABLE headlines ADD COLUMN IF NOT EXISTS source_type VARCHAR",
     ]
     try:
         with engine.begin() as conn:
@@ -712,6 +718,8 @@ def _ingest_headlines(db, headlines: list, label: str) -> int:
             sentiment_score=sentiment["score"],
             sentiment_label=sentiment["label"],
             published_at=h["published_at"],
+            body=h.get("body"),
+            source_type=h.get("source_type"),
         ))
         HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
         saved += 1
@@ -750,6 +758,29 @@ def scrape_rss_only():
                 any_failure = True
                 db.rollback()
                 print(f"[RSS-15M] {ticker} error: {e}")
+
+        # Widened deal sources.  Each is best-effort and fully isolated: a
+        # failure logs, flags the run, and rolls back its own ticker, but never
+        # aborts the RSS job above.  All emit the same headline dict shape, so
+        # _ingest_headlines dedups + FinBERT-scores them identically.
+        #   - AI:         ScraperAI replay configs (server-rendered, RSS-less news)
+        #   - STOCKTWITS: finance-native social via the public JSON API
+        #   - X:          experimental; returns [] unless X_ENABLED (see scraper.py)
+        for ticker in list(TICKERS) + BACKGROUND_TICKERS:
+            for fetch, label in ((fetch_ai_headlines, "AI"),
+                                 (fetch_stocktwits_headlines, "STOCKTWITS"),
+                                 (fetch_x_headlines, "X")):
+                try:
+                    headlines = fetch(ticker)
+                    if not headlines:
+                        continue
+                    saved = _ingest_headlines(db, headlines, label)
+                    db.commit()
+                    print(f"[RSS-15M] {ticker} [{label}]: +{saved} new / {len(headlines)} fetched")
+                except Exception as e:
+                    any_failure = True
+                    db.rollback()
+                    print(f"[RSS-15M] {ticker} [{label}] error: {e}")
     finally:
         db.close()
 

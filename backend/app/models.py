@@ -14,6 +14,8 @@ class Headline(Base):
     sentiment_label = Column(String)            # "positive", "negative", "neutral"
     published_at = Column(DateTime)             # when the article was published
     created_at = Column(DateTime, default=datetime.utcnow)  # when we scraped it
+    body = Column(Text, nullable=True)          # full article text (AI-scraped sources); NOT scored by FinBERT
+    source_type = Column(String, nullable=True) # coarse origin: "ai", "stocktwits", "x", ... (null = legacy RSS/HN/GNews)
 
 
 class Price(Base):

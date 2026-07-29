@@ -7,7 +7,8 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/main.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(npm run *)",
       "WebFetch(domain:en.wikipedia.org)",
-      "WebFetch(domain:fonts.googleapis.com)"
+      "WebFetch(domain:fonts.googleapis.com)",
+      "Bash(curl *)"
     ]
   }
 }

@@ -56,6 +56,7 @@ GENERAL_FEEDS = {
     "https://www.dailyfx.com/feeds/market-news",
     "https://www.actionforex.com/feed/",
     "https://www.reddit.com/r/Forex/new/.rss",
+    "https://www.reddit.com/r/CryptoCurrency/new/.rss",
 }
 
 RSS_FEEDS = {
@@ -71,6 +72,7 @@ RSS_FEEDS = {
         "https://www.newsbtc.com/feed/",
         "https://bitcoinist.com/feed/",
         "https://www.reddit.com/r/Bitcoin/new/.rss",
+        "https://www.reddit.com/r/CryptoCurrency/new/.rss",
     ],
     "ETH": [
         "https://cointelegraph.com/rss/tag/ethereum",
@@ -81,6 +83,7 @@ RSS_FEEDS = {
         "https://www.newsbtc.com/feed/",
         "https://thedefiant.io/feed",
         "https://www.reddit.com/r/ethereum/new/.rss",
+        "https://www.reddit.com/r/CryptoCurrency/new/.rss",
     ],
     "SOL": [
         "https://cointelegraph.com/rss/tag/solana",
@@ -89,18 +92,21 @@ RSS_FEEDS = {
         "https://beincrypto.com/feed/",
         "https://thedefiant.io/feed",
         "https://www.reddit.com/r/solana/new/.rss",
+        "https://www.reddit.com/r/CryptoCurrency/new/.rss",
     ],
     "XRP": [
         "https://cointelegraph.com/rss/tag/xrp",
         "https://cryptoslate.com/feed/",
         "https://beincrypto.com/feed/",
         "https://www.reddit.com/r/XRP/new/.rss",
+        "https://www.reddit.com/r/CryptoCurrency/new/.rss",
     ],
     "DOGE": [
         "https://cointelegraph.com/rss/tag/dogecoin",
         "https://cryptoslate.com/feed/",
         "https://beincrypto.com/feed/",
         "https://www.reddit.com/r/dogecoin/new/.rss",
+        "https://www.reddit.com/r/CryptoCurrency/new/.rss",
     ],
     "EURUSD": [
         "https://www.fxstreet.com/rss/news",
@@ -605,4 +611,135 @@ def fetch_hn_headlines(
         cur_end = cur_start
 
     print(f"[HN] {ticker}: fetched {len(headlines)} headlines over {days} days")
+    return headlines
+
+
+# ---------------------------------------------------------------------------
+# StockTwits — finance-native social feed.  Its public JSON API returns a
+# per-symbol message stream; we use it directly rather than AI-scraping the
+# React SPA (which needs a headless browser and breaks on every redesign).
+# No auth for the read endpoint, but it's rate-limited (~200 req/h/IP), which
+# is plenty for one call per symbol every 15 min.  Best-effort: a 401/403/429
+# just yields [] and never breaks the scrape job.
+# ---------------------------------------------------------------------------
+STOCKTWITS_URL = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
+
+# Map our tickers to StockTwits symbols.  Crypto uses the ".X" suffix; stocks
+# use the plain symbol.  FX pairs and commodity futures aren't covered on
+# StockTwits, so they're intentionally absent (→ no request made).
+STOCKTWITS_SYMBOLS = {
+    "BTC": "BTC.X", "ETH": "ETH.X", "SOL": "SOL.X", "XRP": "XRP.X", "DOGE": "DOGE.X",
+    "AAPL": "AAPL", "MSFT": "MSFT", "GOOGL": "GOOGL", "AMZN": "AMZN", "META": "META",
+    "NVDA": "NVDA", "TSLA": "TSLA", "JPM": "JPM", "BAC": "BAC", "GS": "GS",
+    "V": "V", "MA": "MA", "XOM": "XOM", "JNJ": "JNJ", "AMD": "AMD", "NFLX": "NFLX",
+    "WMT": "WMT", "UBER": "UBER", "CRM": "CRM", "PLTR": "PLTR",
+    "SPY": "SPY", "QQQ": "QQQ", "GLD": "GLD", "SLV": "SLV", "USO": "USO", "ARKK": "ARKK",
+}
+
+
+def fetch_stocktwits_headlines(ticker: str) -> list:
+    """Pull recent StockTwits messages for ``ticker`` in the standard shape.
+
+    Each message's body becomes the ``title`` (FinBERT scores it like a
+    headline); the StockTwits permalink is the dedup ``url``.  Returns [] for
+    unsupported tickers or on any API error.
+    """
+    symbol = STOCKTWITS_SYMBOLS.get(ticker.upper())
+    if not symbol:
+        return []
+
+    try:
+        res = requests.get(
+            STOCKTWITS_URL.format(symbol=symbol),
+            timeout=15,
+            headers={"User-Agent": "SentimentFX/1.0 (+https://sentimentfx.org)"},
+        )
+        if res.status_code != 200:
+            print(f"[STOCKTWITS] {ticker} ({symbol}): HTTP {res.status_code}")
+            return []
+        messages = res.json().get("messages", []) or []
+    except Exception as e:
+        print(f"[STOCKTWITS] {ticker} ({symbol}): error={e}")
+        return []
+
+    headlines = []
+    for msg in messages:
+        try:
+            body = (msg.get("body") or "").strip()
+            if not body:
+                continue
+            username = (msg.get("user") or {}).get("username", "user")
+            msg_id = msg.get("id")
+            url = f"https://stocktwits.com/{username}/message/{msg_id}"
+
+            created = msg.get("created_at")  # e.g. "2026-07-24T12:34:56Z"
+            try:
+                pub_dt = datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                pub_dt = datetime.now(timezone.utc)
+
+            headlines.append({
+                "ticker": ticker.upper(),
+                "title": body,
+                "source": "StockTwits",
+                "url": url,
+                "published_at": pub_dt,
+                "source_type": "stocktwits",
+            })
+        except Exception as e:
+            print(f"[STOCKTWITS] {ticker}: message parse error={e}")
+            continue
+
+    print(f"[STOCKTWITS] {ticker} ({symbol}): {len(headlines)} messages")
+    return headlines
+
+
+# ---------------------------------------------------------------------------
+# X / Twitter — EXPERIMENTAL, off by default.
+#
+# X has no free API and aggressive anti-bot on the web app, so there is no
+# robust unauthenticated path.  This fetcher is a clearly-isolated stub: it
+# returns [] unless X_ENABLED is set AND an X_NITTER_BASE (a reachable Nitter
+# mirror) is configured, in which case it reads that mirror's per-query RSS.
+# Nitter instances are mostly dead, so expect [] in practice — this exists so
+# the wiring is ready if a reliable source appears, not as a working source
+# today.  Kept fully separate so it can never affect the other fetchers.
+# ---------------------------------------------------------------------------
+X_QUERIES = {
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "XRP": "xrp", "DOGE": "dogecoin",
+}
+
+
+def fetch_x_headlines(ticker: str) -> list:
+    """Experimental X/Twitter fetch via a configured Nitter mirror. Usually []."""
+    if os.getenv("X_ENABLED", "").lower() not in ("1", "true", "yes"):
+        return []
+    base = os.getenv("X_NITTER_BASE", "").rstrip("/")
+    query = X_QUERIES.get(ticker.upper())
+    if not base or not query:
+        return []
+
+    from urllib.parse import quote
+    url = f"{base}/search/rss?f=tweets&q={quote(query)}"
+    headlines = []
+    try:
+        feed = feedparser.parse(url, request_headers={"User-Agent": "SentimentFX/1.0"})
+        for entry in feed.entries[:15]:
+            try:
+                published = entry.get("published_parsed") or entry.get("updated_parsed")
+                pub_dt = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
+                headlines.append({
+                    "ticker": ticker.upper(),
+                    "title": entry.title,
+                    "source": "X",
+                    "url": entry.link,
+                    "published_at": pub_dt,
+                    "source_type": "x",
+                })
+            except Exception as e:
+                print(f"[X] {ticker}: entry parse error={e}")
+                continue
+        print(f"[X] {ticker}: {len(headlines)} tweets (experimental)")
+    except Exception as e:
+        print(f"[X] {ticker}: error={e}")
     return headlines
