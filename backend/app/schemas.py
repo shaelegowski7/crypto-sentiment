@@ -25,6 +25,9 @@ class HeadlineResponse(HeadlineBase):
 class PriceBase(BaseModel):
     ticker: str
     close_price: float
+    open_price: Optional[float] = None
+    high_price: Optional[float] = None
+    low_price: Optional[float] = None
     volume: float
     date: datetime
 

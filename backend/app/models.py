@@ -24,9 +24,40 @@ class Price(Base):
     id = Column(Integer, primary_key=True, index=True)
     ticker = Column(String, index=True)        # e.g. "BTC-USD"
     close_price = Column(Float)                # closing price that day
+    # OHLC, nullable — added for candlestick charts.  Rows written from a real
+    # yfinance daily download (fetch_prices) get true values; rows written from
+    # a live spot-price tick (CoinGecko / single yfinance quote, no OHLC in the
+    # response) or a forward-filled gap day get open=high=low=close_price as a
+    # flat placeholder.  Pre-migration historical rows are NULL until the
+    # one-time /admin/prices/backfill-ohlc reconciliation pass runs.
+    open_price = Column(Float, nullable=True)
+    high_price = Column(Float, nullable=True)
+    low_price = Column(Float, nullable=True)
     volume = Column(Float)                     # trading volume
     date = Column(DateTime)                    # date of the price
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class IntradayPrice(Base):
+    """1h OHLCV bars for candlestick charts.  Separate from `Price` (which
+    stays daily-only and continues to drive sentiment/backtest/correlation
+    unchanged) because yfinance's 60m interval only covers ~730 days of
+    history — this table is deliberately a recent, bounded window, not a
+    replacement for the daily table's full 2019+ history.  4h candles are
+    derived at read time by bucketing four consecutive 1h rows; there's no
+    native 4h interval to fetch, so no separate 4h storage.
+    """
+    __tablename__ = "intraday_prices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String, index=True)        # e.g. "BTC"
+    ts = Column(DateTime, index=True)           # bar open time, UTC
+    open_price = Column(Float)
+    high_price = Column(Float)
+    low_price = Column(Float)
+    close_price = Column(Float)
+    volume = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class WaitlistEmail(Base):
     __tablename__ = "waitlist"

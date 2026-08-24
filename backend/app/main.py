@@ -7,6 +7,7 @@ from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, f
 from .ai_sources import fetch_ai_headlines
 from .sentiment import analyse_sentiment
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
+from .candles import fetch_intraday_prices, INTRADAY_BACKFILL_PERIOD, INTRADAY_REFRESH_PERIOD
 from datetime import datetime, timedelta, timezone
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -67,6 +68,10 @@ def _apply_startup_ddl_patches():
         # nullable so existing rows are unaffected.
         "ALTER TABLE headlines ADD COLUMN IF NOT EXISTS body TEXT",
         "ALTER TABLE headlines ADD COLUMN IF NOT EXISTS source_type VARCHAR",
+        # OHLC for candlestick charts — nullable, see models.Price docstring.
+        "ALTER TABLE prices ADD COLUMN IF NOT EXISTS open_price DOUBLE PRECISION",
+        "ALTER TABLE prices ADD COLUMN IF NOT EXISTS high_price DOUBLE PRECISION",
+        "ALTER TABLE prices ADD COLUMN IF NOT EXISTS low_price DOUBLE PRECISION",
     ]
     try:
         with engine.begin() as conn:
@@ -823,12 +828,23 @@ def scrape_all():
                     models.Price.date == prices["date"]
                 ).first()
                 if existing:
+                    # Live spot ticks have no OHLC of their own — accumulate
+                    # today's high/low across repeated hourly ticks instead of
+                    # overwriting, so by end-of-day the placeholder row has
+                    # approximated a real intraday range rather than staying a
+                    # flat doji. `open_price` is left as whatever the first
+                    # tick of the day set it to.
                     existing.close_price = prices["close_price"]
                     existing.volume = prices["volume"]
+                    existing.high_price = max(existing.high_price or prices["close_price"], prices["close_price"])
+                    existing.low_price = min(existing.low_price or prices["close_price"], prices["close_price"])
                 else:
                     price = models.Price(
                         ticker=prices["ticker"],
                         close_price=prices["close_price"],
+                        open_price=prices["close_price"],
+                        high_price=prices["close_price"],
+                        low_price=prices["close_price"],
                         volume=prices["volume"],
                         date=prices["date"]
                     )
@@ -851,8 +867,15 @@ def scrape_all():
                 ).first()
                 if existing_price:
                     existing_price.close_price = price_data["close_price"]
+                    existing_price.high_price = max(existing_price.high_price or price_data["close_price"], price_data["close_price"])
+                    existing_price.low_price = min(existing_price.low_price or price_data["close_price"], price_data["close_price"])
                 else:
-                    db.add(models.Price(**price_data))
+                    db.add(models.Price(
+                        **price_data,
+                        open_price=price_data["close_price"],
+                        high_price=price_data["close_price"],
+                        low_price=price_data["close_price"],
+                    ))
 
             db.commit()
             print(f"[BACKGROUND] {ticker} price refreshed")
@@ -875,6 +898,44 @@ def scrape_all():
     last_scrape_time = datetime.now(timezone.utc).isoformat()
     last_scrape_duration = elapsed
     print(f"Scheduled scrape complete in {elapsed}s (status={status})")
+
+
+def scrape_intraday_prices():
+    """Hourly top-up of 1h OHLCV bars for candlestick charts. Isolated from
+    scrape_all's daily price refresh — a failure here never touches the daily
+    Price table or the alert/sentiment pipeline. Short period="2d" window per
+    tick (see candles.INTRADAY_REFRESH_PERIOD); full history is filled once by
+    POST /admin/intraday/backfill.
+    """
+    start = time.time()
+    db = SessionLocal()
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    saved = 0
+    try:
+        for ticker in all_tickers:
+            try:
+                bars = fetch_intraday_prices(ticker, period=INTRADAY_REFRESH_PERIOD)
+                for bar in bars:
+                    existing = db.query(models.IntradayPrice).filter(
+                        models.IntradayPrice.ticker == bar["ticker"],
+                        models.IntradayPrice.ts == bar["ts"],
+                    ).first()
+                    if existing:
+                        existing.close_price = bar["close_price"]
+                        existing.open_price = bar["open_price"]
+                        existing.high_price = bar["high_price"]
+                        existing.low_price = bar["low_price"]
+                        existing.volume = bar["volume"]
+                    else:
+                        db.add(models.IntradayPrice(**bar))
+                        saved += 1
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                print(f"[INTRADAY] {ticker} error: {e}")
+    finally:
+        db.close()
+    print(f"[INTRADAY] done in {round(time.time() - start, 2)}s — {saved} new bars across {len(all_tickers)} tickers")
 
 
 scheduler = BackgroundScheduler()
@@ -911,6 +972,16 @@ scheduler.add_job(
 # briefly (different DB sessions, dedup-by-URL handles any contention), which
 # is cheaper than staggering and having to reason about cross-job ordering.
 scheduler.add_job(scrape_all, CronTrigger(minute=0))
+# Intraday 1h candle top-up. minute=5 so it lands just after each hour closes
+# and doesn't collide with scrape_all's minute=0 tick.
+scheduler.add_job(
+    scrape_intraday_prices,
+    CronTrigger(minute=5),
+    id="intraday_scrape",
+    max_instances=1,
+    coalesce=True,
+    replace_existing=True,
+)
 scheduler.add_job(refresh_subscription_gauge, CronTrigger(minute=30))
 scheduler.add_job(reset_monthly_api_usage, CronTrigger(day=1, hour=0, minute=0, timezone="UTC"))
 # Settle ripened alert outcomes once a day.  06:00 UTC = after crypto close in
@@ -1017,10 +1088,15 @@ def scrape(ticker: str, db: Session = Depends(get_db), admin=Depends(require_adm
         if existing:
             existing.close_price = prices["close_price"]
             existing.volume = prices["volume"]
+            existing.high_price = max(existing.high_price or prices["close_price"], prices["close_price"])
+            existing.low_price = min(existing.low_price or prices["close_price"], prices["close_price"])
         else:
             db.add(models.Price(
                 ticker=prices["ticker"],
                 close_price=prices["close_price"],
+                open_price=prices["close_price"],
+                high_price=prices["close_price"],
+                low_price=prices["close_price"],
                 volume=prices["volume"],
                 date=prices["date"]
             ))
@@ -1051,6 +1127,9 @@ def _backfill_prices_all():
                     db.add(models.Price(
                         ticker=p["ticker"],
                         close_price=p["close_price"],
+                        open_price=p["open_price"],
+                        high_price=p["high_price"],
+                        low_price=p["low_price"],
                         volume=p["volume"],
                         date=p["date"],
                     ))
@@ -1079,6 +1158,130 @@ def save_all_prices(background_tasks: BackgroundTasks, admin=Depends(require_adm
     }
 
 
+def _backfill_ohlc_all():
+    """One-time reconciliation, distinct from `_backfill_prices_all`.  That
+    function is insert-only (`if exists: continue`) so it will never correct
+    an already-stored row — which means every daily Price row written before
+    the open/high/low columns existed (all of history) or written from a live
+    spot tick (open=high=low=close placeholder) would stay wrong/flat forever.
+    This walks the same yfinance daily download and UPDATEs matching
+    ticker+date rows in place. Safe to re-run; a no-op once history is clean.
+    Not on a schedule — run once via POST /admin/prices/backfill-ohlc after
+    this feature deploys.
+    """
+    db = SessionLocal()
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    summary = {"updated": {}, "errors": {}}
+    try:
+        for ticker in all_tickers:
+            try:
+                prices = fetch_prices(ticker)
+                if not prices:
+                    summary["errors"][ticker] = "no data"
+                    continue
+                by_date = {p["date"]: p for p in prices}
+                rows = db.query(models.Price).filter(models.Price.ticker == ticker).all()
+                updated = 0
+                for row in rows:
+                    p = by_date.get(row.date)
+                    if not p:
+                        continue
+                    row.open_price = p["open_price"]
+                    row.high_price = p["high_price"]
+                    row.low_price = p["low_price"]
+                    updated += 1
+                db.commit()
+                summary["updated"][ticker] = updated
+                print(f"[BACKFILL-OHLC] {ticker}: reconciled {updated}/{len(rows)} rows")
+            except Exception as e:
+                db.rollback()
+                summary["errors"][ticker] = str(e)
+                print(f"[BACKFILL-OHLC] {ticker} error: {e}")
+    finally:
+        db.close()
+    print(f"[BACKFILL-OHLC] done — updated={sum(summary['updated'].values())} across {len(summary['updated'])} tickers, errors={len(summary['errors'])}")
+
+
+@app.post("/admin/prices/backfill-ohlc")
+def backfill_ohlc(background_tasks: BackgroundTasks, admin=Depends(require_admin)):
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    background_tasks.add_task(_backfill_ohlc_all)
+    return {
+        "message": f"Queued OHLC reconciliation for {len(all_tickers)} tickers — check logs for progress",
+        "tickers": all_tickers,
+    }
+
+
+def _backfill_intraday_all():
+    """One-time deep backfill of 1h bars, bounded by yfinance's ~730-day cap
+    on 60m history (see candles.INTRADAY_BACKFILL_PERIOD). Insert-only, same
+    shape as _backfill_prices_all — the hourly scrape_intraday_prices job
+    keeps things current going forward.
+    """
+    db = SessionLocal()
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    summary = {"saved": {}, "errors": {}}
+    try:
+        for ticker in all_tickers:
+            try:
+                bars = fetch_intraday_prices(ticker, period=INTRADAY_BACKFILL_PERIOD)
+                if not bars:
+                    summary["errors"][ticker] = "no data"
+                    continue
+                new_count = 0
+                for bar in bars:
+                    exists = db.query(models.IntradayPrice).filter(
+                        models.IntradayPrice.ticker == bar["ticker"],
+                        models.IntradayPrice.ts == bar["ts"],
+                    ).first()
+                    if exists:
+                        continue
+                    db.add(models.IntradayPrice(**bar))
+                    new_count += 1
+                db.commit()
+                summary["saved"][ticker] = new_count
+                print(f"[BACKFILL-INTRADAY] {ticker}: +{new_count} new / {len(bars)} fetched")
+            except Exception as e:
+                db.rollback()
+                summary["errors"][ticker] = str(e)
+                print(f"[BACKFILL-INTRADAY] {ticker} error: {e}")
+    finally:
+        db.close()
+    print(f"[BACKFILL-INTRADAY] done — saved={sum(summary['saved'].values())} across {len(summary['saved'])} tickers, errors={len(summary['errors'])}")
+
+
+@app.post("/admin/intraday/backfill")
+def backfill_intraday(background_tasks: BackgroundTasks, admin=Depends(require_admin)):
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    background_tasks.add_task(_backfill_intraday_all)
+    return {
+        "message": f"Queued intraday backfill for {len(all_tickers)} tickers — check logs for progress",
+        "tickers": all_tickers,
+    }
+
+
+def _backfill_candles_all():
+    """One-call combo of _backfill_ohlc_all + _backfill_intraday_all — the two
+    one-time migration passes candlestick charts need after this feature
+    deploys. Run via POST /admin/candles/backfill-all instead of hitting the
+    two endpoints separately. Both halves are independently idempotent
+    (OHLC reconciliation UPDATEs in place, intraday backfill skips existing
+    rows), so re-running this is always safe.
+    """
+    _backfill_ohlc_all()
+    _backfill_intraday_all()
+
+
+@app.post("/admin/candles/backfill-all")
+def backfill_candles_all(background_tasks: BackgroundTasks, admin=Depends(require_admin)):
+    all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
+    background_tasks.add_task(_backfill_candles_all)
+    return {
+        "message": f"Queued OHLC reconciliation + intraday backfill for {len(all_tickers)} tickers — check logs for progress",
+        "tickers": all_tickers,
+    }
+
+
 # Forward-fills any missing date between a ticker's earliest and latest record
 # with the prior day's close (volume=0 so imputed rows are distinguishable from
 # real ones).  This produces a continuous daily series — weekends and market
@@ -1098,6 +1301,9 @@ def _forward_fill_gaps(db: Session, ticker: str) -> int:
                 db.add(models.Price(
                     ticker=ticker,
                     close_price=prev.close_price,
+                    open_price=prev.close_price,
+                    high_price=prev.close_price,
+                    low_price=prev.close_price,
                     volume=0.0,
                     date=prev.date + timedelta(days=i),
                 ))
@@ -1156,6 +1362,9 @@ def save_prices(ticker: str, db: Session = Depends(get_db), admin=Depends(requir
         price = models.Price(
             ticker=p["ticker"],
             close_price=p["close_price"],
+            open_price=p["open_price"],
+            high_price=p["high_price"],
+            low_price=p["low_price"],
             volume=p["volume"],
             date=p["date"]
         )
@@ -1225,10 +1434,85 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
             {
                 "date": p.date,
                 "close_price": p.close_price,
+                "open_price": p.open_price if p.open_price is not None else p.close_price,
+                "high_price": p.high_price if p.high_price is not None else p.close_price,
+                "low_price": p.low_price if p.low_price is not None else p.close_price,
                 "volume": p.volume
             } for p in prices
         ]
     }
+
+
+@app.get("/candles/{ticker}")
+def get_candles(ticker: str, interval: str = "1h", limit: int = 500, db: Session = Depends(get_db)):
+    """OHLCV candles for the dashboard's candlestick chart.
+
+    interval=1h / 4h read from the (bounded, ~730-day) IntradayPrice table;
+    4h candles are bucketed from four consecutive 1h rows at read time since
+    yfinance has no native 4h interval to fetch. interval=1d reads the daily
+    Price table directly, so it carries the full 2019+ history the intraday
+    table can't — falling back to close_price for any pre-migration row where
+    open/high/low are still null (see models.Price docstring).
+    """
+    ticker = ticker.upper()
+    if interval not in ("1h", "4h", "1d"):
+        raise HTTPException(status_code=400, detail="interval must be '1h', '4h', or '1d'")
+    limit = max(1, min(limit, 2000))
+
+    if interval == "1d":
+        rows = db.query(models.Price).filter(
+            models.Price.ticker == ticker
+        ).order_by(models.Price.date.desc()).limit(limit).all()
+        candles = [
+            {
+                "ts": r.date,
+                "open": r.open_price if r.open_price is not None else r.close_price,
+                "high": r.high_price if r.high_price is not None else r.close_price,
+                "low": r.low_price if r.low_price is not None else r.close_price,
+                "close": r.close_price,
+                "volume": r.volume,
+            }
+            for r in reversed(rows)
+        ]
+    else:
+        # 4h buckets 4 consecutive 1h rows, so fetch proportionally more raw
+        # bars to end up with roughly `limit` buckets.
+        raw_limit = limit if interval == "1h" else limit * 4
+        rows = list(reversed(db.query(models.IntradayPrice).filter(
+            models.IntradayPrice.ticker == ticker
+        ).order_by(models.IntradayPrice.ts.desc()).limit(raw_limit).all()))
+
+        if interval == "1h":
+            candles = [
+                {
+                    "ts": r.ts,
+                    "open": r.open_price,
+                    "high": r.high_price,
+                    "low": r.low_price,
+                    "close": r.close_price,
+                    "volume": r.volume,
+                }
+                for r in rows
+            ]
+        else:
+            buckets = {}
+            for r in rows:
+                bucket_ts = r.ts.replace(hour=(r.ts.hour // 4) * 4, minute=0, second=0, microsecond=0)
+                buckets.setdefault(bucket_ts, []).append(r)
+            candles = []
+            for bucket_ts in sorted(buckets.keys()):
+                bars = buckets[bucket_ts]
+                candles.append({
+                    "ts": bucket_ts,
+                    "open": bars[0].open_price,
+                    "high": max(b.high_price for b in bars),
+                    "low": min(b.low_price for b in bars),
+                    "close": bars[-1].close_price,
+                    "volume": sum(b.volume for b in bars),
+                })
+            candles = candles[-limit:]
+
+    return {"ticker": ticker, "interval": interval, "candles": candles}
 
 
 @app.get("/stats")
@@ -2985,10 +3269,57 @@ def get_leaderboard(db: Session = Depends(get_db)):
 
 
 @app.get("/backtest/{ticker}")
-def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db: Session = Depends(get_db)):
+def get_backtest(
+    ticker: str,
+    signal: str = "divergence",
+    hold_days: int = 7,
+    direction_mode: str = "momentum",
+    costs_bps: int | None = None,
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    size_pct: float = 100.0,
+    threshold_s: float | None = None,
+    threshold_p: float | None = None,
+    shift_thresh: float | None = None,
+    db: Session = Depends(get_db),
+):
+    """Interactive backtest for any tracked ticker (crypto/FX/stocks/ETFs/
+    commodities alike — the same query path serves all 42).
+
+    `direction_mode`, `costs_bps`, `by_regime`, `walk_forward` mirror what
+    /admin/backtest-board has always supported — this endpoint used to run
+    its own momentum-only, cost-blind simulation in parallel (former marker:
+    BACKTEST_THRESHOLDS_DUPLICATED); it now shares `_simulate_trades` with
+    the admin board so both stay in sync automatically.
+
+    `stop_loss_pct`/`take_profit_pct` (magnitude, e.g. 5.0 = 5%) exit a trade
+    early if price moves against/for you by that much before hold_days is up.
+    `size_pct` (1-100) scales how much of the equity curve each trade risks.
+    `threshold_s`/`threshold_p`/`shift_thresh` override the signal-detection
+    thresholds instead of the hardcoded defaults. All five are optional and
+    default to today's production behaviour — see _simulate_trades.
+
+    `summary` now reports both `gross` and `net` (cost-adjusted) blocks, same
+    convention as the admin board — `net` is the honest number.
+    """
     hold_days = max(1, min(hold_days, 30))
     if signal not in ("divergence", "shift"):
         raise HTTPException(status_code=400, detail="signal must be 'divergence' or 'shift'")
+    if direction_mode not in ("momentum", "contrarian"):
+        raise HTTPException(status_code=400, detail="direction_mode must be 'momentum' or 'contrarian'")
+    if costs_bps is not None:
+        costs_bps = max(0, min(costs_bps, 500))
+    size_pct = max(1.0, min(size_pct, 100.0))
+    if stop_loss_pct is not None:
+        stop_loss_pct = max(0.5, min(stop_loss_pct, 90.0))
+    if take_profit_pct is not None:
+        take_profit_pct = max(0.5, min(take_profit_pct, 500.0))
+    if threshold_s is not None:
+        threshold_s = max(0.001, min(threshold_s, 1.0))
+    if threshold_p is not None:
+        threshold_p = max(0.01, min(threshold_p, 50.0))
+    if shift_thresh is not None:
+        shift_thresh = max(0.001, min(shift_thresh, 1.0))
 
     since = datetime.utcnow() - timedelta(days=365)
 
@@ -3005,149 +3336,105 @@ def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db
     if len(headlines) < 20 or len(prices) < 30:
         return {"message": "Not enough data", "trades": [], "equity_curve": []}
 
-    daily_bucket = defaultdict(lambda: {"scores": [], "weights": []})
-    for h in headlines:
-        if abs(h.sentiment_score) < 0.05:
-            continue
-        d = h.published_at.date()
-        daily_bucket[d]["scores"].append(h.sentiment_score)
-        daily_bucket[d]["weights"].append(abs(h.sentiment_score))
-
-    daily_sentiment = {}
-    for d, v in daily_bucket.items():
-        if not v["scores"]:
-            continue
-        w_sum = sum(v["weights"])
-        daily_sentiment[d] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
-
-    daily_price = {p.date.date(): p.close_price for p in prices}
+    daily_sentiment, daily_price, common = _build_daily_series(headlines, prices)
     sorted_price_dates = sorted(daily_price.keys())
 
-    common = sorted(set(daily_sentiment.keys()) & set(daily_price.keys()))
     if len(common) < 20:
         return {"message": "Not enough overlapping data", "trades": [], "equity_curve": []}
 
-    THRESHOLD_S, THRESHOLD_P = 0.02, 0.5
+    costs_pct = _costs_pct_for(ticker, costs_bps)
+    size_frac = size_pct / 100.0
 
-    def _div_signal(window):
-        if len(window) < 14:
-            return "none"
-        p7, r7 = window[:7], window[7:]
-        ps = sum(daily_sentiment[d] for d in p7) / 7
-        rs = sum(daily_sentiment[d] for d in r7) / 7
-        pp = sum(daily_price[d] for d in p7) / 7
-        rp = sum(daily_price[d] for d in r7) / 7
-        sc = rs - ps
-        pc = (rp - pp) / pp * 100 if pp > 0 else 0
-        if sc > THRESHOLD_S and pc < -THRESHOLD_P:
-            return "bullish"
-        if sc < -THRESHOLD_S and pc > THRESHOLD_P:
-            return "bearish"
-        return "none"
+    trades_raw = _simulate_trades(
+        daily_sentiment, daily_price, common, signal, hold_days,
+        direction_mode=direction_mode,
+        threshold_s=threshold_s, threshold_p=threshold_p, shift_thresh=shift_thresh,
+        stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct, size_pct=size_pct,
+    )
 
-    signal_series = {}
-    if signal == "divergence":
-        for i in range(14, len(common) + 1):
-            signal_series[common[i - 1]] = _div_signal(common[i - 14:i])
-    else:
-        SHIFT_THRESH = 0.05
-        for i, d in enumerate(common):
-            prior = [daily_sentiment[common[j]] for j in range(max(0, i - 7), i)]
-            if len(prior) >= 3:
-                shift = daily_sentiment[d] - sum(prior) / len(prior)
-                if shift > SHIFT_THRESH:
-                    signal_series[d] = "bullish"
-                elif shift < -SHIFT_THRESH:
-                    signal_series[d] = "bearish"
-                else:
-                    signal_series[d] = "none"
-
-    # Simulate long-only trades, no overlap
-    trades = []
-    in_trade_until = None
-
-    for d in sorted(signal_series.keys()):
-        if in_trade_until and d <= in_trade_until:
-            continue
-        if signal_series[d] != "bullish":
-            continue
-
-        entry_date = next((pd for pd in sorted_price_dates if pd > d), None)
-        if not entry_date:
-            continue
-        entry_price = daily_price[entry_date]
-
-        target = entry_date + timedelta(days=hold_days)
-        exit_date = next((pd for pd in sorted_price_dates if pd >= target), sorted_price_dates[-1])
-        exit_price = daily_price[exit_date]
-
-        ret = (exit_price - entry_price) / entry_price * 100
-        trades.append({
-            "entry_date": str(entry_date),
-            "exit_date": str(exit_date),
-            "entry_price": round(entry_price, 2),
-            "exit_price": round(exit_price, 2),
-            "return_pct": round(ret, 2),
-        })
-        in_trade_until = exit_date
-
-    if not trades:
+    if not trades_raw:
         return {
             "ticker": ticker.upper(), "signal": signal, "hold_days": hold_days,
             "message": "No trades generated — signal did not fire in this window.",
             "trades": [], "equity_curve": [],
         }
 
-    returns = [t["return_pct"] for t in trades]
-    winning = [r for r in returns if r > 0]
+    costs_sized = costs_pct * size_frac
 
-    # Compounded total return
-    pv = 100.0
-    for r in returns:
-        pv *= (1 + r / 100)
-    total_return = round(pv - 100, 2)
+    def _agg(returns, hold_days_):
+        n = len(returns)
+        winning = sum(1 for r in returns if r > 0)
+        running = peak = 100.0
+        max_dd = 0.0
+        for r in returns:
+            running *= (1 + r / 100)
+            peak = max(peak, running)
+            max_dd = min(max_dd, (running - peak) / peak * 100)
+        r_arr = np.array(returns)
+        sharpe = None
+        if n >= 3 and np.std(r_arr) > 0:
+            sharpe = round(float(np.mean(r_arr) / np.std(r_arr) * np.sqrt(252 / hold_days_)), 2)
+        return {
+            "total_trades": n,
+            "winning_trades": winning,
+            "win_rate": round(winning / n, 3),
+            "avg_return_pct": round(float(np.mean(r_arr)), 2),
+            "total_return_pct": round(running - 100, 2),
+            "max_drawdown_pct": round(max_dd, 2),
+            "sharpe": sharpe,
+        }
 
-    # Max drawdown
-    peak, running, max_dd = 100.0, 100.0, 0.0
-    for r in returns:
-        running *= (1 + r / 100)
-        peak = max(peak, running)
-        max_dd = min(max_dd, (running - peak) / peak * 100)
+    sized_returns = [t["sized_return_pct"] for t in trades_raw]
+    net_returns = [r - costs_sized for r in sized_returns]
+    gross_summary = _agg(sized_returns, hold_days)
+    net_summary = _agg(net_returns, hold_days)
 
     first_price = daily_price[sorted_price_dates[0]]
     last_price = daily_price[sorted_price_dates[-1]]
     buy_hold = round((last_price - first_price) / first_price * 100, 2)
-    alpha = round(total_return - buy_hold, 2)
+    for s in (gross_summary, net_summary):
+        s["buy_hold_return_pct"] = buy_hold
+        s["alpha_pct"] = round(s["total_return_pct"] - buy_hold, 2)
 
-    r_arr = np.array(returns)
-    sharpe = None
-    if len(returns) >= 3 and np.std(r_arr) > 0:
-        sharpe = round(float(np.mean(r_arr) / np.std(r_arr) * np.sqrt(252 / hold_days)), 2)
+    trades = [{
+        "entry_date": str(t["entry_date"]),
+        "exit_date": str(t["exit_date"]),
+        "entry_price": round(t["entry_price"], 2),
+        "exit_price": round(t["exit_price"], 2),
+        "return_pct": round(t["sized_return_pct"], 2),
+        "exit_reason": t["exit_reason"],
+    } for t in trades_raw]
 
-    # Daily equity curve: portfolio tracks price during active trades
+    # Daily equity curve — net-of-cost, sized. Tracks the live price ratio
+    # during an open trade (so drawdown mid-hold is visible, not just
+    # entry/exit jumps) scaled by size_frac; the round-trip cost is applied
+    # once, as a lump deduction, at the exit day — matching how net_summary
+    # compounds discrete per-trade net returns.
     portfolio_cash = 100.0
     pending = None  # (exit_date, exit_price, portfolio_at_entry, entry_price)
-    trade_by_entry = {
-        datetime.strptime(t["entry_date"], "%Y-%m-%d").date(): (
-            datetime.strptime(t["exit_date"], "%Y-%m-%d").date(),
-            t["exit_price"]
-        )
-        for t in trades
-    }
+    trade_by_entry = {t["entry_date"]: (t["exit_date"], t["exit_price"]) for t in trades_raw}
 
     equity_curve = []
     for d in sorted_price_dates:
         price = daily_price[d]
 
         if pending and d >= pending[0]:
-            portfolio_cash = pending[2] * (pending[1] / pending[3])
+            _, p_exit_price, p_entry_val, p_entry_price = pending
+            gross_mult = p_exit_price / p_entry_price
+            sized_mult = 1 + size_frac * (gross_mult - 1) - size_frac * costs_pct / 100
+            portfolio_cash = p_entry_val * sized_mult
             pending = None
 
         if d in trade_by_entry and pending is None:
             xd, xp = trade_by_entry[d]
             pending = (xd, xp, portfolio_cash, price)
 
-        current = pending[2] * (price / pending[3]) if pending else portfolio_cash
+        if pending:
+            _, _, p_entry_val, p_entry_price = pending
+            current = p_entry_val * (1 + size_frac * (price / p_entry_price - 1))
+        else:
+            current = portfolio_cash
+
         equity_curve.append({
             "date": str(d),
             "portfolio": round(current, 2),
@@ -3159,27 +3446,29 @@ def get_backtest(ticker: str, signal: str = "divergence", hold_days: int = 7, db
     # either keeps the public single-ticker endpoint in sync.  Cost is one
     # extra simulation pass each; cheap relative to the headline/price queries
     # we already did.
-    costs_pct_default = _costs_pct_for(ticker, None)
     by_regime = _regime_split_stats(
-        daily_sentiment, daily_price, common, signal, hold_days, costs_pct_default)
-    walk_fwd  = _walk_forward(
-        daily_sentiment, daily_price, common, signal, hold_days, costs_pct_default)
+        daily_sentiment, daily_price, common, signal, hold_days, costs_pct,
+        direction_mode=direction_mode,
+        threshold_s=threshold_s, threshold_p=threshold_p, shift_thresh=shift_thresh,
+        stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct, size_pct=size_pct,
+    )
+    walk_fwd = _walk_forward(
+        daily_sentiment, daily_price, common, signal, hold_days, costs_pct,
+        direction_mode=direction_mode,
+        threshold_s=threshold_s, threshold_p=threshold_p, shift_thresh=shift_thresh,
+        stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct, size_pct=size_pct,
+    )
 
     return {
         "ticker": ticker.upper(),
         "signal": signal,
         "hold_days": hold_days,
+        "direction_mode": direction_mode,
         "window_days": (sorted_price_dates[-1] - sorted_price_dates[0]).days,
         "summary": {
-            "total_trades": len(trades),
-            "winning_trades": len(winning),
-            "win_rate": round(len(winning) / len(returns), 3),
-            "avg_return_pct": round(float(np.mean(r_arr)), 2),
-            "total_return_pct": total_return,
-            "max_drawdown_pct": round(max_dd, 2),
-            "buy_hold_return_pct": buy_hold,
-            "alpha_pct": alpha,
-            "sharpe": sharpe,
+            "gross": gross_summary,
+            "net": net_summary,
+            "costs_pct_per_trade": costs_pct,
         },
         "by_regime": by_regime,
         "walk_forward": walk_fwd,
@@ -3225,42 +3514,60 @@ def _costs_pct_for(ticker: str, override_bps: int | None) -> float:
     return bps / 100.0   # 30 bps → 0.30%
 
 
-def _compact_backtest_summary(
+def _simulate_trades(
     daily_sentiment: dict,
     daily_price: dict,
     common: list,
     signal: str,
     hold_days: int,
-    costs_pct: float,
     direction_mode: str = "momentum",
-):
-    """Pure trade-sim + summary stats over a date window.  No equity curve,
-    no per-trade list.  Returns a dict with both `gross` and `net` summaries,
-    or None if the window can't generate any trades.
+    threshold_s: float | None = None,
+    threshold_p: float | None = None,
+    shift_thresh: float | None = None,
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    size_pct: float = 100.0,
+) -> list:
+    """Shared trade-simulation core for get_backtest, _compact_backtest_summary
+    and _regime_split_stats — the single place the divergence/shift signal
+    rules and the entry/exit walk live now, replacing three near-duplicate
+    copies of the same logic (former marker: BACKTEST_THRESHOLDS_DUPLICATED).
 
-    The `net` block subtracts `costs_pct` from each trade's gross return
-    BEFORE compounding — so the net total_return is the geometric truth, not
-    just gross minus (n × costs).
+    Returns a list of raw per-trade dicts: entry_date, exit_date, entry_price,
+    exit_price, gross_return_pct, sized_return_pct (gross scaled by
+    size_pct/100 — equal to gross when size_pct=100, the default), regime
+    (bull/bear/chop/unknown, by entry-day trailing trend), exit_reason
+    ("hold_days"/"stop_loss"/"take_profit"). Callers aggregate, apply costs,
+    and bucket as needed — this function only knows signal generation and
+    trade mechanics.
 
-    `direction_mode` controls which signal the simulation acts on:
-      • "momentum"   — long-only on bullish signals (the default;
-                       what the board has always done)
-      • "contrarian" — long-only on BEARISH signals — i.e. buy the panic,
-                       fade the euphoria.  Useful for asking "is sentiment
-                       actually a fade indicator on crypto?".  Same P&L
-                       math; only the entry trigger flips.
+    `direction_mode`: "momentum" (default) longs on bullish signals;
+    "contrarian" longs on bearish signals instead (buy the panic). Both
+    long-only so P&L stays directly comparable.
 
-    Mirrors the threshold + signal-detection conventions of get_backtest.
-    If you ever change those there, change them here too (or refactor both
-    to share).  Comment marker: BACKTEST_THRESHOLDS_DUPLICATED.
+    `threshold_s`/`threshold_p`/`shift_thresh` override the divergence/shift
+    signal-detection thresholds (defaults 0.02 / 0.5 / 0.05 when None —
+    exactly the constants this logic always used).
+
+    `stop_loss_pct`/`take_profit_pct` are OPTIONAL early-exit thresholds
+    (e.g. 5.0 = a 5% adverse/favourable move from entry). When both are None
+    — the only configuration the production alert gate / SignalQuality ever
+    uses — the exit date is computed exactly as before this function existed:
+    a straight jump to the first price on/after entry_date + hold_days. SL/TP
+    only changes anything when a caller opts in, so this is a behaviour-
+    preserving extraction for every existing caller.
+
+    `size_pct` (0-100, default 100) scales each trade's contribution to
+    compounding — the untraded remainder is implicitly flat cash. At the
+    default 100 this is a no-op (sized_return_pct == gross_return_pct).
     """
     if len(common) < 14:
-        return None
+        return []
 
     sorted_price_dates = sorted(daily_price.keys())
-    common_set = set(common)
-    THRESHOLD_S, THRESHOLD_P = 0.02, 0.5
-    SHIFT_THRESH = 0.05
+    ts = threshold_s if threshold_s is not None else 0.02
+    tp_thr = threshold_p if threshold_p is not None else 0.5
+    st = shift_thresh if shift_thresh is not None else 0.05
 
     signal_series = {}
     if signal == "divergence":
@@ -3273,32 +3580,34 @@ def _compact_backtest_summary(
             rp = sum(daily_price[d] for d in r7) / 7
             sc = rs - ps
             pc = (rp - pp) / pp * 100 if pp > 0 else 0
-            if sc > THRESHOLD_S and pc < -THRESHOLD_P:
+            if sc > ts and pc < -tp_thr:
                 signal_series[common[i - 1]] = "bullish"
-            elif sc < -THRESHOLD_S and pc > THRESHOLD_P:
+            elif sc < -ts and pc > tp_thr:
                 signal_series[common[i - 1]] = "bearish"
     else:   # "shift"
         for i, d in enumerate(common):
             prior = [daily_sentiment[common[j]] for j in range(max(0, i - 7), i)]
             if len(prior) >= 3:
                 shift = daily_sentiment[d] - sum(prior) / len(prior)
-                if shift > SHIFT_THRESH:
+                if shift > st:
                     signal_series[d] = "bullish"
-                elif shift < -SHIFT_THRESH:
+                elif shift < -st:
                     signal_series[d] = "bearish"
 
     # Long-only simulation, no overlap.  Entry on next available price after
-    # signal day; exit on first price ≥ entry+hold_days.  Window edge case:
-    # exits that fall past the window boundary still use the next available
-    # price (which may be outside `common`) — that's intentional, so a signal
-    # firing at the very end of the IS window doesn't get truncated.
+    # signal day. Baseline exit is the first price on/after entry+hold_days
+    # (window edge case: may fall outside `common`, which is intentional so a
+    # signal firing near the end of a window doesn't get truncated). SL/TP,
+    # when set, can only pull that exit EARLIER — never later — by scanning
+    # the dates strictly between entry and the baseline exit.
     #
     # `entry_trigger` flips with direction_mode: momentum acts on bullish
     # signals (take the trend), contrarian acts on bearish signals (fade the
-    # crash).  Both modes are long-only so the gross/net stats stay directly
-    # comparable across the table — same P&L formula, different trigger.
+    # crash).
     entry_trigger = "bearish" if direction_mode == "contrarian" else "bullish"
-    trade_returns = []
+    size_frac = max(0.0, min(size_pct, 100.0)) / 100.0
+
+    trades = []
     in_trade_until = None
     for d in sorted(signal_series.keys()):
         if in_trade_until and d <= in_trade_until:
@@ -3309,15 +3618,79 @@ def _compact_backtest_summary(
         if not entry_date:
             continue
         entry_price = daily_price[entry_date]
+
         target = entry_date + timedelta(days=hold_days)
-        exit_date = next((pd for pd in sorted_price_dates if pd >= target), sorted_price_dates[-1])
-        exit_price = daily_price[exit_date]
+        baseline_exit_date = next((pd for pd in sorted_price_dates if pd >= target), sorted_price_dates[-1])
+
+        exit_date, exit_price, exit_reason = baseline_exit_date, daily_price[baseline_exit_date], "hold_days"
+        if stop_loss_pct is not None or take_profit_pct is not None:
+            for pd in sorted_price_dates:
+                if pd <= entry_date or pd > baseline_exit_date:
+                    continue
+                px = daily_price[pd]
+                move_pct = (px - entry_price) / entry_price * 100
+                if stop_loss_pct is not None and move_pct <= -abs(stop_loss_pct):
+                    exit_date, exit_price, exit_reason = pd, px, "stop_loss"
+                    break
+                if take_profit_pct is not None and move_pct >= abs(take_profit_pct):
+                    exit_date, exit_price, exit_reason = pd, px, "take_profit"
+                    break
+
         gross_ret = (exit_price - entry_price) / entry_price * 100
-        trade_returns.append(gross_ret)
+        regime = _regime_for_date(daily_price, sorted_price_dates, entry_date) or "unknown"
+        trades.append({
+            "entry_date": entry_date,
+            "exit_date": exit_date,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "gross_return_pct": gross_ret,
+            "sized_return_pct": gross_ret * size_frac,
+            "regime": regime,
+            "exit_reason": exit_reason,
+        })
         in_trade_until = exit_date
 
-    if not trade_returns:
+    return trades
+
+
+def _compact_backtest_summary(
+    daily_sentiment: dict,
+    daily_price: dict,
+    common: list,
+    signal: str,
+    hold_days: int,
+    costs_pct: float,
+    direction_mode: str = "momentum",
+    threshold_s: float | None = None,
+    threshold_p: float | None = None,
+    shift_thresh: float | None = None,
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    size_pct: float = 100.0,
+):
+    """Pure trade-sim + summary stats over a date window.  No equity curve,
+    no per-trade list.  Returns a dict with both `gross` and `net` summaries,
+    or None if the window can't generate any trades.
+
+    The `net` block subtracts `costs_pct` (scaled by size_pct, since costs are
+    only paid on the capital actually traded) from each trade's gross return
+    BEFORE compounding — so the net total_return is the geometric truth, not
+    just gross minus (n × costs).
+
+    Trade simulation itself lives in `_simulate_trades` — this function just
+    aggregates its output into gross/net stats blocks.
+    """
+    trades = _simulate_trades(
+        daily_sentiment, daily_price, common, signal, hold_days,
+        direction_mode=direction_mode,
+        threshold_s=threshold_s, threshold_p=threshold_p, shift_thresh=shift_thresh,
+        stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct, size_pct=size_pct,
+    )
+    if not trades:
         return None
+
+    size_frac = max(0.0, min(size_pct, 100.0)) / 100.0
+    costs_sized = costs_pct * size_frac
 
     def _stats(returns):
         n = len(returns)
@@ -3332,9 +3705,10 @@ def _compact_backtest_summary(
             "total_return_pct": round(compounded - 100, 2),
         }
 
+    sized_returns = [t["sized_return_pct"] for t in trades]
     return {
-        "gross": _stats(trade_returns),
-        "net": _stats([r - costs_pct for r in trade_returns]),
+        "gross": _stats(sized_returns),
+        "net": _stats([r - costs_sized for r in sized_returns]),
         "costs_pct_per_trade": costs_pct,
     }
 
@@ -3397,72 +3771,36 @@ def _regime_split_stats(
     hold_days: int,
     costs_pct: float,
     direction_mode: str = "momentum",
+    threshold_s: float | None = None,
+    threshold_p: float | None = None,
+    shift_thresh: float | None = None,
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    size_pct: float = 100.0,
 ) -> dict | None:
-    """Replay the same long-only sim as _compact_backtest_summary, but bucket
-    each trade by its entry-day regime so the per-regime net stats are visible.
+    """Bucket _simulate_trades' output by each trade's entry-day regime so
+    the per-regime net stats are visible.
 
     Returns {'bull': {...}, 'bear': {...}, 'chop': {...}} where each value is
     a stats dict like the `net` block of _compact_backtest_summary, or None
     if no trades fired in that regime.  Returns None overall if the window
     can't generate any trades at all (matches _compact_backtest_summary).
     """
-    if len(common) < 14:
+    trades = _simulate_trades(
+        daily_sentiment, daily_price, common, signal, hold_days,
+        direction_mode=direction_mode,
+        threshold_s=threshold_s, threshold_p=threshold_p, shift_thresh=shift_thresh,
+        stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct, size_pct=size_pct,
+    )
+    if not trades:
         return None
-    sorted_price_dates = sorted(daily_price.keys())
-    THRESHOLD_S, THRESHOLD_P = 0.02, 0.5
-    SHIFT_THRESH = 0.05
 
-    # Mirror the signal-generation pass exactly.  Marker:
-    # BACKTEST_THRESHOLDS_DUPLICATED — change here, change _compact_backtest_summary too.
-    signal_series = {}
-    if signal == "divergence":
-        for i in range(14, len(common) + 1):
-            window = common[i - 14:i]
-            p7, r7 = window[:7], window[7:]
-            ps = sum(daily_sentiment[d] for d in p7) / 7
-            rs = sum(daily_sentiment[d] for d in r7) / 7
-            pp = sum(daily_price[d] for d in p7) / 7
-            rp = sum(daily_price[d] for d in r7) / 7
-            sc = rs - ps
-            pc = (rp - pp) / pp * 100 if pp > 0 else 0
-            if sc > THRESHOLD_S and pc < -THRESHOLD_P:
-                signal_series[common[i - 1]] = "bullish"
-            elif sc < -THRESHOLD_S and pc > THRESHOLD_P:
-                signal_series[common[i - 1]] = "bearish"
-    else:
-        for i, d in enumerate(common):
-            prior = [daily_sentiment[common[j]] for j in range(max(0, i - 7), i)]
-            if len(prior) >= 3:
-                shift = daily_sentiment[d] - sum(prior) / len(prior)
-                if shift > SHIFT_THRESH:
-                    signal_series[d] = "bullish"
-                elif shift < -SHIFT_THRESH:
-                    signal_series[d] = "bearish"
+    size_frac = max(0.0, min(size_pct, 100.0)) / 100.0
+    costs_sized = costs_pct * size_frac
 
-    entry_trigger = "bearish" if direction_mode == "contrarian" else "bullish"
     buckets = {"bull": [], "bear": [], "chop": [], "unknown": []}
-    in_trade_until = None
-    any_trade = False
-    for d in sorted(signal_series.keys()):
-        if in_trade_until and d <= in_trade_until:
-            continue
-        if signal_series[d] != entry_trigger:
-            continue
-        entry_date = next((pd for pd in sorted_price_dates if pd > d), None)
-        if not entry_date:
-            continue
-        entry_price = daily_price[entry_date]
-        target = entry_date + timedelta(days=hold_days)
-        exit_date = next((pd for pd in sorted_price_dates if pd >= target), sorted_price_dates[-1])
-        exit_price = daily_price[exit_date]
-        gross_ret = (exit_price - entry_price) / entry_price * 100
-        regime = _regime_for_date(daily_price, sorted_price_dates, entry_date) or "unknown"
-        buckets[regime].append(gross_ret)
-        in_trade_until = exit_date
-        any_trade = True
-
-    if not any_trade:
-        return None
+    for t in trades:
+        buckets[t["regime"]].append(t["sized_return_pct"])
 
     def _stats(returns):
         if not returns:
@@ -3471,7 +3809,7 @@ def _regime_split_stats(
         winning = sum(1 for r in returns if r > 0)
         compounded = 100.0
         for r in returns:
-            compounded *= (1 + (r - costs_pct) / 100)
+            compounded *= (1 + (r - costs_sized) / 100)
         return {
             "trades": n,
             "win_rate": round(winning / n, 3),
@@ -3492,6 +3830,12 @@ def _walk_forward(
     direction_mode: str = "momentum",
     window_days: int = 45,
     step_days: int = 15,
+    threshold_s: float | None = None,
+    threshold_p: float | None = None,
+    shift_thresh: float | None = None,
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    size_pct: float = 100.0,
 ) -> dict | None:
     """Slide a fixed-size test window through `common` and report per-fold net
     stats + stability summary.
@@ -3520,6 +3864,8 @@ def _walk_forward(
         fold = _compact_backtest_summary(
             daily_sentiment, daily_price, fold_window,
             signal, hold_days, costs_pct, direction_mode,
+            threshold_s=threshold_s, threshold_p=threshold_p, shift_thresh=shift_thresh,
+            stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct, size_pct=size_pct,
         )
         if fold is not None:
             folds.append({

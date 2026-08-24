@@ -9,6 +9,7 @@ import {
 } from "recharts"
 import "./dashboard.css"
 import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, TICKER_INFO, nativeCurrencyFor, _formatPrice, redirectToCheckout } from "./lib/constants"
+import CandlestickChart from "./components/CandlestickChart"
 
 // Standalone pages are code-split — they only load on their own routes.
 const Leaderboard = lazy(() => import("./pages/Leaderboard"))
@@ -952,24 +953,54 @@ function BacktestPanel({ ticker }) {
   const [btLoading, setBtLoading] = useState(false)
   const [btSignal, setBtSignal] = useState("divergence")
   const [btHoldDays, setBtHoldDays] = useState(7)
+  const [btDirection, setBtDirection] = useState("momentum")
+  const [btCostsMode, setBtCostsMode] = useState("default")
+  const [btCostsCustom, setBtCostsCustom] = useState(30)
+  const [btView, setBtView] = useState("net")
+  const [btAdvancedOpen, setBtAdvancedOpen] = useState(false)
+  const [btStopLoss, setBtStopLoss] = useState("")
+  const [btTakeProfit, setBtTakeProfit] = useState("")
+  const [btSize, setBtSize] = useState(100)
+  const [btThresholdS, setBtThresholdS] = useState("")
+  const [btThresholdP, setBtThresholdP] = useState("")
+  const [btShiftThresh, setBtShiftThresh] = useState("")
 
   useEffect(() => {
     let cancelled = false
     setBtLoading(true)
     setBtData(null)
-    axios.get(`${API}/backtest/${ticker}?signal=${btSignal}&hold_days=${btHoldDays}`)
+    const params = new URLSearchParams({
+      signal: btSignal,
+      hold_days: String(btHoldDays),
+      direction_mode: btDirection,
+      size_pct: String(btSize),
+    })
+    if (btCostsMode === "zero") params.set("costs_bps", "0")
+    else if (btCostsMode === "custom") params.set("costs_bps", String(btCostsCustom))
+    if (btStopLoss !== "") params.set("stop_loss_pct", btStopLoss)
+    if (btTakeProfit !== "") params.set("take_profit_pct", btTakeProfit)
+    if (btThresholdS !== "") params.set("threshold_s", btThresholdS)
+    if (btThresholdP !== "") params.set("threshold_p", btThresholdP)
+    if (btShiftThresh !== "") params.set("shift_thresh", btShiftThresh)
+    axios.get(`${API}/backtest/${ticker}?${params.toString()}`)
       .then(r => { if (!cancelled) { setBtData(r.data); setBtLoading(false) } })
       .catch(() => { if (!cancelled) { setBtData({ error: true }); setBtLoading(false) } })
     return () => { cancelled = true }
-  }, [ticker, btSignal, btHoldDays])
+  }, [ticker, btSignal, btHoldDays, btDirection, btCostsMode, btCostsCustom, btStopLoss, btTakeProfit, btSize, btThresholdS, btThresholdP, btShiftThresh])
 
-  const summary = btData?.summary
+  const summary = btData?.summary?.[btView]
+  const costsPctPerTrade = btData?.summary?.costs_pct_per_trade
   const trades = btData?.trades ?? []
+  const byRegime = btData?.by_regime
+  const walkForward = btData?.walk_forward
   const btNativeCurrency = nativeCurrencyFor(ticker)
   const priceUnitLabel = btNativeCurrency === "GBP" ? " (£)" : btNativeCurrency === "USD" ? " ($)" : ""
   const equityCurve = btData?.equity_curve ?? []
 
   const retColor = (v) => v > 0 ? "var(--positive)" : v < 0 ? "var(--negative)" : "var(--muted)"
+  const ctrlLabelStyle = { fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }
+  const sectionLabelStyle = { fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "8px" }
+  const numInputStyle = { width: "60px" }
 
   return (
     <div className="panel">
@@ -986,7 +1017,7 @@ function BacktestPanel({ ticker }) {
         {/* Controls */}
         <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }}>SIGNAL</span>
+            <span style={ctrlLabelStyle}>SIGNAL</span>
             {["divergence", "shift"].map(s => (
               <button key={s} className={`seg-btn ${btSignal === s ? "active" : ""}`} onClick={() => setBtSignal(s)}>
                 {s === "divergence" ? "DIVERGENCE" : "SHIFT"}
@@ -994,11 +1025,79 @@ function BacktestPanel({ ticker }) {
             ))}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }}>HOLD</span>
+            <span style={ctrlLabelStyle}>HOLD</span>
             {[1, 3, 7, 14].map(h => (
               <button key={h} className={`seg-btn ${btHoldDays === h ? "active" : ""}`} onClick={() => setBtHoldDays(h)}>{h}D</button>
             ))}
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={ctrlLabelStyle}>DIRECTION</span>
+            {["momentum", "contrarian"].map(m => (
+              <button key={m} className={`seg-btn ${btDirection === m ? "active" : ""}`} onClick={() => setBtDirection(m)}>{m.toUpperCase()}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={ctrlLabelStyle}>COSTS</span>
+            {[["default", "DEFAULT"], ["zero", "0BPS"], ["custom", "CUSTOM"]].map(([v, label]) => (
+              <button key={v} className={`seg-btn ${btCostsMode === v ? "active" : ""}`} onClick={() => setBtCostsMode(v)}>{label}</button>
+            ))}
+            {btCostsMode === "custom" && (
+              <input
+                className="alert-input" style={numInputStyle} type="number" min="0" max="500"
+                value={btCostsCustom} onChange={e => setBtCostsCustom(e.target.value)}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Advanced: stop-loss / take-profit / position size / signal thresholds.
+            All optional — empty means "use the default", matching production. */}
+        <div>
+          <button
+            onClick={() => setBtAdvancedOpen(o => !o)}
+            style={{ ...ctrlLabelStyle, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            {btAdvancedOpen ? "▾" : "▸"} ADVANCED
+          </button>
+          {btAdvancedOpen && (
+            <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap", marginTop: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={ctrlLabelStyle}>SIZE %</span>
+                <input className="alert-input" style={numInputStyle} type="number" min="1" max="100"
+                  value={btSize} onChange={e => setBtSize(e.target.value)} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={ctrlLabelStyle}>STOP LOSS %</span>
+                <input className="alert-input" style={numInputStyle} type="number" min="0" max="90" placeholder="off"
+                  value={btStopLoss} onChange={e => setBtStopLoss(e.target.value)} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={ctrlLabelStyle}>TAKE PROFIT %</span>
+                <input className="alert-input" style={numInputStyle} type="number" min="0" max="500" placeholder="off"
+                  value={btTakeProfit} onChange={e => setBtTakeProfit(e.target.value)} />
+              </div>
+              {btSignal === "divergence" ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={ctrlLabelStyle}>SENTIMENT THRESH</span>
+                    <input className="alert-input" style={numInputStyle} type="number" step="0.01" min="0.001" max="1" placeholder="0.02"
+                      value={btThresholdS} onChange={e => setBtThresholdS(e.target.value)} />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={ctrlLabelStyle}>PRICE THRESH %</span>
+                    <input className="alert-input" style={numInputStyle} type="number" step="0.1" min="0.01" max="50" placeholder="0.5"
+                      value={btThresholdP} onChange={e => setBtThresholdP(e.target.value)} />
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={ctrlLabelStyle}>SHIFT THRESH</span>
+                  <input className="alert-input" style={numInputStyle} type="number" step="0.01" min="0.001" max="1" placeholder="0.05"
+                    value={btShiftThresh} onChange={e => setBtShiftThresh(e.target.value)} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {btLoading && (
@@ -1024,6 +1123,19 @@ function BacktestPanel({ ticker }) {
 
         {!btLoading && summary && (
           <>
+            {/* Gross/net view toggle */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={ctrlLabelStyle}>VIEW</span>
+              {["net", "gross"].map(v => (
+                <button key={v} className={`seg-btn ${btView === v ? "active-blue" : ""}`} onClick={() => setBtView(v)}>{v.toUpperCase()}</button>
+              ))}
+              {costsPctPerTrade != null && (
+                <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)" }}>
+                  {btView === "net" ? `net of ${costsPctPerTrade.toFixed(2)}% cost/trade` : "before transaction costs"}
+                </span>
+              )}
+            </div>
+
             {/* Summary stats */}
             <div className="stat-row">
               <div className="stat-card">
@@ -1113,10 +1225,58 @@ function BacktestPanel({ ticker }) {
               </div>
             )}
 
+            {/* Regime breakdown */}
+            {byRegime && (
+              <div>
+                <div style={sectionLabelStyle}>BY MARKET REGIME</div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  {["bull", "bear", "chop", "unknown"].filter(r => byRegime[r]).map(r => (
+                    <div key={r} className="stat-card" style={{ minWidth: "130px", flex: "1 1 130px" }}>
+                      <div className="stat-label">{r.toUpperCase()}</div>
+                      <div className="stat-value" style={{ color: retColor(byRegime[r].total_return_pct) }}>
+                        {byRegime[r].total_return_pct > 0 ? "+" : ""}{byRegime[r].total_return_pct}%
+                      </div>
+                      <div className="stat-sub">{byRegime[r].trades} trades · {(byRegime[r].win_rate * 100).toFixed(0)}% win</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Walk-forward stability */}
+            {walkForward?.stability && (
+              <div>
+                <div style={sectionLabelStyle}>WALK-FORWARD STABILITY</div>
+                <div className="stat-row">
+                  <div className="stat-card">
+                    <div className="stat-label">Positive Folds</div>
+                    <div className="stat-value" style={{ color: walkForward.stability.pct_folds_positive >= 0.7 ? "var(--positive)" : "var(--negative)" }}>
+                      {walkForward.stability.folds_positive}/{walkForward.stability.folds_with_trades}
+                    </div>
+                    <div className="stat-sub">{(walkForward.stability.pct_folds_positive * 100).toFixed(0)}% of folds</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Mean Fold Return</div>
+                    <div className="stat-value" style={{ color: retColor(walkForward.stability.mean_net_return_pct) }}>
+                      {walkForward.stability.mean_net_return_pct > 0 ? "+" : ""}{walkForward.stability.mean_net_return_pct}%
+                    </div>
+                    <div className="stat-sub">±{walkForward.stability.std_net_return_pct}% std</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Best / Worst Fold</div>
+                    <div className="stat-value" style={{ color: "var(--text)" }}>
+                      {walkForward.stability.best_fold_pct}% / {walkForward.stability.worst_fold_pct}%
+                    </div>
+                    <div className="stat-sub">{walkForward.stability.folds_total} folds, {walkForward.stability.fold_window_days}d window</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Trades table */}
             {trades.length > 0 && (
               <div>
-                <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: "var(--muted)", textTransform: "uppercase", marginBottom: "8px" }}>
+                <div style={sectionLabelStyle}>
                   TRADE LOG
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -1139,7 +1299,12 @@ function BacktestPanel({ ticker }) {
                           alignItems: "center",
                         }}>
                           <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.entry_date)}</span>
-                          <span style={{ color: "var(--muted)" }}>{BT_DATE_FMT(t.exit_date)}</span>
+                          <span style={{ color: "var(--muted)" }}>
+                            {BT_DATE_FMT(t.exit_date)}
+                            {t.exit_reason && t.exit_reason !== "hold_days" && (
+                              <span style={{ color: "var(--accent)" }}> ({t.exit_reason === "stop_loss" ? "SL" : "TP"})</span>
+                            )}
+                          </span>
                           <span style={{ color: "var(--text)" }}>{_formatPrice(t.entry_price, ticker)}</span>
                           <span style={{ color: "var(--text)" }}>{_formatPrice(t.exit_price, ticker)}</span>
                           <span style={{ color: retColor(t.return_pct), textAlign: "right", fontWeight: 600 }}>
@@ -1154,7 +1319,9 @@ function BacktestPanel({ ticker }) {
             )}
 
             <div className="disclaimer">
-              ⚠ Long-only strategy. Entry at next close after signal, exit after {btHoldDays} calendar days. Past results do not predict future performance. Not financial advice.
+              ⚠ {btDirection === "contrarian" ? "Contrarian (buy-the-panic)" : "Long-only momentum"} strategy. Entry at next close after signal
+              {(btStopLoss || btTakeProfit) ? ", exits early on stop-loss/take-profit or " : ", exit "}
+              after {btHoldDays} calendar days. Past results do not predict future performance. Not financial advice.
             </div>
           </>
         )}
@@ -1219,6 +1386,10 @@ function Dashboard() {
   const [apiKeyFull, setApiKeyFull] = useState(null)
   const [apiKeyLoading, setApiKeyLoading] = useState(false)
   const [apiKeyCopied, setApiKeyCopied] = useState(false)
+  const [chartMode, setChartMode] = useState("line")
+  const [candleInterval, setCandleInterval] = useState("1h")
+  const [candleData, setCandleData] = useState([])
+  const [candleLoading, setCandleLoading] = useState(false)
 
   const urlParams = new URLSearchParams(window.location.search)
   const checkoutSuccess = urlParams.get("success")
@@ -1509,6 +1680,19 @@ function Dashboard() {
     setLoading(false)
   }
 
+  // Lazy-loaded: only fetched once the user switches to Candles mode, and
+  // re-fetched on ticker/interval change while in that mode. Independent of
+  // fetchDashboard's line-chart data — different endpoint, different shape.
+  useEffect(() => {
+    if (chartMode !== "candles") return
+    let cancelled = false
+    setCandleLoading(true)
+    axios.get(`${API}/candles/${ticker}?interval=${candleInterval}&limit=500`)
+      .then(r => { if (!cancelled) { setCandleData(r.data.candles ?? []); setCandleLoading(false) } })
+      .catch(() => { if (!cancelled) { setCandleData([]); setCandleLoading(false) } })
+    return () => { cancelled = true }
+  }, [chartMode, ticker, candleInterval])
+
   const profileLoading = !!user && !profile
   const handleTickerClick = (t) => {
     const isLocked = !profileLoading && !FREE_TICKERS.includes(t) && !isPro
@@ -1534,6 +1718,18 @@ function Dashboard() {
   const displayData = filteredData.map(d => ({
     ...d,
     price: d.price != null ? parseFloat((d.price * rate).toFixed(2)) : null,
+  }))
+
+  // Same `rate` conversion the line chart applies, plus the naive-UTC ->
+  // epoch-seconds parsing this codebase already uses for backend timestamps
+  // elsewhere (see the "+ 'Z'" pattern on h.published_at above).
+  const displayCandles = candleData.map(c => ({
+    time: Math.floor(new Date(c.ts + "Z").getTime() / 1000),
+    open: c.open * rate,
+    high: c.high * rate,
+    low: c.low * rate,
+    close: c.close * rate,
+    volume: c.volume,
   }))
 
   const sentimentSignal = avgSentiment !== null
@@ -1831,11 +2027,17 @@ function Dashboard() {
             <div className="panel-header">
               <span className="panel-title">{FX_LABELS[ticker] ?? ticker} / SENTIMENT vs PRICE{isFX ? "" : ` (${currency})`}</span>
               <div className="panel-controls">
+                {["line", "candles"].map(m => (
+                  <button key={m} onClick={() => setChartMode(m)} className={`seg-btn ${chartMode === m ? "active" : ""}`}>
+                    {m === "line" ? "LINE" : "CANDLES"}
+                  </button>
+                ))}
+                <div className="control-divider" />
                 {!isFX && ["GBP", "USD"].map(c => (
                   <button key={c} onClick={() => setCurrency(c)} className={`seg-btn ${currency === c ? "active-blue" : ""}`}>{c}</button>
                 ))}
                 <div className="control-divider" />
-                {[7, 30, 90, 999].map(r => (
+                {chartMode === "line" ? [7, 30, 90, 999].map(r => (
                   <button
                     key={r}
                     onClick={() => {
@@ -1847,10 +2049,15 @@ function Dashboard() {
                   >
                     {r === 999 ? "ALL" : `${r}D`}
                   </button>
+                )) : ["1h", "4h", "1d"].map(iv => (
+                  <button key={iv} onClick={() => setCandleInterval(iv)} className={`seg-btn ${candleInterval === iv ? "active" : ""}`}>
+                    {iv.toUpperCase()}
+                  </button>
                 ))}
               </div>
             </div>
-            {loading ? <ChartSkeleton /> : (
+            {chartMode === "line" ? (
+              loading ? <ChartSkeleton /> : (
               <div className="panel-body" style={{ overflowX: "hidden" }}>
                 <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={displayData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
@@ -1887,6 +2094,19 @@ function Dashboard() {
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
+              )
+            ) : (
+              candleLoading ? <ChartSkeleton /> : (
+                <div className="panel-body">
+                  {displayCandles.length > 0 ? (
+                    <CandlestickChart candles={displayCandles} interval={candleInterval} ticker={ticker} height={300} />
+                  ) : (
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)", padding: "24px 0", textAlign: "center" }}>
+                      No candle data yet for this ticker/interval.
+                    </div>
+                  )}
+                </div>
+              )
             )}
           </div>
 

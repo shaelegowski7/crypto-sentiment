@@ -73,6 +73,9 @@ def fetch_prices(ticker: str) -> list:
     for date, row in data.iterrows():
         try:
             close = float(row["Close"].iloc[0]) if hasattr(row["Close"], 'iloc') else float(row["Close"])
+            open_ = float(row["Open"].iloc[0]) if hasattr(row["Open"], 'iloc') else float(row["Open"])
+            high = float(row["High"].iloc[0]) if hasattr(row["High"], 'iloc') else float(row["High"])
+            low = float(row["Low"].iloc[0]) if hasattr(row["Low"], 'iloc') else float(row["Low"])
             volume = 0.0 if is_fx else (float(row["Volume"].iloc[0]) if hasattr(row["Volume"], 'iloc') else float(row["Volume"]))
             # yfinance returns NaN for holiday/halt rows on equities — those NaN
             # rows would later crash Starlette's strict JSON encoder.  Drop the
@@ -82,9 +85,23 @@ def fetch_prices(ticker: str) -> list:
                 continue
             if not math.isfinite(volume):
                 volume = 0.0
+            # Open/High/Low occasionally come back NaN even when Close doesn't
+            # (thin-volume days on some equities/FX) — fall back to close so a
+            # candle still renders (as a flat doji) instead of the whole row
+            # having to be dropped.
+            decimals = 6 if is_fx else 8
+            if not math.isfinite(open_):
+                open_ = close
+            if not math.isfinite(high):
+                high = close
+            if not math.isfinite(low):
+                low = close
             prices.append({
                 "ticker": ticker,
-                "close_price": round(close * gbp_rate, 6 if is_fx else 8),
+                "close_price": round(close * gbp_rate, decimals),
+                "open_price": round(open_ * gbp_rate, decimals),
+                "high_price": round(high * gbp_rate, decimals),
+                "low_price": round(low * gbp_rate, decimals),
                 "volume": round(volume, 2),
                 "date": date.to_pydatetime()
             })
