@@ -10,6 +10,7 @@ import {
 import "./dashboard.css"
 import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, TICKER_INFO, nativeCurrencyFor, _formatPrice, _formatSentiment, toSentimentScale, toSentimentDelta, fromSentimentScale, redirectToCheckout } from "./lib/constants"
 import CandlestickChart from "./components/CandlestickChart"
+import SentimentGauge from "./components/SentimentGauge"
 
 // Standalone pages are code-split — they only load on their own routes.
 const Leaderboard = lazy(() => import("./pages/Leaderboard"))
@@ -452,10 +453,7 @@ function TodaysSignalCard({ signal, trend, loading }) {
             Sentiment Score
             <InfoTip text="Average FinBERT score across today's headlines. Ranges from 0 (very negative) to 100 (very positive), 50 is neutral. Scored using a financial-domain AI model." />
           </div>
-          <div className="signal-metric-value signal-tone-text">
-            {toSentimentScale(signal.score)}
-          </div>
-          <div className="signal-metric-sub">range: 0 to 100</div>
+          <SentimentGauge score={toSentimentScale(signal.score)} />
         </div>
 
         <div className="signal-divider" />
@@ -1734,6 +1732,7 @@ function Dashboard() {
     low: c.low * rate,
     close: c.close * rate,
     volume: c.volume,
+    sentiment: toSentimentScale(c.sentiment),
   }))
 
   const sentimentSignal = avgSentiment !== null
@@ -2103,7 +2102,7 @@ function Dashboard() {
               candleLoading ? <ChartSkeleton /> : (
                 <div className="panel-body">
                   {displayCandles.length > 0 ? (
-                    <CandlestickChart candles={displayCandles} interval={candleInterval} ticker={ticker} height={300} />
+                    <CandlestickChart candles={displayCandles} interval={candleInterval} ticker={ticker} height={480} />
                   ) : (
                     <div style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)", padding: "24px 0", textAlign: "center" }}>
                       No candle data yet for this ticker/interval.

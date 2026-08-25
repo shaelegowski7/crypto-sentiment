@@ -1443,6 +1443,31 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
     }
 
 
+def _bucket_sentiment(headlines, bucket_fn):
+    """Weighted-average sentiment per bucket — same convention as
+    _build_daily_series (skip |score|<0.05 as noise, weight by |score|),
+    just generalised to an arbitrary bucket_fn instead of hardcoding a
+    calendar day, so it also covers the 1h/4h candle buckets. Returns
+    {bucket_key: weighted_avg_sentiment}; a bucket with no headlines simply
+    doesn't appear (caller should treat a missing key as "no data").
+    """
+    buckets = defaultdict(lambda: {"scores": [], "weights": []})
+    for h in headlines:
+        if abs(h.sentiment_score) < 0.05:
+            continue
+        key = bucket_fn(h.published_at)
+        buckets[key]["scores"].append(h.sentiment_score)
+        buckets[key]["weights"].append(abs(h.sentiment_score))
+
+    result = {}
+    for key, v in buckets.items():
+        if not v["scores"]:
+            continue
+        w_sum = sum(v["weights"])
+        result[key] = sum(s * w for s, w in zip(v["scores"], v["weights"])) / w_sum if w_sum else 0
+    return result
+
+
 @app.get("/candles/{ticker}")
 def get_candles(ticker: str, interval: str = "1h", limit: int = 500, db: Session = Depends(get_db)):
     """OHLCV candles for the dashboard's candlestick chart.
@@ -1453,6 +1478,11 @@ def get_candles(ticker: str, interval: str = "1h", limit: int = 500, db: Session
     Price table directly, so it carries the full 2019+ history the intraday
     table can't — falling back to close_price for any pre-migration row where
     open/high/low are still null (see models.Price docstring).
+
+    Each candle also carries a `sentiment` field — the same weighted-average
+    FinBERT score /dashboard uses, just bucketed to match the candle's own
+    interval (day / hour / 4h) instead of always being daily. `null` means no
+    headlines fell in that bucket, not a zero/neutral score.
     """
     ticker = ticker.upper()
     if interval not in ("1h", "4h", "1d"):
@@ -1511,6 +1541,20 @@ def get_candles(ticker: str, interval: str = "1h", limit: int = 500, db: Session
                     "volume": sum(b.volume for b in bars),
                 })
             candles = candles[-limit:]
+
+    if candles:
+        bucket_fn = {
+            "1d": lambda dt: dt.replace(hour=0, minute=0, second=0, microsecond=0),
+            "1h": lambda dt: dt.replace(minute=0, second=0, microsecond=0),
+            "4h": lambda dt: dt.replace(hour=(dt.hour // 4) * 4, minute=0, second=0, microsecond=0),
+        }[interval]
+        headlines = db.query(models.Headline).filter(
+            models.Headline.ticker == ticker,
+            models.Headline.published_at >= candles[0]["ts"],
+        ).all()
+        sentiment_by_bucket = _bucket_sentiment(headlines, bucket_fn)
+        for c in candles:
+            c["sentiment"] = sentiment_by_bucket.get(bucket_fn(c["ts"]))
 
     return {"ticker": ticker, "interval": interval, "candles": candles}
 
