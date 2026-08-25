@@ -1094,10 +1094,47 @@
   margin-top: 5px;
 }
 
+/* Word-length verdict (STRONG / WEAK / INCONCLUSIVE) in a slot sized for a
+   short number — needs to be smaller so "INCONCLUSIVE" doesn't blow out the
+   column on narrow screens. */
+.signal-strength-value {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+
 .signal-divider {
   width: 1px;
   background: var(--border);
   align-self: stretch;
+}
+
+/* ── sentiment gauge ─────────────────────────────────────────────────── */
+
+.sentiment-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 148px;
+}
+
+.sentiment-gauge-value {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-top: -6px;
+  line-height: 1;
+}
+
+.sentiment-gauge-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin-top: 2px;
+  text-align: center;
 }
 
 /* ── auth modal ──────────────────────────────────────────────────────── */
@@ -1527,6 +1564,10 @@
   .signal-metrics { gap: 16px; }
   .signal-divider { display: none; }
   .signal-metric { min-width: calc(50% - 8px); }
+  /* Keep the gauge from making its half-width cell far taller than the
+     plain-number metrics beside it. */
+  .sentiment-gauge { max-width: 112px; }
+  .sentiment-gauge-value { font-size: 21px; }
 
   .correlation-value { font-size: 28px; }
   .stat-value { font-size: 22px; }

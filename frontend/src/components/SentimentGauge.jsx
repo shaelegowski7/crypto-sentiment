@@ -31,8 +31,15 @@ export default function SentimentGauge({ score, size = 148 }) {
   const gradId = "sentGaugeGrad"
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <svg width={size} height={size / 2 + 22} viewBox={`0 0 ${size} ${size / 2 + 22}`}>
+    <div className="sentiment-gauge">
+      {/* Fluid: the viewBox does the scaling, so the gauge shrinks to fit
+          narrow columns (mobile stacks .signal-metric to ~50% width) instead
+          of forcing its cell taller than the metrics beside it. */}
+      <svg
+        width="100%"
+        viewBox={`0 0 ${size} ${size / 2 + 22}`}
+        style={{ maxWidth: `${size}px`, height: "auto", display: "block" }}
+      >
         <defs>
           <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#f26d64" />
@@ -58,10 +65,10 @@ export default function SentimentGauge({ score, size = 148 }) {
         <text x={cx} y={cy - r - 4} textAnchor="middle" fontFamily="var(--mono)" fontSize="9" fill="#8b95a7">50</text>
         <text x={endX} y={cy + 15} textAnchor="middle" fontFamily="var(--mono)" fontSize="9" fill="#8b95a7">100</text>
       </svg>
-      <div style={{ fontFamily: "var(--mono)", fontSize: "26px", fontWeight: 700, color: "var(--text)", marginTop: "-6px", lineHeight: 1 }}>
+      <div className="sentiment-gauge-value">
         {hasScore ? Math.round(clamped) : "—"}
       </div>
-      <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "0.1em", color: labelColor, fontWeight: 600, marginTop: "2px" }}>
+      <div className="sentiment-gauge-label" style={{ color: labelColor }}>
         {label}
       </div>
     </div>

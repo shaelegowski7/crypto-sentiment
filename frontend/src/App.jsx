@@ -366,8 +366,9 @@ function TrendArrow({ trend }) {
   const colorMap = { up: "var(--positive)", down: "var(--negative)", flat: "var(--neutral)" }
   const labelMap = { up: "improving", down: "worsening", flat: "stable" }
 
-  const deltaDisplay = delta !== null
-     ? `${delta > 0 ? "+" : ""}${delta}`
+  const scaledDelta = delta !== null ? toSentimentDelta(delta) : null
+  const deltaDisplay = scaledDelta !== null
+     ? `${scaledDelta > 0 ? "+" : ""}${scaledDelta}`
      : null
 
   return (
@@ -471,13 +472,23 @@ function TodaysSignalCard({ signal, trend, loading }) {
             <div className="signal-divider" />
             <div className="signal-metric">
               <div className="signal-metric-label">
-                Correlation (r)
-                <InfoTip text="Pearson correlation between daily sentiment shifts and next-day price returns over the last 180 days. +1 = perfect positive link, -1 = perfect inverse link, 0 = no relationship." />
+                Predictive Link
+                <InfoTip text="How reliably sentiment shifts have led next-day price moves over the last 180 days, measured as a Pearson correlation (r). r runs -1 to +1 — positive means price tends to follow sentiment, negative means it moves opposite, and near 0 means no relationship. Strength accounts for both effect size and statistical significance." />
               </div>
-              <div className="signal-metric-value accent2-text">
-                {signal.correlation > 0 ? "+" : ""}{signal.correlation}
+              {/* Lead with the plain-English verdict; r stays on its standard
+                  -1..+1 scale underneath (deliberately NOT rescaled to 0-100
+                  like sentiment — the sign carries the meaning, and the CI /
+                  p-value alongside it are defined on that same scale). */}
+              <div className="signal-metric-value signal-strength-value" style={{
+                color: signal.strength === "strong" ? "var(--positive)"
+                  : signal.strength === "weak" ? "var(--accent)"
+                  : "var(--muted)",
+              }}>
+                {(signal.strength ?? "unknown").toUpperCase()}
               </div>
-              <div className="signal-metric-sub">next-day return · n={signal.sampleSize ?? "?"}</div>
+              <div className="signal-metric-sub">
+                r = {signal.correlation > 0 ? "+" : ""}{signal.correlation} · n={signal.sampleSize ?? "?"}
+              </div>
             </div>
           </>
         )}
