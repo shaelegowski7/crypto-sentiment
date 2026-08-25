@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks
 from sqlalchemy.orm import Session
+from sqlalchemy import or_ as sa_or, func as sa_func
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
@@ -1390,8 +1391,56 @@ def get_prices(ticker: str, db: Session = Depends(get_db)):
     return prices
 
 
+# Social chatter vs editorial news.  Reddit arrives through the general RSS
+# path, so it carries no source_type and is identified by its feed title
+# ("newest submissions : Bitcoin"); StockTwits/X are tagged via source_type;
+# and the HN backfill stores the linked article's domain, which is sometimes
+# a social platform.  Matching is deliberately exact/prefix rather than a
+# loose "%reddit%" — real companies (redditinc.com, redditrecs.com) would be
+# caught by that and wrongly hidden.
+#
+# Used for DISPLAY filtering only (see the `sources` param on /dashboard).
+# Sentiment scoring, correlation, alerts and the SignalQuality gate all still
+# consume every headline — verified that excluding social doesn't measurably
+# change the correlation, so there's no reason to recalibrate that pipeline.
+_SOCIAL_SOURCE_TYPES = ("stocktwits", "x")
+_SOCIAL_DOMAINS = (
+    "reddit.com", "old.reddit.com", "sh.reddit.com",
+    "twitter.com", "x.com", "youtube.com",
+)
+
+
+def _social_headline_filter():
+    """SQLAlchemy predicate matching social-chatter headlines.
+
+    COALESCE guards the NULL trap: `NOT (NULL = 'stocktwits')` is NULL, not
+    TRUE, so without it every legacy news row (source_type IS NULL) would be
+    dropped by the negated filter.
+    """
+    return sa_or(
+        sa_func.coalesce(models.Headline.source_type, "").in_(_SOCIAL_SOURCE_TYPES),
+        sa_func.coalesce(models.Headline.source, "").ilike("newest submissions :%"),
+        sa_func.lower(sa_func.coalesce(models.Headline.source, "")).in_(_SOCIAL_DOMAINS),
+    )
+
+
+def _classify_source(source: str | None, source_type: str | None) -> str:
+    """Coarse label for the UI badge: 'stocktwits' | 'reddit' | 'x' | 'news'."""
+    st = (source_type or "").lower()
+    if st in _SOCIAL_SOURCE_TYPES:
+        return st
+    src = (source or "").lower()
+    if src.startswith("newest submissions :") or src in ("reddit.com", "old.reddit.com", "sh.reddit.com"):
+        return "reddit"
+    if src in ("twitter.com", "x.com"):
+        return "x"
+    if src == "youtube.com":
+        return "youtube"
+    return "news"
+
+
 @app.get("/dashboard/{ticker}")
-def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1, limit: int = 50, db: Session = Depends(get_db)):
+def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1, limit: int = 50, sources: str = "all", db: Session = Depends(get_db)):
     query_headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
     )
@@ -1403,6 +1452,14 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
         since = datetime.utcnow() - timedelta(days=days)
         query_headlines = query_headlines.filter(models.Headline.published_at >= since)
         query_prices = query_prices.filter(models.Price.date >= since)
+
+    # `sources=news` hides Reddit/StockTwits chatter from the headline feed.
+    # Default stays "all" so existing consumers (the landing page's ticker
+    # chips, anything else hitting this endpoint) are unaffected — the
+    # dashboard opts in explicitly. Filtering is applied before the count so
+    # pagination stays correct for the filtered set.
+    if sources == "news":
+        query_headlines = query_headlines.filter(~_social_headline_filter())
 
     # prices always returned in full for the chart
     prices = query_prices.order_by(models.Price.date.desc()).all()
@@ -1427,7 +1484,9 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
                 "date": h.published_at,
                 "score": h.sentiment_score,
                 "label": h.sentiment_label,
-                "title": h.title
+                "title": h.title,
+                "source": h.source,
+                "source_kind": _classify_source(h.source, h.source_type),
             } for h in headlines
         ],
         "prices": [

@@ -1398,6 +1398,10 @@ function Dashboard() {
   const [apiKeyFull, setApiKeyFull] = useState(null)
   const [apiKeyLoading, setApiKeyLoading] = useState(false)
   const [apiKeyCopied, setApiKeyCopied] = useState(false)
+  // Headline feed defaults to editorial news — Reddit/StockTwits chatter is
+  // ~75% of raw volume and reads as noise in the feed. Sentiment scoring is
+  // unaffected either way; this is display-only (see /dashboard `sources`).
+  const [headlineSources, setHeadlineSources] = useState("news")
   const [chartMode, setChartMode] = useState("line")
   const [candleInterval, setCandleInterval] = useState("1h")
   const [candleData, setCandleData] = useState([])
@@ -1487,7 +1491,7 @@ function Dashboard() {
 
   useEffect(() => {
     fetchDashboard(range, 1, ticker)
-  }, [ticker])
+  }, [ticker, headlineSources])
 
   useEffect(() => {
   const interval = setInterval(() => {
@@ -1630,8 +1634,8 @@ function Dashboard() {
         : `${API}/dashboard/${selectedTicker}?days=${Math.max(days, 90)}`
 
       const url = headlinePageNum === 1
-        ? `${baseUrl}&page=1&limit=50`
-        : `${baseUrl}&page=${headlinePageNum}&limit=50`
+        ? `${baseUrl}&page=1&limit=50&sources=${headlineSources}`
+        : `${baseUrl}&page=${headlinePageNum}&limit=50&sources=${headlineSources}`
 
       const [dashRes, sentimentRes] = await Promise.all([
         axios.get(url),
@@ -2296,9 +2300,19 @@ function Dashboard() {
           <div className="panel">
             <div className="panel-header">
               <span className="panel-title">LATEST HEADLINES</span>
-              <span className="panel-title" style={{ color: "#7d8590" }}>
-                {loading ? "—" : `${headlines.length} ITEMS · PG ${headlinePage}/${totalPages || 1}`}
-              </span>
+              <div className="panel-controls">
+                {[["news", "NEWS"], ["all", "ALL"]].map(([v, lbl]) => (
+                  <button
+                    key={v}
+                    className={`seg-btn ${headlineSources === v ? "active" : ""}`}
+                    onClick={() => { setHeadlineSources(v); setHeadlinePage(1) }}
+                  >{lbl}</button>
+                ))}
+                <div className="control-divider" />
+                <span className="panel-title" style={{ color: "#7d8590" }}>
+                  {loading ? "—" : `${headlines.length} ITEMS · PG ${headlinePage}/${totalPages || 1}`}
+                </span>
+              </div>
             </div>
             {loading ? <HeadlinesSkeleton /> : (
               <>
@@ -2312,6 +2326,9 @@ function Dashboard() {
                       </div>
                       <div style={{ flex: 1 }}>
                         <div className="headline-title">{h.title}</div>
+                        {h.source_kind && h.source_kind !== "news" && (
+                          <span className="source-badge">{h.source_kind.toUpperCase()}</span>
+                        )}
                       </div>
                       <div className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
                         {toSentimentScale(h.score)}
