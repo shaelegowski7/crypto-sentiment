@@ -187,7 +187,7 @@
 
       .nav-cta:hover { background: rgba(240,180,41,0.08) !important; }
 
-      /* Dashboard variant — lower-key than Create Account so the primary
+      /* Log In variant — lower-key than Create Account so the primary
          signup CTA still wins visual hierarchy, but obvious enough that
          existing users have a fast path back into the app. */
       .nav-cta-dashboard {
@@ -198,14 +198,6 @@
         background: rgba(255,255,255,0.04) !important;
         border-color: var(--text);
       }
-
-      /* Hero "Open Dashboard" link — secondary-button shape with a quiet
-         border so it doesn't compete with Create Account / Log In. */
-      .btn-dashboard {
-        border-color: var(--border) !important;
-        opacity: 0.85;
-      }
-      .btn-dashboard:hover { opacity: 1; }
 
       .hero {
         position: relative;
@@ -920,6 +912,14 @@
 
       .footer-link:hover { text-decoration: underline; }
 
+      .footer-links {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
       @keyframes fadeUp {
         from { opacity: 0; transform: translateY(20px); }
         to   { opacity: 1; transform: translateY(0); }
@@ -962,19 +962,14 @@
     <nav>
       <a href="#" class="nav-logo">SentimentFX</a>
       <ul class="nav-links">
-        <li><a href="/brief">Brief</a></li>
-        <li><a href="/leaderboard">Leaderboard</a></li>
-        <li><a href="https://app.sentimentfx.org/track-record">Track record</a></li>
         <li><a href="#coverage">Coverage</a></li>
         <li><a href="#features">Features</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#pricing">Pricing</a></li>
         <li><a href="https://developers.sentimentfx.org"
             target="_blank">Developers</a></li>
-        <li><a href="https://status.sentimentfx.org"
-            target="_blank">Status</a></li>
-        <li><a href="https://app.sentimentfx.org" target="_blank"
-            class="nav-cta nav-cta-dashboard">Dashboard</a></li>
+        <li><a href="https://app.sentimentfx.org?auth=login" target="_blank"
+            class="nav-cta nav-cta-dashboard">Log In</a></li>
         <li><a href="https://app.sentimentfx.org?auth=signup" target="_blank"
             class="nav-cta">Create Account</a></li>
       </ul>
@@ -1013,8 +1008,6 @@
           class="btn-primary">Create Account</a>
         <a href="https://app.sentimentfx.org?auth=login"
           class="btn-secondary">Log In</a>
-        <a href="https://app.sentimentfx.org"
-          class="btn-secondary btn-dashboard">Open Dashboard →</a>
       </div>
     </section>
 
@@ -1167,8 +1160,8 @@
           <div class="feature-icon">06 — Dashboard</div>
           <div class="feature-title">Terminal-style UI</div>
           <div class="feature-desc">Bloomberg-inspired interface.
-            Sentiment vs price charts, signal strength ratings, and
-            a live headline feed — all in one view.</div>
+            Candlestick and sentiment-vs-price charts (1H/4H/1D), signal
+            strength ratings, and a live headline feed — all in one view.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">07 — Alerts & Brief</div>
@@ -1185,6 +1178,15 @@
             MCP server — wire SentimentFX straight into Claude Code,
             Claude.ai, Cursor or any MCP-speaking tool as a native tool,
             no custom integration required.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">09 — Strategy Testing</div>
+          <div class="feature-title">Backtest the signal yourself</div>
+          <div class="feature-desc">Don't take our word for it — run the
+            strategy against real history. Tune direction, hold period,
+            transaction costs, stop-loss/take-profit and position size,
+            then see the actual trade log, equity curve, regime breakdown
+            and walk-forward stability. No black box.</div>
         </div>
       </div>
     </section>
@@ -1259,6 +1261,7 @@
           <ul class="price-features">
             <li class="included">15 top tickers across crypto, FX, stocks, ETFs &amp; commodities</li>
             <li class="included">30-day history</li>
+            <li class="included">Candlestick charts &amp; interactive backtest simulator</li>
             <li class="included">Correlation signal</li>
             <li>All 42 tickers</li>
             <li>Full history</li>
@@ -1277,7 +1280,7 @@
           <div class="price-saving">Annual saves £43.89</div>
           <ul class="price-features">
             <li class="included">All 42 tickers (crypto, FX, stocks, ETFs, commodities)</li>
-            <li class="included">Full price history</li>
+            <li class="included">Full price history — candlesticks &amp; backtests across everything</li>
             <li class="included">1,000 API calls / month included</li>
             <li class="included">Email sentiment alerts</li>
             <li class="included">Morning brief email</li>
@@ -1336,10 +1339,13 @@
           style="color:var(--muted);text-decoration:none;">Privacy</a>
         · <a href="/terms"
           style="color:var(--muted);text-decoration:none;">Terms</a></span>
-      <a href="https://status.sentimentfx.org" target="_blank"
-        class="footer-link">Status</a>
-      <a href="https://app.sentimentfx.org" target="_blank"
-        class="footer-link">Live Dashboard →</a>
+      <div class="footer-links">
+        <a href="/brief" class="footer-link">Brief</a>
+        <a href="/leaderboard" class="footer-link">Leaderboard</a>
+        <a href="https://app.sentimentfx.org/track-record" class="footer-link">Track record</a>
+        <a href="https://status.sentimentfx.org" target="_blank" class="footer-link">Status</a>
+        <a href="https://app.sentimentfx.org" target="_blank" class="footer-link">Live Dashboard →</a>
+      </div>
     </footer>
 
     <script>
