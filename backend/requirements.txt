@@ -19,4 +19,4 @@ feedparser
 lxml>=5.0.0
 slowapi
 prometheus_fastapi_instrumentator
-mcp>=1.2.0
+mcp>=1.2.0,<2.0.0
