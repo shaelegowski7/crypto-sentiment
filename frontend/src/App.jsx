@@ -8,7 +8,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from "recharts"
 import "./dashboard.css"
-import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, TICKER_INFO, nativeCurrencyFor, _formatPrice, redirectToCheckout } from "./lib/constants"
+import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, FX_TICKERS, TICKER_INFO, nativeCurrencyFor, _formatPrice, _formatSentiment, toSentimentScale, toSentimentDelta, fromSentimentScale, redirectToCheckout } from "./lib/constants"
 import CandlestickChart from "./components/CandlestickChart"
 
 // Standalone pages are code-split — they only load on their own routes.
@@ -126,7 +126,7 @@ function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
   const sampleSize = correlation?.sample_size ?? null
 
   // Build the narrative sentence
-  let narrative = `${ticker} sentiment is currently ${sentimentLabel} (${score > 0 ? "+" : ""}${score}).`
+  let narrative = `${ticker} sentiment is currently ${sentimentLabel} (${toSentimentScale(score)}/100).`
 
   if (strength === "strong" || strength === "weak") {
     const followVerb = isMomentum ? "tends to follow" : "historically moves opposite to"
@@ -143,7 +143,8 @@ function buildTodaySignal({ ticker, avgSentiment, correlation, trend }) {
 
   if (trend?.direction !== "flat" && trend?.delta !== null) {
     const trendWord = trend.direction === "up" ? "improving" : "deteriorating"
-    narrative += ` Sentiment has been ${trendWord} over the past week (${trend.delta > 0 ? "+" : ""}${trend.delta}).`
+    const deltaDisplay = toSentimentDelta(trend.delta)
+    narrative += ` Sentiment has been ${trendWord} over the past week (${deltaDisplay > 0 ? "+" : ""}${deltaDisplay}).`
   }
 
   return {
@@ -230,7 +231,7 @@ function DivergenceCard({ data, loading }) {
               Sentiment 7D
             </div>
             <div style={{ fontFamily: "var(--mono)", fontSize: "22px", fontWeight: 600, color: sentColor, lineHeight: 1 }}>
-              {sentiment_change_7d > 0 ? "+" : ""}{sentiment_change_7d}
+              {toSentimentDelta(sentiment_change_7d) > 0 ? "+" : ""}{toSentimentDelta(sentiment_change_7d)}
             </div>
             <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)", marginTop: "3px" }}>
               {dirIcon(sentiment_direction)} {dirLabel(sentiment_direction)}
@@ -449,12 +450,12 @@ function TodaysSignalCard({ signal, trend, loading }) {
         <div className="signal-metric">
           <div className="signal-metric-label">
             Sentiment Score
-            <InfoTip text="Average FinBERT score across today's headlines. Ranges from -1 (very negative) to +1 (very positive). Scored using a financial-domain AI model." />
+            <InfoTip text="Average FinBERT score across today's headlines. Ranges from 0 (very negative) to 100 (very positive), 50 is neutral. Scored using a financial-domain AI model." />
           </div>
           <div className="signal-metric-value signal-tone-text">
-            {signal.score > 0 ? "+" : ""}{signal.score}
+            {toSentimentScale(signal.score)}
           </div>
-          <div className="signal-metric-sub">range: −1.0 to +1.0</div>
+          <div className="signal-metric-sub">range: 0 to 100</div>
         </div>
 
         <div className="signal-divider" />
@@ -677,7 +678,7 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
                     className={`heatmap-cell ${color ? "" : "no-data"} ${selectedDay === day.date ? "selected" : ""}`}
                     style={color ? { background: color } : {}}
                     onClick={() => setSelectedDay(selectedDay === day.date ? null : day.date)}
-                    title={`${day.date}${day.sentiment !== null ? ` · ${day.sentiment > 0 ? "+" : ""}${day.sentiment}` : " · no data"}`}
+                    title={`${day.date}${day.sentiment !== null ? ` · ${toSentimentScale(day.sentiment)}/100` : " · no data"}`}
                   />
                 )
               })}
@@ -734,7 +735,7 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
           <span className="heatmap-day-date">{selectedDay}</span>
           {selectedScore !== null && selectedScore !== undefined ? (
             <span className="heatmap-day-score" style={{ color: selectedScore > 0.1 ? "var(--positive)" : selectedScore < -0.1 ? "var(--negative)" : "var(--neutral)" }}>
-              {selectedScore > 0 ? "+" : ""}{selectedScore}
+              {toSentimentScale(selectedScore)}
             </span>
           ) : (
             <span style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)" }}>No sentiment data</span>
@@ -752,7 +753,7 @@ function SentimentHeatmap({ allData, headlines, isPro, onUpgrade }) {
                 </span>
                 <span style={{ fontSize: "12px", color: "var(--text)", flex: 1, lineHeight: "1.5" }}>{h.title}</span>
                 <span className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
-                  {h.score > 0 ? "+" : ""}{h.score}
+                  {toSentimentScale(h.score)}
                 </span>
               </div>
             ))}
@@ -904,7 +905,7 @@ function HeadlineImpactPanel({ ticker }) {
                         {h.sentiment_label.slice(0, 3).toUpperCase()}
                       </span>
                       <span style={{ fontFamily: "var(--mono)", fontSize: "10px", color: sentColor, fontWeight: 600 }}>
-                        {h.sentiment_score > 0 ? "+" : ""}{h.sentiment_score}
+                        {toSentimentScale(h.sentiment_score)}
                       </span>
                     </div>
 
@@ -1377,7 +1378,9 @@ function Dashboard() {
   const [passwordResetDone, setPasswordResetDone] = useState(false)
   const [alerts, setAlerts] = useState([])
   const [alertTicker, setAlertTicker] = useState("BTC")
-  const [alertThreshold, setAlertThreshold] = useState(0.3)
+  // 0-100 scale (display) — converted back to the API's native -1..1 scale
+  // at submission time in createAlert(). 65 === toSentimentScale(0.3).
+  const [alertThreshold, setAlertThreshold] = useState(65)
   const [alertDirection, setAlertDirection] = useState("above")
   const [alertLoading, setAlertLoading] = useState(false)
   const [signalData, setSignalData] = useState(null)
@@ -1583,7 +1586,7 @@ function Dashboard() {
         },
         body: JSON.stringify({
           ticker: alertTicker,
-          threshold: alertThreshold,
+          threshold: fromSentimentScale(alertThreshold),
           direction: alertDirection
         })
       })
@@ -1718,6 +1721,7 @@ function Dashboard() {
   const displayData = filteredData.map(d => ({
     ...d,
     price: d.price != null ? parseFloat((d.price * rate).toFixed(2)) : null,
+    sentiment: toSentimentScale(d.sentiment),
   }))
 
   // Same `rate` conversion the line chart applies, plus the naive-UTC ->
@@ -1951,7 +1955,7 @@ function Dashboard() {
               <div className={`stat-value ${!loading && avgSentiment > 0.1 ? "positive-text" : !loading && avgSentiment < -0.1 ? "negative-text" : "neutral-text"}`}>
                 {loading
                   ? <span className="skeleton" style={{ display: "inline-block", width: "80px", height: "22px", borderRadius: "2px" }} />
-                  : (avgSentiment ?? "—")}
+                  : (avgSentiment !== null && avgSentiment !== undefined ? toSentimentScale(avgSentiment) : "—")}
               </div>
               <div className="stat-sub">{loading ? "—" : (sentimentSignal ?? "Loading...")}</div>
             </div>
@@ -1992,7 +1996,7 @@ function Dashboard() {
                         color: sentimentTrend.direction === "up" ? "var(--positive)" : sentimentTrend.direction === "down" ? "var(--negative)" : "var(--neutral)"
                       }}>
                         {sentimentTrend.direction === "up" ? "↑" : sentimentTrend.direction === "down" ? "↓" : "→"}
-                        {sentimentTrend.delta !== null ? ` ${Math.abs(sentimentTrend.delta)}` : ""}
+                        {sentimentTrend.delta !== null ? ` ${Math.abs(toSentimentDelta(sentimentTrend.delta))}` : ""}
                       </span>
                     : "—"
                 }
@@ -2081,7 +2085,7 @@ function Dashboard() {
                     <YAxis
                       yAxisId="sentiment"
                       orientation="left"
-                      domain={[-1, 1]}
+                      domain={[0, 100]}
                       stroke="#30363d"
                       tick={{ fill: "#7d8590", fontSize: 9, fontFamily: "IBM Plex Mono" }}
                       tickLine={false}
@@ -2300,7 +2304,7 @@ function Dashboard() {
                         <div className="headline-title">{h.title}</div>
                       </div>
                       <div className={`headline-score ${h.score > 0.1 ? "positive-text" : h.score < -0.1 ? "negative-text" : "neutral-text"}`}>
-                        {h.score > 0 ? "+" : ""}{h.score}
+                        {toSentimentScale(h.score)}
                       </div>
                     </div>
                   ))}
@@ -2342,7 +2346,7 @@ function Dashboard() {
                 <div className="explainer-card" style={{ borderLeft: "2px solid var(--accent)" }}>
                   <div className="explainer-label" style={{ color: "var(--accent)" }}>What is Sentiment?</div>
                   <div className="explainer-text">
-                    Each news headline is scored from <span style={{ color: "var(--positive)" }}>+1 (very positive)</span> to <span style={{ color: "var(--negative)" }}>-1 (very negative)</span> using an AI model trained on financial news. The average of all recent headlines gives the overall sentiment score.
+                    Each news headline is scored from <span style={{ color: "var(--negative)" }}>0 (very negative)</span> to <span style={{ color: "var(--positive)" }}>100 (very positive)</span>, 50 is neutral, using an AI model trained on financial news. The average of all recent headlines gives the overall sentiment score.
                   </div>
                 </div>
                 <div className="explainer-card" style={{ borderLeft: "2px solid var(--accent2)" }}>
@@ -2392,9 +2396,9 @@ function Dashboard() {
                     <input
                       className="alert-input"
                       type="number"
-                      min="-1"
-                      max="1"
-                      step="0.05"
+                      min="0"
+                      max="100"
+                      step="1"
                       value={alertThreshold}
                       onChange={e => setAlertThreshold(parseFloat(e.target.value))}
                     />
@@ -2426,7 +2430,7 @@ function Dashboard() {
                             <span style={{ color: "var(--accent)" }}>{a.ticker}</span>
                             {" "}sentiment {a.direction}{" "}
                             <span style={{ color: a.direction === "above" ? "var(--positive)" : "var(--negative)" }}>
-                              {a.threshold}
+                              {toSentimentScale(a.threshold)}
                             </span>
                           </span>
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>

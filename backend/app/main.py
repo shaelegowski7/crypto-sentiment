@@ -1799,11 +1799,17 @@ def get_signal(ticker: str, db: Session = Depends(get_db)):
         else "neutral"
     )
 
-    # Plain-English summary
+    # Plain-English summary. The dashboard displays sentiment on a 0-100
+    # scale (display-only rescale — the `today`/`sentiment` fields returned
+    # below stay on FinBERT's native -1..1 range for API/alert consumers),
+    # so this human-readable sentence embeds the same 0-100 numbers a reader
+    # sees everywhere else on the page instead of the raw -1..1 values.
     sign = "+" if today_shift > 0 else ""
-    summary = f"{ticker.upper()} sentiment is {sentiment_label} ({sign}{round(today_sentiment, 3)}) "
+    display_sentiment = round((today_sentiment + 1) * 50)
+    display_shift = round(today_shift * 50)
+    summary = f"{ticker.upper()} sentiment is {sentiment_label} ({display_sentiment}/100) "
     summary += f"with a {magnitude} {'upward' if shift_direction == 'up' else 'downward'} shift "
-    summary += f"of {sign}{round(today_shift, 3)} vs the 7-day average "
+    summary += f"of {sign}{display_shift} vs the 7-day average "
     summary += f"({percentile}th percentile of all daily shifts). "
     if days_since_similar and days_since_similar > 7:
         summary += f"The last shift of this size was {days_since_similar} days ago. "
@@ -3129,22 +3135,26 @@ def get_divergence(ticker: str, db: Session = Depends(get_db)):
     price_dir = "up" if price_change_pct > THRESHOLD_P else "down" if price_change_pct < -THRESHOLD_P else "flat"
     sign_s = "+" if sentiment_change >= 0 else ""
     sign_p = "+" if price_change_pct >= 0 else ""
+    # Dashboard-display 0-100 scale for the human-readable summary only — see
+    # the matching comment in get_signal(); sentiment_change_7d below stays
+    # on the native -1..1 scale for API/alert consumers.
+    display_sentiment_change = round(sentiment_change * 50)
 
     if divergence_type == "bullish":
         summary = (
-            f"{ticker.upper()} sentiment is rising ({sign_s}{round(sentiment_change, 3)}) "
+            f"{ticker.upper()} sentiment is rising ({sign_s}{display_sentiment_change}) "
             f"while price is falling ({sign_p}{round(price_change_pct, 1)}%) over the last 7 days. "
             f"Bullish divergence — narrative improvement has not yet been reflected in price."
         )
     elif divergence_type == "bearish":
         summary = (
-            f"{ticker.upper()} sentiment is falling ({sign_s}{round(sentiment_change, 3)}) "
+            f"{ticker.upper()} sentiment is falling ({sign_s}{display_sentiment_change}) "
             f"while price is rising ({sign_p}{round(price_change_pct, 1)}%) over the last 7 days. "
             f"Bearish divergence — price is rising against deteriorating sentiment."
         )
     else:
         summary = (
-            f"{ticker.upper()} sentiment ({sign_s}{round(sentiment_change, 3)}) and price "
+            f"{ticker.upper()} sentiment ({sign_s}{display_sentiment_change}) and price "
             f"({sign_p}{round(price_change_pct, 1)}%) are moving in alignment over the last 7 days — "
             f"no meaningful divergence detected."
         )

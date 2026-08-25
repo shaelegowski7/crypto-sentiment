@@ -101,6 +101,42 @@ export function _formatPrice(v, ticker) {
   return `${symbol}${v.toFixed(4)}`
 }
 
+// Display-only rescale: the backend, database, /v1 API, alert storage, and
+// all backtest/correlation math stay on FinBERT's native -1..1 scale
+// (positive_prob - negative_prob) — this is purely how the frontend presents
+// and collects sentiment numbers, so a Fear & Greed-style 0-100 (50 =
+// neutral) reads more naturally than -1..1. Every raw -1..1 value from the
+// API should be piped through toSentimentScale() at the point it's rendered;
+// classification thresholds (bullish/bearish/etc.) keep comparing the raw
+// -1..1 value internally, since that comparison is invisible to the user and
+// correct regardless of display scale — only the number shown changes.
+export function toSentimentScale(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return null
+  return Math.round((v + 1) * 50)
+}
+
+// Inverse — for the one place a user picks a sentiment-scale value (the
+// alert threshold input): convert their 0-100 pick back to -1..1 before it's
+// sent to the API, which still stores/compares thresholds on the native scale.
+export function fromSentimentScale(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return null
+  return (v / 50) - 1
+}
+
+export function _formatSentiment(v) {
+  const s = toSentimentScale(v)
+  return s === null ? "—" : String(s)
+}
+
+// Deltas/shifts (e.g. "sentiment moved +0.11 over 7 days") scale by the same
+// factor as absolute scores but WITHOUT the +1 offset — the offset only
+// makes sense for an absolute -1..1 value, not a difference between two of
+// them: toSentimentScale(a) - toSentimentScale(b) === toSentimentDelta(a - b).
+export function toSentimentDelta(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return null
+  return Math.round(v * 50)
+}
+
 export const redirectToCheckout = async (priceId) => {
   const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, {
     method: "POST",

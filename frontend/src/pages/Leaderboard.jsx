@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { supabase } from "../supabaseClient"
 import AuthModal from "../AuthModal"
-import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, _formatPrice } from "../lib/constants"
+import { API, FX_LABELS, COMMODITY_LABELS, TICKER_SLUGS, _formatPrice, toSentimentScale, toSentimentDelta } from "../lib/constants"
 import "../dashboard.css"
 
 const CATEGORY_FILTERS = [
@@ -34,10 +34,19 @@ function _signedPct(v) {
   return `${sign}${v.toFixed(2)}%`
 }
 
+// Display-only 0-100 rescale (see lib/constants.js) — sentiment_24h is an
+// absolute score (0-100, never negative, so no sign prefix), while
+// sentiment_change_24h is a delta (can go either way) — they need different
+// transforms even though the API returns both on the same -1..1 shape.
 function _signedScore(v) {
-  if (v === null || v === undefined) return "—"
-  const sign = v > 0 ? "+" : ""
-  return `${sign}${v.toFixed(3)}`
+  const s = toSentimentScale(v)
+  return s === null ? "—" : `${s}`
+}
+
+function _signedDelta(v) {
+  const s = toSentimentDelta(v)
+  if (s === null) return "—"
+  return s > 0 ? `+${s}` : `${s}`
 }
 
 function _scoreColor(v) {
@@ -667,7 +676,7 @@ function Leaderboard() {
                           {_signedScore(r.sentiment_24h)}
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: _scoreColor(r.sentiment_change_24h), fontWeight: 500 }}>
-                          {_signedScore(r.sentiment_change_24h)}
+                          {_signedDelta(r.sentiment_change_24h)}
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--muted)" }}>
                           {r.article_count_24h ?? 0}
