@@ -13,9 +13,16 @@ from .prices import TICKER_MAP, STOCK_TICKER_MAP, FX_TICKER_MAP, USD_TICKERS, ge
 INTRADAY_INTERVAL = "60m"
 INTRADAY_REFRESH_PERIOD = "2d"      # short window for the hourly top-up job
 
-# Hard ceiling on how far back 60m bars can legitimately go (Yahoo's own cap).
-# Anything older than this in intraday_prices is by definition not real 1h data.
-INTRADAY_MAX_LOOKBACK_DAYS = 729
+# How far back to *request* 60m bars. Yahoo's actual limit is symbol-dependent
+# and more generous than the widely-quoted "730 days" — measured against live
+# data: US equities go back to ~2023-09, FX to ~2023-11, commodities to
+# ~2024-04. So this is deliberately generous and Yahoo truncates naturally;
+# using a tight bound here silently threw away real history.
+#
+# It is NOT a validity test — daily-fallback data is caught by the median-gap
+# gate in fetch_intraday_prices, which is cadence-based and therefore correct
+# regardless of how far back a given symbol happens to serve.
+INTRADAY_MAX_LOOKBACK_DAYS = 1100
 
 # Sentinel meaning "go back as far as 60m data is available". Deliberately NOT
 # a period string: yfinance only accepts a fixed vocabulary of periods

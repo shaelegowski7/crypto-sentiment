@@ -1253,41 +1253,74 @@ def _backfill_intraday_all():
 
 @app.post("/admin/intraday/purge-bad-rows")
 def purge_bad_intraday_rows(dry_run: bool = True, db: Session = Depends(get_db), admin=Depends(require_admin)):
-    """Delete non-intraday rows that leaked into intraday_prices.
+    """Delete DAILY bars that leaked into intraday_prices.
 
-    Yahoo only serves 60m bars for ~730 days, so any row older than that is
-    provably not real hourly data — it came from a yfinance call that silently
-    returned DAILY bars (see candles.INTRADAY_BACKFILL_PERIOD). Those rows sit
-    at 00:00 one-per-day and corrupt both the 1h view and the 4h bucketing.
+    A yfinance call that silently returns daily data (see
+    candles.INTRADAY_BACKFILL_PERIOD) writes one row per day at 00:00 into the
+    hourly table, corrupting both the 1h view and the 4h bucketing.
 
-    Nothing is lost: the same daily candles live correctly in the `prices`
-    table, which is what /candles?interval=1d reads. Defaults to a dry run —
-    pass ?dry_run=false to actually delete.
+    Detection is CADENCE-based, not age-based. An age cutoff is wrong: Yahoo's
+    60m history is symbol-dependent and reaches back further than the commonly
+    quoted 730 days (equities ~2023-09, FX ~2023-11), so "older than N days"
+    would delete large amounts of perfectly good hourly data — measured at
+    ~86k rows when this was first written that way.
+
+    Instead, per ticker, find the first date carrying more than one bar (where
+    genuine hourly coverage starts) and delete only the single-bar-per-day
+    rows before it. Nothing is lost either way: those same daily candles live
+    correctly in the `prices` table, which is what /candles?interval=1d reads.
+
+    Dry run by default — pass ?dry_run=false to actually delete.
     """
-    from .candles import INTRADAY_MAX_LOOKBACK_DAYS
-    cutoff = datetime.utcnow() - timedelta(days=INTRADAY_MAX_LOOKBACK_DAYS)
+    plan, total = {}, 0
+    tickers = [r[0] for r in db.query(models.IntradayPrice.ticker).distinct().all()]
 
-    doomed = db.query(models.IntradayPrice).filter(models.IntradayPrice.ts < cutoff)
-    by_ticker = {}
-    for row in db.query(
-        models.IntradayPrice.ticker, sa_func.count(models.IntradayPrice.id)
-    ).filter(models.IntradayPrice.ts < cutoff).group_by(models.IntradayPrice.ticker).all():
-        by_ticker[row[0]] = row[1]
-    total = sum(by_ticker.values())
+    for t in tickers:
+        # First date with >1 bar == start of real hourly coverage. Aggregate
+        # over the grouped subquery's own column — selecting min() straight
+        # off the base table here silently produces a malformed query that
+        # matches nothing.
+        per_day = (
+            db.query(
+                sa_func.date(models.IntradayPrice.ts).label("d"),
+                sa_func.count(models.IntradayPrice.id).label("n"),
+            )
+            .filter(models.IntradayPrice.ticker == t)
+            .group_by(sa_func.date(models.IntradayPrice.ts))
+            .having(sa_func.count(models.IntradayPrice.id) > 1)
+            .subquery()
+        )
+        first_multi = db.query(sa_func.min(per_day.c.d)).scalar()
+        if first_multi is None:
+            continue   # no hourly coverage at all — leave it alone, don't guess
+
+        n = db.query(sa_func.count(models.IntradayPrice.id)).filter(
+            models.IntradayPrice.ticker == t,
+            sa_func.date(models.IntradayPrice.ts) < first_multi,
+        ).scalar() or 0
+        if n:
+            plan[t] = {"hourly_starts": str(first_multi), "rows": n, "_cutoff": first_multi}
+            total += n
+
+    # Strip the internal date object before it hits JSON serialisation.
+    public_plan = {t: {k: v for k, v in info.items() if not k.startswith("_")}
+                   for t, info in plan.items()}
 
     if dry_run:
         return {
-            "dry_run": True,
-            "cutoff": cutoff.isoformat(),
-            "would_delete": total,
-            "by_ticker": by_ticker,
+            "dry_run": True, "would_delete": total, "by_ticker": public_plan,
             "hint": "re-run with ?dry_run=false to delete",
         }
 
-    deleted = doomed.delete(synchronize_session=False)
+    deleted = 0
+    for t, info in plan.items():
+        deleted += db.query(models.IntradayPrice).filter(
+            models.IntradayPrice.ticker == t,
+            sa_func.date(models.IntradayPrice.ts) < info["_cutoff"],
+        ).delete(synchronize_session=False)
     db.commit()
-    print(f"[INTRADAY-PURGE] deleted {deleted} pre-{cutoff.date()} rows from intraday_prices")
-    return {"dry_run": False, "cutoff": cutoff.isoformat(), "deleted": deleted, "by_ticker": by_ticker}
+    print(f"[INTRADAY-PURGE] deleted {deleted} daily-cadence rows from intraday_prices")
+    return {"dry_run": False, "deleted": deleted, "by_ticker": public_plan}
 
 
 @app.post("/admin/intraday/backfill")
