@@ -1251,6 +1251,42 @@ def _backfill_intraday_all():
     print(f"[BACKFILL-INTRADAY] done — saved={sum(summary['saved'].values())} across {len(summary['saved'])} tickers, errors={len(summary['errors'])}")
 
 
+@app.post("/admin/prices/purge-nan")
+def purge_nan_prices(dry_run: bool = True, db: Session = Depends(get_db), admin=Depends(require_admin)):
+    """Delete rows whose close_price is NaN.
+
+    Source of these: the live spot fetchers had no finite-check, so on
+    weekends/holidays yfinance's NaN close for equities and ETFs was written
+    straight into `prices` (fixed in prices._finite). NaN rows corrupt
+    backtests and correlation and are why the API needs a NaN scrubber on
+    JSON responses at all.
+
+    NOTE the Postgres semantics: NaN = NaN is TRUE in Postgres (unlike IEEE
+    754), so the usual `col != col` idiom detects nothing here — the test has
+    to be an explicit comparison against 'NaN'::float8.
+
+    Genuine negative prices are NOT touched: CL=F really did settle at -37.63
+    on 2020-04-20.
+
+    Dry run by default — pass ?dry_run=false to actually delete.
+    """
+    nan_filter = models.Price.close_price == float("nan")
+    rows = db.query(
+        models.Price.ticker, sa_func.count(models.Price.id)
+    ).filter(nan_filter).group_by(models.Price.ticker).all()
+    by_ticker = {t: n for t, n in rows}
+    total = sum(by_ticker.values())
+
+    if dry_run:
+        return {"dry_run": True, "would_delete": total, "by_ticker": by_ticker,
+                "hint": "re-run with ?dry_run=false to delete"}
+
+    deleted = db.query(models.Price).filter(nan_filter).delete(synchronize_session=False)
+    db.commit()
+    print(f"[PRICES-PURGE] deleted {deleted} NaN close_price rows")
+    return {"dry_run": False, "deleted": deleted, "by_ticker": by_ticker}
+
+
 @app.post("/admin/intraday/purge-bad-rows")
 def purge_bad_intraday_rows(dry_run: bool = True, db: Session = Depends(get_db), admin=Depends(require_admin)):
     """Delete DAILY bars that leaked into intraday_prices.

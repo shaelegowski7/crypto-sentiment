@@ -113,6 +113,26 @@ def fetch_prices(ticker: str) -> list:
     return prices
 
 
+def _finite(value, ticker: str, context: str) -> float | None:
+    """Reject non-finite prices before they reach the database.
+
+    fetch_prices() has always guarded its bulk download, but the live spot
+    fetchers below did not — and on weekends/holidays yfinance returns NaN for
+    the latest close on stocks and ETFs. Those NaNs were being written straight
+    into `prices`, where they corrupt backtests and correlation and force the
+    API's NaN-scrubbing workaround. Catch it at the source instead.
+    """
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        print(f"[PRICES] {ticker}: {context} not numeric ({value!r}) — skipped")
+        return None
+    if not math.isfinite(f):
+        print(f"[PRICES] {ticker}: {context} is {f} (markets likely closed) — skipped")
+        return None
+    return f
+
+
 def fetch_latest_prices_all() -> dict:
     """Fetch latest prices for all tickers (crypto via CoinGecko, FX via yfinance)."""
     today = datetime.now(timezone.utc).date()
@@ -135,8 +155,10 @@ def fetch_latest_prices_all() -> dict:
             if coin_id not in data:
                 print(f"[PRICES] {ticker}: missing from CoinGecko response")
                 continue
-            price = data[coin_id]["gbp"]
-            volume = data[coin_id].get("gbp_24h_vol", 0)
+            price = _finite(data[coin_id]["gbp"], ticker, "CoinGecko close")
+            if price is None:
+                continue
+            volume = _finite(data[coin_id].get("gbp_24h_vol", 0), ticker, "volume") or 0.0
             result[ticker] = {
                 "ticker": ticker,
                 "close_price": round(price, 8),
@@ -154,7 +176,10 @@ def fetch_latest_prices_all() -> dict:
                 print(f"[PRICES] {ticker}: no yfinance data")
                 continue
             close_series = data["Close"]
-            close = float(close_series.iloc[-1].iloc[0]) if hasattr(close_series.iloc[-1], 'iloc') else float(close_series.iloc[-1])
+            raw = close_series.iloc[-1].iloc[0] if hasattr(close_series.iloc[-1], 'iloc') else close_series.iloc[-1]
+            close = _finite(raw, ticker, "FX close")
+            if close is None:
+                continue
             result[ticker] = {
                 "ticker": ticker,
                 "close_price": round(close, 6),
@@ -177,7 +202,11 @@ def fetch_latest_stock_price(ticker: str) -> dict | None:
         if data.empty:
             return None
         close_series = data["Close"]
-        close = float(close_series.iloc[-1].iloc[0]) if hasattr(close_series.iloc[-1], 'iloc') else float(close_series.iloc[-1])
+        raw = close_series.iloc[-1].iloc[0] if hasattr(close_series.iloc[-1], 'iloc') else close_series.iloc[-1]
+        # Weekends/holidays: yfinance hands back NaN here for equities.
+        close = _finite(raw, ticker, "stock close")
+        if close is None:
+            return None
         today = datetime.now(timezone.utc).date()
         print(f"[PRICES] {ticker}: live={today} close={round(close, 4)}")
         return {"ticker": ticker.upper(), "close_price": round(close, 4), "volume": 0.0, "date": today}
@@ -194,7 +223,10 @@ def fetch_latest_price(ticker: str) -> dict | None:
             if data.empty:
                 return None
             close_series = data["Close"]
-            close = float(close_series.iloc[-1].iloc[0]) if hasattr(close_series.iloc[-1], 'iloc') else float(close_series.iloc[-1])
+            raw = close_series.iloc[-1].iloc[0] if hasattr(close_series.iloc[-1], 'iloc') else close_series.iloc[-1]
+            close = _finite(raw, t, "FX close")
+            if close is None:
+                return None
             today = datetime.now(timezone.utc).date()
             print(f"[PRICES] {t}: live={today} close={close}")
             return {"ticker": t, "close_price": round(close, 6), "volume": 0.0, "date": today}
@@ -222,8 +254,10 @@ def fetch_latest_price(ticker: str) -> dict | None:
         )
         print(f"[COINGECKO] response: {res.status_code} {res.text}")
         data = res.json()
-        price = data[coin_id]["gbp"]
-        volume = data[coin_id].get("gbp_24h_vol", 0)
+        price = _finite(data[coin_id]["gbp"], ticker, "CoinGecko close")
+        if price is None:
+            return None
+        volume = _finite(data[coin_id].get("gbp_24h_vol", 0), ticker, "volume") or 0.0
         today = datetime.now(timezone.utc).date()
 
         print(f"[PRICES] {ticker}: live={today} close={price}")
