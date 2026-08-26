@@ -1251,6 +1251,45 @@ def _backfill_intraday_all():
     print(f"[BACKFILL-INTRADAY] done — saved={sum(summary['saved'].values())} across {len(summary['saved'])} tickers, errors={len(summary['errors'])}")
 
 
+@app.post("/admin/intraday/purge-bad-rows")
+def purge_bad_intraday_rows(dry_run: bool = True, db: Session = Depends(get_db), admin=Depends(require_admin)):
+    """Delete non-intraday rows that leaked into intraday_prices.
+
+    Yahoo only serves 60m bars for ~730 days, so any row older than that is
+    provably not real hourly data — it came from a yfinance call that silently
+    returned DAILY bars (see candles.INTRADAY_BACKFILL_PERIOD). Those rows sit
+    at 00:00 one-per-day and corrupt both the 1h view and the 4h bucketing.
+
+    Nothing is lost: the same daily candles live correctly in the `prices`
+    table, which is what /candles?interval=1d reads. Defaults to a dry run —
+    pass ?dry_run=false to actually delete.
+    """
+    from .candles import INTRADAY_MAX_LOOKBACK_DAYS
+    cutoff = datetime.utcnow() - timedelta(days=INTRADAY_MAX_LOOKBACK_DAYS)
+
+    doomed = db.query(models.IntradayPrice).filter(models.IntradayPrice.ts < cutoff)
+    by_ticker = {}
+    for row in db.query(
+        models.IntradayPrice.ticker, sa_func.count(models.IntradayPrice.id)
+    ).filter(models.IntradayPrice.ts < cutoff).group_by(models.IntradayPrice.ticker).all():
+        by_ticker[row[0]] = row[1]
+    total = sum(by_ticker.values())
+
+    if dry_run:
+        return {
+            "dry_run": True,
+            "cutoff": cutoff.isoformat(),
+            "would_delete": total,
+            "by_ticker": by_ticker,
+            "hint": "re-run with ?dry_run=false to delete",
+        }
+
+    deleted = doomed.delete(synchronize_session=False)
+    db.commit()
+    print(f"[INTRADAY-PURGE] deleted {deleted} pre-{cutoff.date()} rows from intraday_prices")
+    return {"dry_run": False, "cutoff": cutoff.isoformat(), "deleted": deleted, "by_ticker": by_ticker}
+
+
 @app.post("/admin/intraday/backfill")
 def backfill_intraday(background_tasks: BackgroundTasks, admin=Depends(require_admin)):
     all_tickers = list(TICKERS) + [t for t in BACKGROUND_TICKERS if t not in TICKERS]
