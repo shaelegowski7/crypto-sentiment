@@ -33,6 +33,7 @@ from prometheus_client import Counter, Gauge, Histogram
 import numpy as np
 import resend
 import os
+import re
 import uuid
 import json
 import requests
@@ -1915,7 +1916,8 @@ def get_correlation(ticker: str, db: Session = Depends(get_db)):
             "primary_beats_momentum": bool(beats_momentum) if beats_momentum is not None else None,
         },
         "interpretation": (
-            f"Sentiment shifts show a {strength} {direction} signal "
+            f"Sentiment shifts show {'an' if strength[:1] in 'aeiou' else 'a'} "
+            f"{strength} {direction} signal "
             f"(r={primary_r}, p={primary_p}, n={len(common)}). "
             f"{'Outperforms' if beats_momentum else 'Does not outperform'} momentum baseline."
         ),
@@ -1989,11 +1991,18 @@ def get_signal(ticker: str, db: Session = Depends(get_db)):
     last_similar = larger_shifts[-1] if larger_shifts else None
     days_since_similar = (most_recent - last_similar).days if last_similar else None
 
-    # Shift magnitude label
+    # Shift magnitude label.  These describe SIZE relative to this ticker's own
+    # history of daily shifts -- nothing more.  Deliberately avoid the word
+    # "significant": this sentence renders directly above the correlation
+    # strength verdict, which is a genuine p-value, and a reader seeing "a
+    # significant shift" next to "INCONCLUSIVE" reasonably reads the two as
+    # contradicting each other.  They don't -- one is about today's input, the
+    # other about whether that input has ever predicted price -- but only if
+    # the magnitude words stay unambiguously about magnitude.
     if percentile >= 90:
         magnitude = "extreme"
     elif percentile >= 75:
-        magnitude = "significant"
+        magnitude = "large"
     elif percentile >= 50:
         magnitude = "moderate"
     else:
@@ -2564,19 +2573,62 @@ async def stripe_webhook(request: Request):
 # API key management
 # ---------------------------------------------------------------------------
 
-@app.post("/api/keys/generate")
-async def generate_api_key(request: Request, db: Session = Depends(get_db)):
-    body = await request.json()
-    email = body.get("email")
+# Deliberately loose: the point is to reject obvious junk and typos before we
+# create a Stripe customer, not to adjudicate RFC 5322.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
 
+
+async def _valid_signup_email(request: Request) -> str:
+    """Parse and validate the signup email, normalised to lowercase.
+
+    Deliberately a dependency rather than inline in the handler.  FastAPI
+    resolves dependencies BEFORE invoking the endpoint function, and the
+    slowapi decorator wraps that function -- so rejecting a malformed address
+    here costs the caller nothing from their hourly quota.  Inline, five
+    fat-fingered attempts would lock someone out for an hour before they ever
+    got a valid request through, which is a miserable way to meet an API.
+    Only requests that could actually create a Stripe customer are counted.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Expected a JSON body.")
+
+    email = (body.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="Email required")
+    if len(email) > 254 or not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="That doesn't look like a valid email address.")
+    return email
 
+
+@app.post("/api/keys/generate")
+@limiter.limit("5/hour")
+async def generate_api_key(request: Request, response: Response,
+                           email: str = Depends(_valid_signup_email),
+                           db: Session = Depends(get_db)):
+    """Self-serve free-tier key: email in, key out, 100 free calls.
+
+    This is where the landing page's "Get an API key" CTA now leads.  It is
+    intentionally unauthenticated -- requiring a paid Pro subscription before a
+    developer could make their first call was the funnel's biggest hole -- so
+    it carries its own guards:
+
+      * 5/hour per IP, counted only on well-formed requests (see the
+        dependency above).  The limiter keys on X-API-Key and falls back to IP,
+        which is what happens here since callers have no key yet.  Every
+        success creates a Stripe customer, so an unbounded endpoint would be a
+        way to stuff the Stripe account with junk.
+      * Email normalised, so Foo@Bar.com and foo@bar.com can't hold two keys.
+
+    NB the @limiter.limit decorator requires the `response: Response` param --
+    without it slowapi 500s when it tries to stamp X-RateLimit-* headers.
+    """
     existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
     if existing:
         raise HTTPException(
             status_code=409,
-            detail="A key already exists for this email. Use /api/keys/regenerate to get a new one."
+            detail="A key already exists for this email. Use /api/keys/regenerate/request to have a reset link emailed to you."
         )
 
     stripe_customer_id, stripe_subscription_id = _create_stripe_customer(email)
@@ -2596,33 +2648,25 @@ async def generate_api_key(request: Request, db: Session = Depends(get_db)):
     return {
         "key": key,
         "prefix": key[:12],
+        "free_calls": api_key.free_calls,
         "message": "API key generated. Save this key - it will not be shown again."
     }
 
 
-@app.post("/api/keys/regenerate")
-async def regenerate_api_key(request: Request, db: Session = Depends(get_db)):
-    body = await request.json()
-    email = body.get("email")
-
-    if not email:
-        raise HTTPException(status_code=400, detail="Email required")
-
-    existing = db.query(models.APIKey).filter(models.APIKey.email == email).first()
-    if not existing:
-        raise HTTPException(status_code=404, detail="No key found for this email")
-
-    new_key = _make_key()
-    existing.key_hash = _hash_key(new_key)
-    existing.key_prefix = new_key[:12]
-    existing.active = True
-    db.commit()
-
-    return {
-        "key": new_key,
-        "prefix": new_key[:12],
-        "message": "Key regenerated. Your old key is now invalid. Save this key - it will not be shown again."
-    }
+# REMOVED: POST /api/keys/regenerate
+#
+# It took an email and nothing else, then returned a fresh plaintext key for
+# whatever account owned that email.  Knowing someone's address was enough to
+# (a) invalidate their working key and (b) obtain a key whose usage bills to
+# their Stripe subscription.  No auth, no token, no ownership proof.
+#
+# It had no callers: the dashboard uses /api/keys/regenerate-linked (Supabase
+# JWT) and the self-serve path is /api/keys/regenerate/request +
+# /api/keys/regenerate/confirm (emailed, single-use, 30-minute token).  Both
+# of those actually prove ownership; this one never did.
+#
+# Removed rather than patched because the two supported flows already cover
+# every legitimate case.
 
 
 @app.get("/api/keys/info")

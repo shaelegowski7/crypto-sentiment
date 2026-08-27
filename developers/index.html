@@ -4,7 +4,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>SentimentFX API — Sentiment, Price &amp; Correlation REST API for 42 Tickers</title>
-        <meta name="description" content="SentimentFX REST API: FinBERT-scored news sentiment, daily price data, and sentiment-price correlation for 42 tickers across crypto, FX, stocks, ETFs and commodities. Metered billing, generous free tier." />
+        <meta name="description" content="SentimentFX REST API: FinBERT-scored news sentiment, daily price data, and sentiment-price correlation for 42 tickers across crypto, FX, stocks, ETFs and commodities. Free API key with 100 calls, no card required. Also available as an MCP server." />
         <meta name="keywords" content="sentiment API, financial NLP API, crypto sentiment API, FX sentiment API, FinBERT API, market sentiment REST API, news sentiment endpoint" />
         <meta name="author" content="SentimentFX" />
         <meta name="robots" content="index, follow, max-image-preview:large" />
@@ -13,7 +13,7 @@
 
         <meta property="og:site_name" content="SentimentFX" />
         <meta property="og:title" content="SentimentFX API — Sentiment, Price &amp; Correlation REST API" />
-        <meta property="og:description" content="FinBERT-scored news sentiment, price data, and correlation endpoints for 42 tickers. Metered billing, free tier included." />
+        <meta property="og:description" content="FinBERT-scored news sentiment, price data, and correlation endpoints for 42 tickers. Free key with 100 calls, no card required." />
         <meta property="og:url" content="https://developers.sentimentfx.org/" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://sentimentfx.org/dashboard.jpeg" />
@@ -117,6 +117,25 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
 .badge-pro{background:rgba(240,180,41,0.12);color:var(--accent);border:1px solid rgba(240,180,41,0.3);}
 .badge-data{background:rgba(88,166,255,0.12);color:var(--accent2);border:1px solid rgba(88,166,255,0.3);}
 
+/* Free-key signup box */
+.signup{background:var(--surface);border:1px solid var(--border2);border-radius:4px;padding:18px 20px;margin-bottom:24px;}
+.signup-title{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;}
+.signup-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.signup-input{font-family:var(--mono);font-size:12px;padding:8px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:2px;color:var(--text);outline:none;flex:1;min-width:220px;}
+.signup-input:focus{border-color:var(--accent);}
+.signup-input::placeholder{color:var(--muted);}
+.signup-msg{font-family:var(--mono);font-size:11px;line-height:1.6;margin-top:10px;display:none;}
+.signup-msg.err{color:var(--negative,#f85149);display:block;}
+.signup-msg.ok{color:var(--positive,#3fb950);display:block;}
+.signup-result{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+.signup-result.show{display:block;}
+.signup-result-label{font-family:var(--mono);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.signup-key-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.signup-key{font-family:var(--mono);font-size:12px;padding:8px 12px;background:var(--bg);border:1px solid var(--accent);border-radius:2px;color:var(--accent);flex:1;min-width:220px;word-break:break-all;}
+.signup-result-hint{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:10px;line-height:1.6;}
+.signup-result-hint a{color:var(--accent2);text-decoration:none;}
+.signup-result-hint a:hover{text-decoration:underline;}
+
 /* Key entry box */
 .key-bar{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:14px 18px;margin-bottom:28px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
 .key-bar-label{font-family:var(--mono);font-size:9px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;white-space:nowrap;}
@@ -149,7 +168,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
             <nav class="topbar-links">
                 <a href="#" onclick="nav('docs');return false;" class="active" id="nav-docs">API Reference</a>
                 <a href="#" onclick="nav('methodology');return false;" id="nav-methodology">Methodology</a>
-                <a href="https://app.sentimentfx.org" class="topbar-cta" target="_blank">Open Dashboard</a>
+                <a href="#" class="topbar-cta" onclick="nav('docs');scrollToId('auth');return false;">Get a free API key</a>
             </nav>
         </header>
 
@@ -194,23 +213,48 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                         <span class="key-bar-label">API Key</span>
                         <input class="key-bar-input" type="password" id="tester-api-key" placeholder="sfx_••••••••••••••••••••••••••••••••••••••••••••••••" oninput="saveKey(this.value)" autocomplete="off" />
                         <span class="key-bar-hint">
-                            Get your key from the <a href="https://app.sentimentfx.org" target="_blank">dashboard → API Access</a>. Required by Pro and Data plans.
+                            No key yet? <a href="#" onclick="nav('docs');scrollToId('auth');return false;">Get a free one</a> — 100 calls, no card.
                         </span>
                     </div>
 
                     <div id="auth" class="scroll-section">
                         <h2>Authentication</h2>
-                        <p>All API endpoints require an API key passed as the <code style="color:var(--accent2);">X-API-Key</code> request header. Keys are tied to your SentimentFX account and are available on Pro and Data plans.</p>
-                        <div class="notice">
-                            Generate your API key from the <strong><a href="https://app.sentimentfx.org" target="_blank" style="color:var(--accent2);text-decoration:none;">dashboard → API Access section</a></strong>. Sign in at app.sentimentfx.org, then scroll to the API Access panel at the bottom of the page.
+                        <p>All API endpoints require an API key passed as the <code style="color:var(--accent2);">X-API-Key</code> request header. Get one below — no card, no account, 100 free calls to try it with.</p>
+
+                        <div class="signup">
+                            <div class="signup-title">Get a free API key</div>
+                            <div class="signup-row">
+                                <input class="signup-input" type="email" id="signup-email"
+                                    placeholder="you@example.com" autocomplete="email" spellcheck="false">
+                                <button class="tester-btn" id="signup-btn" onclick="requestKey()">Get key</button>
+                            </div>
+                            <div class="signup-msg" id="signup-msg"></div>
+                            <div class="signup-result" id="signup-result">
+                                <div class="signup-result-label">Your API key — shown once, save it now</div>
+                                <div class="signup-key-row">
+                                    <code class="signup-key" id="signup-key"></code>
+                                    <button class="tester-btn" id="signup-copy" onclick="copyKey()">Copy</button>
+                                </div>
+                                <div class="signup-result-hint">
+                                    We don't store it in a readable form, so we can't show it to you again.
+                                    Lost it? <a href="#" onclick="resetKey();return false;">Email yourself a reset link</a>.
+                                </div>
+                            </div>
                         </div>
+
                         <table class="param-table" style="margin-bottom:20px;">
                             <thead><tr><th>Plan</th><th>Included Calls/mo</th><th>Overage</th></tr></thead>
                             <tbody>
+                                <tr><td style="color:var(--positive,#3fb950);">Free</td><td>100 (one-off, not monthly)</td><td>—</td></tr>
                                 <tr><td style="color:var(--accent);">Pro</td><td>1,000</td><td>£0.01 / call via Stripe</td></tr>
                                 <tr><td style="color:var(--accent2);">Data</td><td>5,000</td><td>£0.01 / call via Stripe</td></tr>
                             </tbody>
                         </table>
+                        <p style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:20px;">
+                            Already subscribed? Keys generated from the
+                            <a href="https://app.sentimentfx.org" target="_blank" style="color:var(--accent2);text-decoration:none;">dashboard</a>
+                            are linked to your account and pick up your plan's monthly allowance automatically.
+                        </p>
                         <div class="code-label">Example Request</div>
                         <pre><span class="c-comment"># Curl</span>
 curl https://api.sentimentfx.org/v1/sentiment/BTC \
@@ -453,7 +497,7 @@ const res = await fetch(
                         <h2>MCP — Claude, Cursor &amp; other AI clients</h2>
                         <p>SentimentFX also speaks the <a href="https://modelcontextprotocol.io" target="_blank" style="color:var(--accent2);text-decoration:none;">Model Context Protocol</a>, so Claude Code, Claude.ai desktop, Cursor, Cline and any other MCP-compatible client can call the sentiment tools natively without you writing HTTP-plumbing code. Same X-API-Key, same billing, same rate limits — you just point the client at a URL.</p>
                         <p><strong>Endpoint:</strong> <code>https://api.sentimentfx.org/mcp</code></p>
-                        <p><strong>Auth:</strong> <code>X-API-Key: sfx_...</code> header (generate from the <a href="https://app.sentimentfx.org" target="_blank" style="color:var(--accent2);text-decoration:none;">dashboard</a>).</p>
+                        <p><strong>Auth:</strong> <code>X-API-Key: sfx_...</code> header (<a href="#" onclick="nav('docs');scrollToId('auth');return false;" style="color:var(--accent2);text-decoration:none;">get a free key</a>).</p>
 
                         <h3 style="margin-top:20px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Tools exposed</h3>
                         <table class="param-table" style="margin-top:8px;">
@@ -622,7 +666,116 @@ let currentKey = sessionStorage.getItem('sfx_tester_key') || ''
 window.addEventListener('DOMContentLoaded', () => {
     if (currentKey) document.getElementById('tester-api-key').value = currentKey
     initScrollSpy()
+    handleResetLink()
 })
+
+// --- Free-key signup -------------------------------------------------------
+// POSTs to /api/keys/generate (unauthenticated, 5/hour/IP, 100 free calls).
+// On success the key is dropped straight into the tester's key field, so the
+// next thing a new developer can do is make a real call without copy-pasting
+// anything anywhere.
+
+function signupMsg(text, kind) {
+    const el = document.getElementById('signup-msg')
+    el.textContent = text
+    el.className = 'signup-msg' + (kind ? ' ' + kind : '')
+}
+
+function showKey(key) {
+    document.getElementById('signup-key').textContent = key
+    document.getElementById('signup-result').classList.add('show')
+    // Prefill the interactive testers so "try it" is one click away.
+    saveKey(key)
+    const testerField = document.getElementById('tester-api-key')
+    if (testerField) testerField.value = key
+}
+
+async function requestKey() {
+    const email = document.getElementById('signup-email').value.trim()
+    const btn = document.getElementById('signup-btn')
+    if (!email) { signupMsg('Enter an email address first.', 'err'); return }
+
+    btn.disabled = true
+    signupMsg('Generating...', '')
+    try {
+        const res = await fetch(`${API_BASE}/api/keys/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data.key) {
+            signupMsg(`Key created with ${data.free_calls ?? 100} free calls. It's in the tester below too.`, 'ok')
+            showKey(data.key)
+        } else if (res.status === 409) {
+            signupMsg("You already have a key for that email. Use the reset link below to get a fresh one.", 'err')
+            document.getElementById('signup-result').classList.add('show')
+            document.getElementById('signup-key').textContent = '—'
+        } else if (res.status === 429) {
+            signupMsg('Too many requests from this address. Try again in an hour.', 'err')
+        } else {
+            signupMsg(data.detail || 'Could not create a key. Try again shortly.', 'err')
+        }
+    } catch (e) {
+        signupMsg('Network error — could not reach the API.', 'err')
+    } finally {
+        btn.disabled = false
+    }
+}
+
+async function copyKey() {
+    const key = document.getElementById('signup-key').textContent
+    if (!key || key === '—') return
+    try {
+        await navigator.clipboard.writeText(key)
+        const btn = document.getElementById('signup-copy')
+        btn.textContent = 'Copied'
+        setTimeout(() => { btn.textContent = 'Copy' }, 1500)
+    } catch (e) { /* clipboard blocked — the key is selectable on screen anyway */ }
+}
+
+async function resetKey() {
+    const email = document.getElementById('signup-email').value.trim()
+    if (!email) { signupMsg('Enter your email above first, then click reset.', 'err'); return }
+    try {
+        await fetch(`${API_BASE}/api/keys/regenerate/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        })
+        // Endpoint deliberately answers identically whether or not the address
+        // is registered, so don't imply anything about whether it exists.
+        signupMsg('If a key exists for that email, a reset link is on its way.', 'ok')
+    } catch (e) {
+        signupMsg('Network error — could not reach the API.', 'err')
+    }
+}
+
+// The reset email links back here as ?reset=<token>.  Nothing was reading that
+// param, so the emailed link used to land on an ordinary page and silently do
+// nothing.  Exchange it for the new key and clear it from the URL.
+async function handleResetLink() {
+    const token = new URLSearchParams(location.search).get('reset')
+    if (!token) return
+    history.replaceState({}, '', location.pathname)
+    nav('docs'); scrollToId('auth')
+    try {
+        const res = await fetch(`${API_BASE}/api/keys/regenerate/confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data.key) {
+            signupMsg('Key reset. Your previous key no longer works.', 'ok')
+            showKey(data.key)
+        } else {
+            signupMsg(data.detail || 'That reset link is invalid or has expired.', 'err')
+        }
+    } catch (e) {
+        signupMsg('Network error — could not complete the reset.', 'err')
+    }
+}
 
 function saveKey(val) {
     currentKey = val.trim()
