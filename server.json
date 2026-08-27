@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "org.sentimentfx/sentimentfx",
+  "title": "SentimentFX",
+  "description": "FinBERT news sentiment and price history for 42 crypto, FX, stock, ETF and commodity tickers.",
+  "version": "1.0.0",
+  "websiteUrl": "https://developers.sentimentfx.org",
+  "repository": {
+    "url": "https://github.com/shaelegowski7/crypto-sentiment",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.sentimentfx.org/mcp",
+      "headers": [
+        {
+          "name": "X-API-Key",
+          "description": "SentimentFX API key. Free key (100 calls, no card) at developers.sentimentfx.org",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

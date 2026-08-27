@@ -65,3 +65,11 @@ desktop.ini
 logs/
 CLAUDE.md
 backfill_sentiment.py
+# ========================
+# MCP registry publishing credentials
+# ========================
+# Ed25519 keypair used by `mcp-publisher login dns` to prove ownership of
+# sentimentfx.org. Whoever holds this can publish under our namespace.
+# See docs/publishing-mcp-registry.md
+*.pem
+mcp-key*
