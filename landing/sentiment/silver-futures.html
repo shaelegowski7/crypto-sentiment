@@ -28,7 +28,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Commodities Sentiment","item":"https://sentimentfx.org/#coverage"},{"@type":"ListItem","position":3,"name":"Silver Futures (SI=F) (SI=F)","item":"https://sentimentfx.org/sentiment/silver-futures"}]}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is SI=F sentiment calculated?","acceptedAnswer":{"@type":"Answer","text":"SentimentFX scrapes Silver Futures (SI=F) news headlines from major financial outlets every hour and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus negative probability, giving a value between -1 (very bearish) and +1 (very bullish)."}},{"@type":"Question","name":"How often is SI=F sentiment data updated?","acceptedAnswer":{"@type":"Answer","text":"The scraper runs every hour, pulling new SI=F headlines from GNews and Yahoo Finance RSS feeds. New sentiment scores are usually live within 1–2 minutes of scrape completion."}},{"@type":"Question","name":"Can I correlate SI=F sentiment with its price?","acceptedAnswer":{"@type":"Answer","text":"Yes — the SentimentFX dashboard plots SI=F sentiment against price on the same chart, and the correlation endpoint returns a Pearson r value, 95% confidence interval and strength label over a rolling 180-day window. You can also pull this via the public REST API at developers.sentimentfx.org."}},{"@type":"Question","name":"Is SI=F sentiment data available via API?","acceptedAnswer":{"@type":"Answer","text":"Yes. The SentimentFX public API exposes /v1/sentiment/SI=F, /v1/summary/SI=F, /v1/prices/SI=F and /v1/correlation/SI=F endpoints. Authentication is via X-API-Key header. See the developer portal for full reference."}}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is SI=F sentiment calculated?","acceptedAnswer":{"@type":"Answer","text":"SentimentFX scrapes Silver Futures (SI=F) news headlines from major financial outlets every 15 minutes and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus its negative probability, presented on a 0–100 scale where 50 is neutral, below 50 is bearish and above 50 is bullish."}},{"@type":"Question","name":"How often is SI=F sentiment data updated?","acceptedAnswer":{"@type":"Answer","text":"The scraper runs every 15 minutes, pulling new SI=F headlines from Yahoo Finance RSS feeds alongside StockTwits and other social sources. New sentiment scores are usually live within 1–2 minutes of scrape completion."}},{"@type":"Question","name":"Can I correlate SI=F sentiment with its price?","acceptedAnswer":{"@type":"Answer","text":"Yes — the SentimentFX dashboard plots SI=F sentiment against price on the same chart, and the correlation endpoint returns a Pearson r value, 95% confidence interval and strength label over a rolling 180-day window. You can also pull this via the public REST API at developers.sentimentfx.org."}},{"@type":"Question","name":"Is SI=F sentiment data available via API?","acceptedAnswer":{"@type":"Answer","text":"Yes. The SentimentFX public API exposes /v1/sentiment/SI=F, /v1/summary/SI=F, /v1/prices/SI=F and /v1/correlation/SI=F endpoints. Authentication is via X-API-Key header. See the developer portal for full reference."}}]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Silver Futures (SI=F) (SI=F) News Sentiment Dataset","description":"Hourly FinBERT-scored news sentiment headlines for Silver Futures (SI=F) (SI=F), with matched daily price data in USD. Maintained by SentimentFX.","url":"https://sentimentfx.org/sentiment/silver-futures","keywords":["SI=F sentiment","Silver Futures (SI=F) sentiment analysis","FinBERT","financial NLP","news sentiment"],"creator":{"@type":"Organization","name":"SentimentFX","url":"https://sentimentfx.org/"},"license":"https://sentimentfx.org/terms.html"}</script>
 
   <style>
@@ -128,7 +128,7 @@
 
   <div class="live-card" id="live-card">
     <div class="live-cell">
-      <div class="live-label">Avg sentiment (7d)</div>
+      <div class="live-label">Avg sentiment (7d) · /100</div>
       <div class="live-value" id="live-sentiment">—</div>
     </div>
     <div class="live-cell">
@@ -152,10 +152,10 @@
 
   <h2>What we track for SI=F</h2>
   <p>
-    Every hour, SentimentFX collects the latest Silver Futures (SI=F) news from major financial publishers
-    and RSS feeds, then scores each headline using FinBERT — a transformer model fine-tuned
-    on financial text. The output is a sentiment score between -1 (very bearish) and +1
-    (very bullish), and we plot the daily average against SI=F price so you can
+    Every 15 minutes, SentimentFX collects the latest Silver Futures (SI=F) news from major financial
+    publishers and RSS feeds, then scores each headline using FinBERT — a transformer model
+    fine-tuned on financial text. The output is a sentiment score on a 0–100 scale, where 50
+    is neutral, and we plot the daily average against SI=F price so you can
     see how news flow moves with the market.
   </p>
   <p>
@@ -195,11 +195,11 @@
     
     <div class="faq-item">
       <div class="faq-q">How is SI=F sentiment calculated?</div>
-      <div class="faq-a">SentimentFX scrapes Silver Futures (SI=F) news headlines from major financial outlets every hour and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus negative probability, giving a value between -1 (very bearish) and +1 (very bullish).</div>
+      <div class="faq-a">SentimentFX scrapes Silver Futures (SI=F) news headlines from major financial outlets every 15 minutes and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus its negative probability, presented on a 0–100 scale where 50 is neutral, below 50 is bearish and above 50 is bullish.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">How often is SI=F sentiment data updated?</div>
-      <div class="faq-a">The scraper runs every hour, pulling new SI=F headlines from GNews and Yahoo Finance RSS feeds. New sentiment scores are usually live within 1–2 minutes of scrape completion.</div>
+      <div class="faq-a">The scraper runs every 15 minutes, pulling new SI=F headlines from Yahoo Finance RSS feeds alongside StockTwits and other social sources. New sentiment scores are usually live within 1–2 minutes of scrape completion.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Can I correlate SI=F sentiment with its price?</div>
@@ -236,9 +236,12 @@
     return n.toFixed(4);
   }
 
+  // Sentiment is stored -1..+1 but shown on a 0-100 scale (50 = neutral),
+  // matching toSentimentScale in frontend/src/lib/constants.js.  This formats
+  // a LEVEL; a delta would scale by 50 without the +1 offset.
   function fmtSent(n) {
     if (n == null || isNaN(n)) return '—';
-    return (n >= 0 ? '+' : '') + n.toFixed(3);
+    return String(Math.round((n + 1) * 50));
   }
 
   fetch(API + '/dashboard/' + encodeURIComponent(TICKER) + '?days=30&limit=200')

@@ -28,7 +28,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Sentiment Leaderboard","item":"https://sentimentfx.org/leaderboard"}]}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What does the sentiment leaderboard show?","acceptedAnswer":{"@type":"Answer","text":"The SentimentFX leaderboard ranks 42 tracked assets — across crypto, FX, stocks, ETFs and commodities — by the largest change in news sentiment over the last 24 hours compared with the prior 24 hours. Sentiment is a volume-weighted average of FinBERT scores across recent headlines."}},{"@type":"Question","name":"How often is the leaderboard updated?","acceptedAnswer":{"@type":"Answer","text":"Headline sentiment refreshes every 15 minutes from RSS feeds across major financial publishers, so the leaderboard reflects new movers almost in real time. Prices are refreshed hourly via yfinance."}},{"@type":"Question","name":"How is sentiment scored?","acceptedAnswer":{"@type":"Answer","text":"Each headline is scored by FinBERT, a transformer fine-tuned on financial text. The score for an individual headline is the model's positive probability minus its negative probability, giving a value from -1 (very bearish) to +1 (very bullish). Daily sentiment is a volume-weighted mean across all scored headlines for that ticker."}},{"@type":"Question","name":"Can I get the leaderboard data via API?","acceptedAnswer":{"@type":"Answer","text":"Yes — the GET /leaderboard endpoint on api.sentimentfx.org returns the same data as JSON, with one row per ticker. No authentication is required for the leaderboard endpoint. See developers.sentimentfx.org for full API reference."}}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What does the sentiment leaderboard show?","acceptedAnswer":{"@type":"Answer","text":"The SentimentFX leaderboard ranks 42 tracked assets — across crypto, FX, stocks, ETFs and commodities — by the largest change in news sentiment over the last 24 hours compared with the prior 24 hours. Sentiment is a volume-weighted average of FinBERT scores across recent headlines."}},{"@type":"Question","name":"How often is the leaderboard updated?","acceptedAnswer":{"@type":"Answer","text":"Headline sentiment refreshes every 15 minutes from RSS feeds across major financial publishers, so the leaderboard reflects new movers almost in real time. Prices are refreshed hourly via yfinance."}},{"@type":"Question","name":"How is sentiment scored?","acceptedAnswer":{"@type":"Answer","text":"Each headline is scored by FinBERT, a transformer fine-tuned on financial text. The score for an individual headline is the model's positive probability minus its negative probability, presented on a 0–100 scale where 50 is neutral, below 50 is bearish and above 50 is bullish. Daily sentiment is a volume-weighted mean across all scored headlines for that ticker."}},{"@type":"Question","name":"Can I get the leaderboard data via API?","acceptedAnswer":{"@type":"Answer","text":"Yes — the GET /leaderboard endpoint on api.sentimentfx.org returns the same data as JSON, with one row per ticker. No authentication is required for the leaderboard endpoint. See developers.sentimentfx.org for full API reference."}}]}</script>
 
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -178,8 +178,8 @@
     <p>
       Every 15 minutes, SentimentFX pulls fresh headlines from a curated list of RSS feeds
       across crypto, FX, equities and macro outlets. Each headline is scored by FinBERT — a
-      finance-tuned transformer — producing a value between -1 (very bearish) and +1 (very
-      bullish). For each asset, we compute a volume-weighted mean of the last 24 hours of
+      finance-tuned transformer — producing a score on a 0–100 scale, where 50 is neutral.
+      For each asset, we compute a volume-weighted mean of the last 24 hours of
       scores, then subtract the same mean over the prior 24 hours. That difference is the
       "Δ 24h" column above, and is what the leaderboard ranks by.
     </p>
@@ -255,7 +255,13 @@
       return symbol + v.toFixed(4);
     };
     const fmtPct = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(2) + "%";
-    const fmtScore = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(3);
+    // Sentiment is stored -1..+1 and presented 0-100 (50 = neutral).  A LEVEL
+    // and a DELTA convert differently: a level maps through (v+1)*50, but a
+    // delta is already a difference so it only scales by 50 -- applying the
+    // +1 offset to a change would turn "no change" into "+50".  Mirrors
+    // toSentimentScale / toSentimentDelta in frontend/src/lib/constants.js.
+    const fmtScore = v => v == null ? "—" : String(Math.round((v + 1) * 50));
+    const fmtScoreDelta = v => v == null ? "—" : (v > 0 ? "+" : "") + Math.round(v * 50);
     const colorClass = v => v == null ? "neutral" : v > 0.05 ? "pos" : v < -0.05 ? "neg" : "neutral";
 
     let allRows = [];
@@ -275,7 +281,7 @@
           <td class="muted">${i + 1}</td>
           <td class="left"><a href="${href}">${label(r.ticker)}</a><span class="cat-tag">${(r.category || "").toUpperCase()}</span></td>
           <td class="${colorClass(r.sentiment_24h)}">${fmtScore(r.sentiment_24h)}</td>
-          <td class="${colorClass(r.sentiment_change_24h)}" style="font-weight:500;">${fmtScore(r.sentiment_change_24h)}</td>
+          <td class="${colorClass(r.sentiment_change_24h)}" style="font-weight:500;">${fmtScoreDelta(r.sentiment_change_24h)}</td>
           <td class="muted">${r.article_count_24h || 0}</td>
           <td>${fmtPrice(r.price, r.ticker)}</td>
           <td class="${colorClass(r.price_change_24h_pct)}">${fmtPct(r.price_change_24h_pct)}</td>

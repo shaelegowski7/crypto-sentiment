@@ -80,11 +80,11 @@ function pageHtml(t) {
   const faqs = [
     {
       q: `How is ${t.display} sentiment calculated?`,
-      a: `SentimentFX scrapes ${t.name} news headlines from major financial outlets every hour and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus negative probability, giving a value between -1 (very bearish) and +1 (very bullish).`,
+      a: `SentimentFX scrapes ${t.name} news headlines from major financial outlets every 15 minutes and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus its negative probability, presented on a 0–100 scale where 50 is neutral, below 50 is bearish and above 50 is bullish.`,
     },
     {
       q: `How often is ${t.display} sentiment data updated?`,
-      a: `The scraper runs every hour, pulling new ${t.display} headlines from GNews and ${t.category === 'crypto' ? 'crypto-specific RSS feeds (CoinTelegraph, CoinDesk, Decrypt and others)' : t.category === 'fx' ? 'forex RSS feeds (FXStreet, ForexLive, DailyFX)' : 'Yahoo Finance RSS feeds'}. New sentiment scores are usually live within 1–2 minutes of scrape completion.`,
+      a: `The scraper runs every 15 minutes, pulling new ${t.display} headlines from ${t.category === 'crypto' ? 'crypto-specific RSS feeds (CoinTelegraph, CoinDesk, Decrypt and others)' : t.category === 'fx' ? 'forex RSS feeds (FXStreet, ForexLive, DailyFX)' : 'Yahoo Finance RSS feeds'} alongside StockTwits and other social sources. New sentiment scores are usually live within 1–2 minutes of scrape completion.`,
     },
     {
       q: `Can I correlate ${t.display} sentiment with its price?`,
@@ -257,7 +257,7 @@ function pageHtml(t) {
 
   <div class="live-card" id="live-card">
     <div class="live-cell">
-      <div class="live-label">Avg sentiment (7d)</div>
+      <div class="live-label">Avg sentiment (7d) · /100</div>
       <div class="live-value" id="live-sentiment">—</div>
     </div>
     <div class="live-cell">
@@ -281,15 +281,15 @@ function pageHtml(t) {
 
   <h2>What we track for ${t.display}</h2>
   <p>
-    Every hour, SentimentFX collects the latest ${t.name} news from major financial publishers
-    and RSS feeds, then scores each headline using FinBERT — a transformer model fine-tuned
-    on financial text. The output is a sentiment score between -1 (very bearish) and +1
-    (very bullish), and we plot the daily average against ${t.display} price so you can
+    Every 15 minutes, SentimentFX collects the latest ${t.name} news from major financial
+    publishers and RSS feeds, then scores each headline using FinBERT — a transformer model
+    fine-tuned on financial text. The output is a sentiment score on a 0–100 scale, where 50
+    is neutral, and we plot the daily average against ${t.display} price so you can
     see how news flow moves with the market.
   </p>
   <p>
     ${t.name} is ${t.blurb}, which makes ${t.display} an especially useful ticker for
-    sentiment-driven analysis. Our pipeline ${t.category === 'crypto' ? 'pulls from CoinTelegraph, CoinDesk, Decrypt, Blockworks, BeInCrypto and Reddit alongside GNews search results' : t.category === 'fx' ? 'pulls from FXStreet, ForexLive, DailyFX, ActionForex and Reddit alongside GNews search results' : 'pulls from Yahoo Finance and other major financial newswires'}, deduplicates by URL, and only stores headlines whose title actually mentions ${t.display} or a recognised alias.
+    sentiment-driven analysis. Our pipeline ${t.category === 'crypto' ? 'pulls from CoinTelegraph, CoinDesk, Decrypt, Blockworks, BeInCrypto and Reddit' : t.category === 'fx' ? 'pulls from FXStreet, ForexLive, DailyFX, ActionForex and Reddit' : 'pulls from Yahoo Finance and other major financial newswires'}, deduplicates by URL, and only stores headlines whose title actually mentions ${t.display} or a recognised alias.
   </p>
 
   <h2>Sentiment vs price correlation</h2>
@@ -351,9 +351,12 @@ function pageHtml(t) {
     return n.toFixed(4);
   }
 
+  // Sentiment is stored -1..+1 but shown on a 0-100 scale (50 = neutral),
+  // matching toSentimentScale in frontend/src/lib/constants.js.  This formats
+  // a LEVEL; a delta would scale by 50 without the +1 offset.
   function fmtSent(n) {
     if (n == null || isNaN(n)) return '—';
-    return (n >= 0 ? '+' : '') + n.toFixed(3);
+    return String(Math.round((n + 1) * 50));
   }
 
   fetch(API + '/dashboard/' + encodeURIComponent(TICKER) + '?days=30&limit=200')

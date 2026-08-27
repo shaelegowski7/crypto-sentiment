@@ -28,7 +28,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Foreign Exchange Sentiment","item":"https://sentimentfx.org/#coverage"},{"@type":"ListItem","position":3,"name":"US Dollar / Swiss Franc (USD/CHF)","item":"https://sentimentfx.org/sentiment/usdchf"}]}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is USD/CHF sentiment calculated?","acceptedAnswer":{"@type":"Answer","text":"SentimentFX scrapes US Dollar / Swiss Franc news headlines from major financial outlets every hour and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus negative probability, giving a value between -1 (very bearish) and +1 (very bullish)."}},{"@type":"Question","name":"How often is USD/CHF sentiment data updated?","acceptedAnswer":{"@type":"Answer","text":"The scraper runs every hour, pulling new USD/CHF headlines from GNews and forex RSS feeds (FXStreet, ForexLive, DailyFX). New sentiment scores are usually live within 1–2 minutes of scrape completion."}},{"@type":"Question","name":"Can I correlate USD/CHF sentiment with its price?","acceptedAnswer":{"@type":"Answer","text":"Yes — the SentimentFX dashboard plots USD/CHF sentiment against price on the same chart, and the correlation endpoint returns a Pearson r value, 95% confidence interval and strength label over a rolling 180-day window. You can also pull this via the public REST API at developers.sentimentfx.org."}},{"@type":"Question","name":"Is USD/CHF sentiment data available via API?","acceptedAnswer":{"@type":"Answer","text":"Yes. The SentimentFX public API exposes /v1/sentiment/USDCHF, /v1/summary/USDCHF, /v1/prices/USDCHF and /v1/correlation/USDCHF endpoints. Authentication is via X-API-Key header. See the developer portal for full reference."}}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is USD/CHF sentiment calculated?","acceptedAnswer":{"@type":"Answer","text":"SentimentFX scrapes US Dollar / Swiss Franc news headlines from major financial outlets every 15 minutes and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus its negative probability, presented on a 0–100 scale where 50 is neutral, below 50 is bearish and above 50 is bullish."}},{"@type":"Question","name":"How often is USD/CHF sentiment data updated?","acceptedAnswer":{"@type":"Answer","text":"The scraper runs every 15 minutes, pulling new USD/CHF headlines from forex RSS feeds (FXStreet, ForexLive, DailyFX) alongside StockTwits and other social sources. New sentiment scores are usually live within 1–2 minutes of scrape completion."}},{"@type":"Question","name":"Can I correlate USD/CHF sentiment with its price?","acceptedAnswer":{"@type":"Answer","text":"Yes — the SentimentFX dashboard plots USD/CHF sentiment against price on the same chart, and the correlation endpoint returns a Pearson r value, 95% confidence interval and strength label over a rolling 180-day window. You can also pull this via the public REST API at developers.sentimentfx.org."}},{"@type":"Question","name":"Is USD/CHF sentiment data available via API?","acceptedAnswer":{"@type":"Answer","text":"Yes. The SentimentFX public API exposes /v1/sentiment/USDCHF, /v1/summary/USDCHF, /v1/prices/USDCHF and /v1/correlation/USDCHF endpoints. Authentication is via X-API-Key header. See the developer portal for full reference."}}]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"US Dollar / Swiss Franc (USD/CHF) News Sentiment Dataset","description":"Hourly FinBERT-scored news sentiment headlines for US Dollar / Swiss Franc (USD/CHF), with matched daily price data in raw exchange rate. Maintained by SentimentFX.","url":"https://sentimentfx.org/sentiment/usdchf","keywords":["USD/CHF sentiment","US Dollar / Swiss Franc sentiment analysis","FinBERT","financial NLP","news sentiment"],"creator":{"@type":"Organization","name":"SentimentFX","url":"https://sentimentfx.org/"},"license":"https://sentimentfx.org/terms.html"}</script>
 
   <style>
@@ -128,7 +128,7 @@
 
   <div class="live-card" id="live-card">
     <div class="live-cell">
-      <div class="live-label">Avg sentiment (7d)</div>
+      <div class="live-label">Avg sentiment (7d) · /100</div>
       <div class="live-value" id="live-sentiment">—</div>
     </div>
     <div class="live-cell">
@@ -152,15 +152,15 @@
 
   <h2>What we track for USD/CHF</h2>
   <p>
-    Every hour, SentimentFX collects the latest US Dollar / Swiss Franc news from major financial publishers
-    and RSS feeds, then scores each headline using FinBERT — a transformer model fine-tuned
-    on financial text. The output is a sentiment score between -1 (very bearish) and +1
-    (very bullish), and we plot the daily average against USD/CHF price so you can
+    Every 15 minutes, SentimentFX collects the latest US Dollar / Swiss Franc news from major financial
+    publishers and RSS feeds, then scores each headline using FinBERT — a transformer model
+    fine-tuned on financial text. The output is a sentiment score on a 0–100 scale, where 50
+    is neutral, and we plot the daily average against USD/CHF price so you can
     see how news flow moves with the market.
   </p>
   <p>
     US Dollar / Swiss Franc is a classic safe-haven pair that reacts strongly to risk-off headlines, which makes USD/CHF an especially useful ticker for
-    sentiment-driven analysis. Our pipeline pulls from FXStreet, ForexLive, DailyFX, ActionForex and Reddit alongside GNews search results, deduplicates by URL, and only stores headlines whose title actually mentions USD/CHF or a recognised alias.
+    sentiment-driven analysis. Our pipeline pulls from FXStreet, ForexLive, DailyFX, ActionForex and Reddit, deduplicates by URL, and only stores headlines whose title actually mentions USD/CHF or a recognised alias.
   </p>
 
   <h2>Sentiment vs price correlation</h2>
@@ -198,11 +198,11 @@
     
     <div class="faq-item">
       <div class="faq-q">How is USD/CHF sentiment calculated?</div>
-      <div class="faq-a">SentimentFX scrapes US Dollar / Swiss Franc news headlines from major financial outlets every hour and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus negative probability, giving a value between -1 (very bearish) and +1 (very bullish).</div>
+      <div class="faq-a">SentimentFX scrapes US Dollar / Swiss Franc news headlines from major financial outlets every 15 minutes and scores each one with FinBERT, a finance-tuned transformer model. The score is the model's positive probability minus its negative probability, presented on a 0–100 scale where 50 is neutral, below 50 is bearish and above 50 is bullish.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">How often is USD/CHF sentiment data updated?</div>
-      <div class="faq-a">The scraper runs every hour, pulling new USD/CHF headlines from GNews and forex RSS feeds (FXStreet, ForexLive, DailyFX). New sentiment scores are usually live within 1–2 minutes of scrape completion.</div>
+      <div class="faq-a">The scraper runs every 15 minutes, pulling new USD/CHF headlines from forex RSS feeds (FXStreet, ForexLive, DailyFX) alongside StockTwits and other social sources. New sentiment scores are usually live within 1–2 minutes of scrape completion.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Can I correlate USD/CHF sentiment with its price?</div>
@@ -239,9 +239,12 @@
     return n.toFixed(4);
   }
 
+  // Sentiment is stored -1..+1 but shown on a 0-100 scale (50 = neutral),
+  // matching toSentimentScale in frontend/src/lib/constants.js.  This formats
+  // a LEVEL; a delta would scale by 50 without the +1 offset.
   function fmtSent(n) {
     if (n == null || isNaN(n)) return '—';
-    return (n >= 0 ? '+' : '') + n.toFixed(3);
+    return String(Math.round((n + 1) * 50));
   }
 
   fetch(API + '/dashboard/' + encodeURIComponent(TICKER) + '?days=30&limit=200')

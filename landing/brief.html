@@ -162,8 +162,8 @@
     <p>
       At 06:55 London time, SentimentFX pulls every headline from the last 24 hours
       that mentions one of the tracked tickers. Each one is scored with FinBERT — a
-      transformer model fine-tuned on financial text — producing a value between
-      -1 (very bearish) and +1 (very bullish). The volume-weighted mean is compared
+      transformer model fine-tuned on financial text — producing a score on a 0–100
+      scale, where 50 is neutral. The volume-weighted mean is compared
       against the prior 24 hours to detect sentiment shifts, and against the matching
       24-hour price move to detect divergences.
     </p>
