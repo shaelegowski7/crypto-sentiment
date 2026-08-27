@@ -25,11 +25,13 @@ Design decisions worth pinning:
   update BOTH — marker string: MCP_MIRRORS_V1.
 """
 import math
+import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.transport_security import TransportSecuritySettings
 
 from . import models
 from .database import SessionLocal
@@ -44,8 +46,27 @@ _PRIMARY_TICKERS = [
 ]
 
 
+# DNS-rebinding protection defaults to ON with an EMPTY allowlist, which
+# rejects every Host header -- including our own -- with 421 "Invalid Host
+# header".  That made the mounted server unusable no matter how it was called.
+# Keep the protection (it's the right default for a local-first protocol) but
+# name the hosts this server is actually reachable on.  MCP_ALLOWED_HOSTS lets
+# a preview/staging domain be added without a code change.
+_MCP_HOSTS = [h.strip() for h in os.getenv(
+    "MCP_ALLOWED_HOSTS",
+    "api.sentimentfx.org,localhost,localhost:8000,127.0.0.1,127.0.0.1:8000",
+).split(",") if h.strip()]
+
 mcp = FastMCP(
     name="SentimentFX",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=_MCP_HOSTS,
+        # Browser-originated calls aren't a supported client for this server
+        # (MCP clients are desktop/CLI), so allow the same set rather than "*".
+        allowed_origins=[f"https://{h}" for h in _MCP_HOSTS] +
+                        [f"http://{h}" for h in _MCP_HOSTS],
+    ),
     instructions=(
         "SentimentFX exposes FinBERT-scored news sentiment (-1 to +1) and "
         "GBP prices for 42 assets spanning crypto, forex, US equities, ETFs "

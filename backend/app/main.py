@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Gauge, Histogram
 import numpy as np
@@ -5266,6 +5267,33 @@ async def delete_account(authorization: str = Header(None), db: Session = Depend
 from .mcp_server import mcp as _mcp_server  # noqa: E402
 
 # streamable-http is the modern MCP transport (superseded SSE mid-2025).  The
-# returned Starlette sub-app handles the /mcp POST endpoint clients hit for
-# every tool call; FastMCP takes care of the JSON-RPC framing internally.
-app.mount("/mcp", _mcp_server.streamable_http_app())
+# returned Starlette sub-app handles the POST endpoint clients hit for every
+# tool call; FastMCP takes care of the JSON-RPC framing internally.
+#
+# TWO mounting gotchas, both of which silently broke this endpoint in prod:
+#
+# 1. PATH.  FastMCP's sub-app serves at settings.streamable_http_path, which
+#    defaults to "/mcp".  Mounting THAT at "/mcp" put the real endpoint on
+#    /mcp/mcp, while every doc, the landing page and the portal's copy-paste
+#    client config all said /mcp -- which 404'd.  Set the inner path to "/"
+#    so the mount point alone determines the URL.
+#
+# 2. LIFESPAN.  Starlette does not run a mounted sub-app's lifespan -- only
+#    the top-level app's.  FastMCP's session manager is started by that
+#    lifespan, so without it every request died on "Task group is not
+#    initialized. Make sure to use run()." (a 500).  We therefore run the
+#    session manager from the parent app's own lifespan below.
+_mcp_server.settings.streamable_http_path = "/"
+_mcp_streamable_app = _mcp_server.streamable_http_app()
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Starts FastMCP's StreamableHTTPSessionManager task group.  Without this
+    # the mounted sub-app accepts connections but 500s on every call.
+    async with _mcp_server.session_manager.run():
+        yield
+
+
+app.router.lifespan_context = _lifespan
+app.mount("/mcp", _mcp_streamable_app)

@@ -1,2 +1,11 @@
 [start]
-cmd = "python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+# --proxy-headers / --forwarded-allow-ips: Railway terminates TLS and forwards
+# over plain HTTP, so without these uvicorn ignores X-Forwarded-Proto and
+# X-Forwarded-For.  Two things broke as a result:
+#   * redirects were emitted as http:// for https:// requests (a protocol
+#     downgrade — clients that follow it would send X-API-Key in plaintext)
+#   * get_remote_address() returned the proxy's IP for every caller, so the
+#     per-IP rate limit on /api/keys/generate was effectively one global bucket
+# "*" is safe here because Railway's proxy is the only route into the
+# container; nothing can reach it directly to spoof the header.
+cmd = "python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips=*"
