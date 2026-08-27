@@ -1,5 +1,6 @@
 import requests
 import feedparser
+import html
 import time
 from datetime import datetime, timedelta, timezone
 import os
@@ -618,11 +619,48 @@ def fetch_hn_headlines(
 # StockTwits — finance-native social feed.  Its public JSON API returns a
 # per-symbol message stream; we use it directly rather than AI-scraping the
 # React SPA (which needs a headless browser and breaks on every redesign).
-# No auth for the read endpoint, but it's rate-limited (~200 req/h/IP), which
-# is plenty for one call per symbol every 15 min.  Best-effort: a 401/403/429
-# just yields [] and never breaks the scrape job.
+# No auth for the read endpoint.  Best-effort: any non-200 just yields [] and
+# never breaks the scrape job.
+#
+# Cloudflare: this endpoint sits behind Cloudflare, which serves a "Just a
+# moment..." interstitial (HTTP 403) to clients it doesn't like.  It answered
+# normally for two days after launch and then began 403ing from the Railway
+# host while still answering fine from a residential IP with the *same*
+# headers — i.e. the block keys off the datacenter IP, not the User-Agent.
+# Browser-realistic headers below are the cheap half of the mitigation; the
+# circuit breaker is the half that actually matters, because without it we
+# spent ~3,000 requests a day on a wall.  If STOCKTWITS_ENABLED is off or the
+# breaker is open, no request is made at all.
 # ---------------------------------------------------------------------------
 STOCKTWITS_URL = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
+
+# Kill switch.  Defaults ON to preserve current behaviour; set to "false" to
+# drop the source entirely without a code change.
+STOCKTWITS_ENABLED = os.getenv("STOCKTWITS_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# Circuit breaker.  After this many consecutive failures we stop calling out
+# for the cooldown window.  Cloudflare blocks are IP-wide and persist for
+# hours, so retrying every 15 minutes across 32 symbols is pure waste — and
+# sustained hammering is plausibly what got the IP flagged in the first place.
+STOCKTWITS_FAILURE_THRESHOLD = 6
+STOCKTWITS_COOLDOWN_SECS = 3600
+
+_stocktwits_consecutive_failures = 0
+_stocktwits_blocked_until = 0.0
+
+# One session so the connection (and any cookie Cloudflare hands out) is
+# reused across the per-symbol loop rather than renegotiated 32 times.
+_stocktwits_session = requests.Session()
+_stocktwits_session.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://stocktwits.com/",
+    "Origin": "https://stocktwits.com",
+})
 
 # Map our tickers to StockTwits symbols.  Crypto uses the ".X" suffix; stocks
 # use the plain symbol.  FX pairs and commodity futures aren't covered on
@@ -644,28 +682,51 @@ def fetch_stocktwits_headlines(ticker: str) -> list:
     headline); the StockTwits permalink is the dedup ``url``.  Returns [] for
     unsupported tickers or on any API error.
     """
+    global _stocktwits_consecutive_failures, _stocktwits_blocked_until
+
+    if not STOCKTWITS_ENABLED:
+        return []
+
     symbol = STOCKTWITS_SYMBOLS.get(ticker.upper())
     if not symbol:
         return []
 
+    now = time.time()
+    if now < _stocktwits_blocked_until:
+        return []          # breaker open — stay quiet, don't log per ticker
+
     try:
-        res = requests.get(
-            STOCKTWITS_URL.format(symbol=symbol),
-            timeout=15,
-            headers={"User-Agent": "SentimentFX/1.0 (+https://sentimentfx.org)"},
-        )
+        res = _stocktwits_session.get(STOCKTWITS_URL.format(symbol=symbol), timeout=15)
         if res.status_code != 200:
-            print(f"[STOCKTWITS] {ticker} ({symbol}): HTTP {res.status_code}")
+            _stocktwits_consecutive_failures += 1
+            print(f"[STOCKTWITS] {ticker} ({symbol}): HTTP {res.status_code} "
+                  f"(failure {_stocktwits_consecutive_failures}/{STOCKTWITS_FAILURE_THRESHOLD})")
+            if _stocktwits_consecutive_failures >= STOCKTWITS_FAILURE_THRESHOLD:
+                _stocktwits_blocked_until = now + STOCKTWITS_COOLDOWN_SECS
+                _stocktwits_consecutive_failures = 0
+                print(f"[STOCKTWITS] circuit breaker OPEN — pausing all StockTwits "
+                      f"requests for {STOCKTWITS_COOLDOWN_SECS // 60} min")
             return []
         messages = res.json().get("messages", []) or []
+        _stocktwits_consecutive_failures = 0
     except Exception as e:
-        print(f"[STOCKTWITS] {ticker} ({symbol}): error={e}")
+        _stocktwits_consecutive_failures += 1
+        print(f"[STOCKTWITS] {ticker} ({symbol}): error={e} "
+              f"(failure {_stocktwits_consecutive_failures}/{STOCKTWITS_FAILURE_THRESHOLD})")
+        if _stocktwits_consecutive_failures >= STOCKTWITS_FAILURE_THRESHOLD:
+            _stocktwits_blocked_until = now + STOCKTWITS_COOLDOWN_SECS
+            _stocktwits_consecutive_failures = 0
+            print(f"[STOCKTWITS] circuit breaker OPEN — pausing all StockTwits "
+                  f"requests for {STOCKTWITS_COOLDOWN_SECS // 60} min")
         return []
 
     headlines = []
     for msg in messages:
         try:
-            body = (msg.get("body") or "").strip()
+            # StockTwits returns entity-escaped bodies ("You&#39;re welcome",
+            # "AT&amp;T"), and those escapes were being stored verbatim and fed
+            # to FinBERT as-is.  Unescape before scoring.
+            body = html.unescape(msg.get("body") or "").strip()
             if not body:
                 continue
             username = (msg.get("user") or {}).get("username", "user")
