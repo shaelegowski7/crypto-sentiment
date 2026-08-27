@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SentimentFX (Sentiment FX) | AI News Sentiment for Crypto, FX, Stocks &amp; Commodities</title>
     <meta name="description"
-      content="SentimentFX (Sentiment FX) scores market news with FinBERT AI — quantified sentiment vs price for 42 tickers across crypto, FX, stocks, ETFs and commodities. Free dashboard, REST API, and CSV export." />
+      content="SentimentFX (Sentiment FX) scores market news with FinBERT AI — 178,000+ headlines across 42 tickers in crypto, FX, stocks, ETFs and commodities, with hourly OHLCV on the same timeline. Free dashboard, REST API, MCP server and CSV export." />
     <meta name="keywords"
       content="crypto sentiment, FX sentiment, FinBERT, market sentiment API, bitcoin sentiment, news sentiment analysis, trading signals, sentiment dashboard, financial NLP" />
     <meta name="author" content="SentimentFX" />
@@ -17,7 +17,7 @@
     <meta property="og:title"
       content="SentimentFX | AI News Sentiment for Crypto, FX, Stocks &amp; Commodities" />
     <meta property="og:description"
-      content="Quantified news sentiment vs price for 42 tickers — crypto, FX, stocks, ETFs and commodities. FinBERT-scored, updated hourly." />
+      content="178,000+ FinBERT-scored headlines and hourly price history across 42 tickers — crypto, FX, stocks, ETFs and commodities. Queryable over REST and MCP." />
     <meta property="og:url" content="https://sentimentfx.org/" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://sentimentfx.org/dashboard.jpeg" />
@@ -26,7 +26,7 @@
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="SentimentFX | AI News Sentiment for Crypto, FX, Stocks &amp; Commodities" />
-    <meta name="twitter:description" content="Quantified news sentiment vs price for 42 tickers — FinBERT-scored, updated hourly." />
+    <meta name="twitter:description" content="178,000+ FinBERT-scored headlines and hourly price history across 42 tickers. Queryable over REST and MCP." />
     <meta name="twitter:image" content="https://sentimentfx.org/dashboard.jpeg" />
     <meta name="twitter:image:alt" content="SentimentFX dashboard showing sentiment vs price chart" />
 
@@ -58,7 +58,7 @@
           "alternateName": "Sentiment FX",
           "operatingSystem": "Web",
           "applicationCategory": "FinanceApplication",
-          "description": "AI-powered news sentiment analysis vs price for 42 tickers across crypto, FX, stocks, ETFs and commodities. FinBERT-scored, updated hourly, with REST API access.",
+          "description": "FinBERT-scored news sentiment and price history for 42 tickers across crypto, FX, stocks, ETFs and commodities. 178,000+ scored headlines since 2019 with hourly OHLCV, available via dashboard, REST API and MCP server.",
           "url": "https://sentimentfx.org/",
           "image": "https://sentimentfx.org/dashboard.jpeg",
           "offers": [
@@ -284,50 +284,6 @@
         flex-wrap: wrap;
         justify-content: center;
       }
-
-      /* Live track-record badge.  Hidden by default; the loader unhides it
-         only when /track-record returns a settled aggregate.  Position above
-         the primary CTA buttons — proof before pitch. */
-      .track-record-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 14px;
-        padding: 10px 18px;
-        margin-bottom: 24px;
-        border: 1px solid var(--border2);
-        border-radius: 10px;
-        background: rgba(66,199,104,0.04);
-        color: var(--text);
-        text-decoration: none;
-        font-family: var(--mono);
-        transition: border-color 0.15s, background 0.15s;
-      }
-      .track-record-badge:hover {
-        border-color: var(--positive);
-        background: rgba(66,199,104,0.08);
-      }
-      .track-record-badge .trb-eyebrow {
-        font-size: 9px;
-        letter-spacing: 0.2em;
-        color: var(--muted);
-        text-transform: uppercase;
-      }
-      .track-record-badge .trb-stats {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 12px;
-      }
-      .track-record-badge .trb-return {
-        font-weight: 600;
-        font-size: 14px;
-      }
-      .track-record-badge .trb-return.up   { color: var(--positive); }
-      .track-record-badge .trb-return.down { color: var(--negative); }
-      .track-record-badge .trb-return.flat { color: var(--text); }
-      .track-record-badge .trb-sep   { color: var(--border2); }
-      .track-record-badge .trb-meta  { color: var(--muted); font-size: 11px; }
-      .track-record-badge .trb-arrow { color: var(--muted); font-size: 14px; }
 
       .btn-primary {
         background: var(--accent);
@@ -979,38 +935,29 @@
     </nav>
 
     <section class="hero">
-      <div class="hero-tag">AI-Powered Market Sentiment Intelligence</div>
+      <div class="hero-tag">Market Sentiment Data Infrastructure</div>
       <h1 class="hero-title">
-        Know what the market<br><span>is reading right now</span>
+        Every market headline,<br><span>scored and queryable</span>
       </h1>
       <p class="hero-sub">
-        SentimentFX scores every market headline with FinBERT AI —
-        giving you quantified sentiment context across 42 tickers in crypto, FX, stocks,
-        ETFs and commodities, updated hourly.
+        178,000+ headlines across 42 tickers in crypto, FX, stocks, ETFs and
+        commodities — each scored by FinBERT, timestamped and ticker-tagged,
+        served over REST or MCP. Hourly candles and daily history since 2019
+        in the same API.
       </p>
 
       <div
         style="font-family:var(--mono);font-size:9px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;">Daily
-        avg sentiment</div>
+        avg sentiment · 0&ndash;100, 50 = neutral</div>
       <div class="ticker-strip" id="heroTickerStrip">
         <span class="ticker-chip" style="color:var(--muted);">Loading...</span>
       </div>
 
-      <a href="https://app.sentimentfx.org/track-record" id="trackRecordBadge" class="track-record-badge" style="display:none;">
-        <span class="trb-eyebrow">Track record · last 90d</span>
-        <span class="trb-stats">
-          <span class="trb-return" id="trbReturn">—</span>
-          <span class="trb-sep">·</span>
-          <span class="trb-meta" id="trbMeta">—</span>
-        </span>
-        <span class="trb-arrow">→</span>
-      </a>
-
       <div class="hero-actions">
+        <a href="https://developers.sentimentfx.org"
+          class="btn-primary">Get an API key</a>
         <a href="https://app.sentimentfx.org?auth=signup"
-          class="btn-primary">Create Account</a>
-        <a href="https://app.sentimentfx.org?auth=login"
-          class="btn-secondary">Log In</a>
+          class="btn-secondary">Explore the dashboard</a>
       </div>
     </section>
 
@@ -1023,24 +970,24 @@
 
     <div class="stats-bar">
       <div class="stat-item">
-        <div class="stat-num">42</div>
-        <div class="stat-desc">Tickers tracked</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-num">5</div>
-        <div class="stat-desc">Asset classes</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-num">1hr</div>
-        <div class="stat-desc">Update cadence</div>
-      </div>
-      <div class="stat-item">
         <div class="stat-num" id="stat-headlines">—</div>
         <div class="stat-desc">Headlines scored</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">FinBERT</div>
-        <div class="stat-desc">Sentiment model</div>
+        <div class="stat-num">42</div>
+        <div class="stat-desc">Tickers, 5 asset classes</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">12.5K</div>
+        <div class="stat-desc">Distinct sources</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">395K</div>
+        <div class="stat-desc">Hourly OHLCV bars</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">2019</div>
+        <div class="stat-desc">History since</div>
       </div>
     </div>
 
@@ -1125,27 +1072,33 @@
 
     <section class="features" id="features">
       <div class="section-label">What you get</div>
-      <h2 class="section-title">Built for traders and developers</h2>
+      <h2 class="section-title">A measurement layer, not a crystal ball</h2>
       <div class="features-grid">
         <div class="feature-card">
-          <div class="feature-icon">01 — AI Sentiment</div>
-          <div class="feature-title">FinBERT-powered analysis</div>
-          <div class="feature-desc">Every headline scored by FinBERT —
-            a BERT model fine-tuned on financial text. Not generic
-            sentiment. Finance-specific NLP built for markets.</div>
+          <div class="feature-icon">01 — The Dataset</div>
+          <div class="feature-title">178K scored headlines and counting</div>
+          <div class="feature-desc">Every headline scored by FinBERT — a BERT
+            model fine-tuned on financial text, not generic sentiment. Tagged
+            to a ticker, timestamped, deduplicated by URL, drawn from 12,500+
+            distinct sources since 2019. Roughly 6,500 new ones a week.</div>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">02 — Signal Analysis</div>
-          <div class="feature-title">Honest correlation engine</div>
-          <div class="feature-desc">Analyses the historical relationship
-            between sentiment shifts and next-day price returns — with
-            statistical confidence intervals, not cherry-picked
-            correlations.</div>
+          <div class="feature-icon">02 — Strategy Testing</div>
+          <div class="feature-title">Backtest it yourself</div>
+          <div class="feature-desc">Don't take our word for it — run the
+            strategy against real history. Tune direction, hold period,
+            transaction costs, stop-loss/take-profit and position size,
+            then see the actual trade log, equity curve, regime breakdown
+            and walk-forward stability. No black box.</div>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">03 — Real-time Data</div>
-          <div class="feature-title">Hourly scraping pipeline</div>
-          <div class="feature-desc">News scraped every hour across 42 assets spanning crypto, FX, stocks, ETFs and commodities. Prices pulled from live feeds and stored for historical analysis.</div>
+          <div class="feature-icon">03 — Signal Analysis</div>
+          <div class="feature-title">Correlation, measured not claimed</div>
+          <div class="feature-desc">Pearson r, p-value and a 95% confidence
+            interval on sentiment shifts vs next-day returns, per ticker.
+            Most tickers come back <em>inconclusive</em> — and we show you
+            that, because a sentiment tool that always finds signal is
+            lying to you.</div>
         </div>
         <div class="feature-card">
           <div class="feature-icon">04 — API Access</div>
@@ -1153,29 +1106,7 @@
           <div class="feature-desc">REST API with sentiment scores, price history and correlation data. 1,000 calls/mo included with Pro. 5,000 with Data. Integrate into your own systems or bots.</div>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">05 — Historical Data</div>
-          <div class="feature-title">Growing dataset</div>
-          <div class="feature-desc">Sentiment history building daily.
-            Backfilled across multiple years. The longer we run,
-            the richer the dataset becomes.</div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">06 — Dashboard</div>
-          <div class="feature-title">Terminal-style UI</div>
-          <div class="feature-desc">Bloomberg-inspired interface.
-            Candlestick and sentiment-vs-price charts (1H/4H/1D), signal
-            strength ratings, and a live headline feed — all in one view.</div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">07 — Alerts & Brief</div>
-          <div class="feature-title">Inbox-ready signals</div>
-          <div class="feature-desc">Alerts only fire once our backtest
-            confirms the signal has real historical edge — no noise-chasing.
-            Plus a daily morning brief by email, with every past edition
-            browsable in a <a href="/brief" style="color:var(--accent2);">public archive</a>.</div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">08 — AI-Native</div>
+          <div class="feature-icon">05 — AI-Native</div>
           <div class="feature-title">Built for Claude, Cursor &amp; agents</div>
           <div class="feature-desc">Every endpoint is also exposed as an
             MCP server — wire SentimentFX straight into Claude Code,
@@ -1183,13 +1114,35 @@
             no custom integration required.</div>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">09 — Strategy Testing</div>
-          <div class="feature-title">Backtest the signal yourself</div>
-          <div class="feature-desc">Don't take our word for it — run the
-            strategy against real history. Tune direction, hold period,
-            transaction costs, stop-loss/take-profit and position size,
-            then see the actual trade log, equity curve, regime breakdown
-            and walk-forward stability. No black box.</div>
+          <div class="feature-icon">06 — Price History</div>
+          <div class="feature-title">OHLCV in the same query</div>
+          <div class="feature-desc">395,000 hourly bars across all 42 tickers
+            back to 2023, and daily candles to 2019 — stored alongside the
+            sentiment, on the same timeline, so you never have to join two
+            vendors' clocks together.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">07 — Coverage</div>
+          <div class="feature-title">Five asset classes, one schema</div>
+          <div class="feature-desc">Crypto, FX, stocks, ETFs and commodities
+            behind identical endpoints. Headlines refresh every 15 minutes;
+            prices and correlation hourly.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">08 — Dashboard</div>
+          <div class="feature-title">Terminal-style UI</div>
+          <div class="feature-desc">Bloomberg-inspired interface.
+            Candlestick and sentiment-vs-price charts (1H/4H/1D), signal
+            strength ratings, and a live headline feed — all in one view.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">09 — Alerts &amp; Brief</div>
+          <div class="feature-title">Optional email digests</div>
+          <div class="feature-desc">Set sentiment thresholds per ticker and
+            get told when they're crossed. Alerts are screened against a
+            backtest first, though on most tickers that screen finds nothing
+            worth sending — by design. Plus a daily morning brief, with every
+            past edition in a <a href="/brief" style="color:var(--accent2);">public archive</a>.</div>
         </div>
       </div>
     </section>
@@ -1199,19 +1152,20 @@
       <div class="honest-inner">
         <div class="honest-icon">📊</div>
         <div class="honest-content">
-          <div class="honest-title">A note on signal strength</div>
+          <div class="honest-title">What this does — and what it doesn't</div>
           <div class="honest-text">
-            Crypto markets are noisy. We don't claim sentiment predicts price
-            with certainty —
-            no tool does. What SentimentFX gives you is <strong>quantified
-              context</strong>:
-            how the market narrative is shifting, scored objectively, updated
-            hourly.
-            Use it to inform your thinking, not replace it.
-            Our correlation engine tells you honestly whether a signal is
-            <strong>strong, weak, or inconclusive</strong> — with p-values and
-            confidence intervals,
-            not marketing copy.
+            We've tested whether our sentiment score predicts next-day price
+            four separate ways: daily, intraday, across five alternative
+            formulations of the signal, and as an overlay on breakout and
+            moving-average strategies. <strong>It doesn't, reliably, on most
+            tickers.</strong> We ship the backtester so you can confirm that
+            for yourself rather than take our word for it.
+            <br><br>
+            So we don't sell forecasts. What we sell is the
+            <strong>measurement layer</strong>: a large, clean, queryable
+            record of how financial media talked about 42 assets, scored
+            consistently by one model, sitting next to the price data on the
+            same timeline. What you build on top of that is yours.
           </div>
         </div>
       </div>
@@ -1225,28 +1179,31 @@
           <div class="step">
             <div class="step-num">STEP 01</div>
             <div class="step-title">News scraping</div>
-            <div class="step-desc">Every hour, our pipeline scrapes the latest headlines across 42 tickers in crypto, FX, stocks, ETFs and commodities.</div>
+            <div class="step-desc">Every 15 minutes our pipeline pulls fresh
+              headlines for 42 tickers across crypto, FX, stocks, ETFs and
+              commodities, then deduplicates them by URL.</div>
           </div>
           <div class="step">
             <div class="step-num">STEP 02</div>
             <div class="step-title">FinBERT scoring</div>
-            <div class="step-desc">Each headline passes through
-              FinBERT — returning a sentiment score from −1
-              (bearish) to +1 (bullish).</div>
+            <div class="step-desc">Each new headline passes through FinBERT.
+              We take the positive minus negative probability and present it
+              on a 0&ndash;100 scale, where 50 is neutral.</div>
           </div>
           <div class="step">
             <div class="step-num">STEP 03</div>
             <div class="step-title">Correlation analysis</div>
             <div class="step-desc">We measure whether sentiment shifts
-              historically correlate with next-day returns, with
-              honest signal strength ratings and confidence intervals.</div>
+              historically correlate with next-day returns — and report the
+              p-value and confidence interval alongside, including when the
+              answer is "no relationship found".</div>
           </div>
           <div class="step">
             <div class="step-num">STEP 04</div>
-            <div class="step-title">Signal delivery</div>
-            <div class="step-desc">Signals surface in the dashboard
-              and via API. Traders get context. Developers get
-              structured data. No black boxes.</div>
+            <div class="step-title">Delivery</div>
+            <div class="step-desc">Everything lands in the dashboard, the
+              REST API and the MCP server simultaneously. Same numbers,
+              three surfaces, no black boxes.</div>
           </div>
         </div>
       </div>
@@ -1268,7 +1225,7 @@
             <li class="included">Correlation signal</li>
             <li>All 42 tickers</li>
             <li>Full history</li>
-            <li>API access</li>
+            <li>API &amp; MCP access</li>
             <li>Alerts &amp; morning brief</li>
           </ul>
           <a href="https://app.sentimentfx.org?auth=signup"
@@ -1277,6 +1234,24 @@
 
         <div class="price-card featured">
           <div class="price-badge">Most Popular</div>
+          <div class="price-tier">Data</div>
+          <div class="price-amount">£49.99</div>
+          <div class="price-period">per month · or £499.99/yr</div>
+          <div class="price-saving">Annual saves £99.89</div>
+          <ul class="price-features">
+            <li class="included">Full dataset via REST API and MCP</li>
+            <li class="included">5,000 API calls / month included</li>
+            <li class="included">£0.01 / call after allowance</li>
+            <li class="included">All 42 tickers, complete history</li>
+            <li class="included">Sentiment, OHLCV &amp; correlation endpoints</li>
+            <li class="included">Everything in Pro</li>
+          </ul>
+          <a href="https://developers.sentimentfx.org"
+            class="price-btn price-btn-filled">Get an API key</a>
+        </div>
+
+        <div class="price-card">
+          <div class="price-badge" style="background:var(--accent2);">Dashboard</div>
           <div class="price-tier">Pro</div>
           <div class="price-amount">£11.99</div>
           <div class="price-period">per month · or £99.99/yr</div>
@@ -1284,28 +1259,10 @@
           <ul class="price-features">
             <li class="included">All 42 tickers (crypto, FX, stocks, ETFs, commodities)</li>
             <li class="included">Full price history — candlesticks &amp; backtests across everything</li>
+            <li class="included">CSV export (90 days)</li>
             <li class="included">1,000 API calls / month included</li>
             <li class="included">Email sentiment alerts</li>
             <li class="included">Morning brief email</li>
-            <li class="included">CSV export (90 days)</li>
-            <li class="included">Advanced correlation engine</li>
-          </ul>
-          <a href="https://app.sentimentfx.org?auth=signup"
-            class="price-btn price-btn-filled">Get Started</a>
-        </div>
-
-        <div class="price-card">
-          <div class="price-badge" style="background:var(--accent2);">Data</div>
-          <div class="price-tier">Data</div>
-          <div class="price-amount">£49.99</div>
-          <div class="price-period">per month · or £499.99/yr</div>
-          <div class="price-saving">Annual saves £99.89</div>
-          <ul class="price-features">
-            <li class="included">Everything in Pro</li>
-            <li class="included">5,000 API calls / month included</li>
-            <li class="included">£0.01 / call after allowance</li>
-            <li class="included">All 42 tickers via API</li>
-            <li class="included">Sentiment, prices &amp; correlation endpoints</li>
           </ul>
           <a href="https://app.sentimentfx.org?auth=signup"
             class="price-btn price-btn-outline" style="border-color:var(--accent2);color:var(--accent2);">Get Started</a>
@@ -1318,11 +1275,11 @@
       <div class="hero-tag" style="justify-content:center;">Now Live</div>
       <h2
         style="font-family:var(--mono);font-size:clamp(24px,4vw,40px);font-weight:600;margin-bottom:16px;letter-spacing:-0.01em;">
-        Start reading the market
+        Query the dataset
       </h2>
       <p
         style="font-size:14px;color:var(--muted);margin-bottom:36px;max-width:440px;margin-left:auto;margin-right:auto;">
-        Sign up free and get your first sentiment signals in minutes.
+        Free account, 15 tickers and 30 days of history to poke at.
         No credit card required.
       </p>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
@@ -1396,37 +1353,6 @@
         } catch (e) {}
       }
 
-      // Live track-record badge.  We only render it if there are settled
-      // trades to talk about — early on the dataset is empty and a "0 trades"
-      // badge would be louder than no badge at all.  Pending count alone
-      // isn't enough; we wait for real outcomes.
-      async function loadTrackRecord() {
-        try {
-          const res = await fetch(`${API}/track-record?days=90`, { signal: AbortSignal.timeout(5000) });
-          if (!res.ok) return;
-          const data = await res.json();
-          const overall = data.overall;
-          if (!overall || !overall.count || overall.total_return_pct == null) return;
-
-          const badge   = document.getElementById('trackRecordBadge');
-          const retEl   = document.getElementById('trbReturn');
-          const metaEl  = document.getElementById('trbMeta');
-          if (!badge || !retEl || !metaEl) return;
-
-          const r = overall.total_return_pct;
-          const sign = r > 0 ? '+' : '';
-          retEl.textContent = `${sign}${r.toFixed(2)}%`;
-          retEl.classList.add(r > 0 ? 'up' : r < 0 ? 'down' : 'flat');
-
-          const wr = overall.win_rate == null ? null : Math.round(overall.win_rate * 100);
-          const parts = [`${overall.count} settled`];
-          if (wr != null) parts.push(`${wr}% win rate`);
-          metaEl.textContent = parts.join(' · ');
-
-          badge.style.display = 'inline-flex';
-        } catch (e) { /* silent — badge stays hidden */ }
-      }
-
       function fmtPrice(sym, p) {
         if (FX.includes(sym)) return p.toFixed(sym === 'USDJPY' ? 2 : 4);
         if (CRYPTO.includes(sym)) {
@@ -1464,19 +1390,24 @@
         return { sym, ...FALLBACK[sym] };
       }
 
+      // Sentiment is stored -1..+1 but presented on a 0-100 scale everywhere
+      // in the product (mirrors toSentimentScale in frontend/src/lib/
+      // constants.js).  50 is neutral.  Keep the two in step — the landing
+      // page showing -1..+1 while the dashboard shows 0-100 reads as a bug.
+      function toScale(s) { return Math.round((s + 1) * 50); }
+
       function buildTickerHTML(results) {
         const items = results.map(({ sym, price, change, sentiment }) => {
           const chgClass  = change > 0.05 ? 'up' : change < -0.05 ? 'down' : 'flat';
           const sentClass = sentiment > 0.1 ? 'bull' : sentiment < -0.1 ? 'bear' : 'neut';
           const arrow     = sentiment > 0.1 ? '▲' : sentiment < -0.1 ? '▼' : '—';
           const chgSign   = change >= 0 ? '+' : '';
-          const sentSign  = sentiment >= 0 ? '+' : '';
           const label     = LABELS[sym] ?? sym;
           return `<div class="lti">
             <span class="lti-name">${label}</span>
             <span class="lti-price">${fmtPrice(sym, price)}</span>
             <span class="lti-chg ${chgClass}">${chgSign}${change.toFixed(2)}%</span>
-            <span class="lti-sent ${sentClass}">${arrow} ${sentSign}${sentiment.toFixed(2)}</span>
+            <span class="lti-sent ${sentClass}">${arrow} ${toScale(sentiment)}</span>
           </div>`;
         }).join('');
         return items + items;
@@ -1494,19 +1425,16 @@
         const results = await Promise.all(TICKERS.map(fetchTickerData));
         strip.innerHTML = results.map(({ sym, sentiment }) => {
           const cls   = sentiment > 0.05 ? 'bull' : sentiment < -0.05 ? 'bear' : '';
-          const sign  = sentiment >= 0 ? '+' : '';
           const label = LABELS[sym] ?? sym;
-          return `<span class="ticker-chip ${cls}">${label} ${sign}${sentiment.toFixed(2)}</span>`;
+          return `<span class="ticker-chip ${cls}">${label} ${toScale(sentiment)}</span>`;
         }).join('');
       }
 
       loadStats();
-      loadTrackRecord();
       loadHeroChips();
       loadLiveTicker();
       setInterval(loadLiveTicker, 60000);
       setInterval(loadHeroChips, 60000);
-      setInterval(loadTrackRecord, 5 * 60 * 1000);
     </script>
   </body>
 </html>
