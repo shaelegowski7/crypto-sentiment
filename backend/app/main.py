@@ -252,6 +252,7 @@ def _v1_error_type(status_code: int) -> str:
         401: "authentication_error",
         403: "permission_error",
         404: "not_found_error",
+        402: "insufficient_quota",
         422: "invalid_request_error",
         429: "rate_limit_error",
     }.get(status_code, "api_error")
@@ -380,6 +381,12 @@ def _make_key() -> str:
     return "sfx_" + secrets.token_hex(24)
 
 def _create_stripe_customer(email: str):
+    """Customer + metered subscription. For PAID plans only.
+
+    Do not call this for free-tier signups: attaching the metered subscription
+    is what makes overage billable, and someone who signed up under "no card
+    required" has consented to no such thing.  Use _create_stripe_customer_only.
+    """
     try:
         customer = stripe.Customer.create(email=email)
         subscription = stripe.Subscription.create(
@@ -390,6 +397,60 @@ def _create_stripe_customer(email: str):
     except Exception as e:
         print(f"Stripe error: {e}")
         return None, None
+
+
+def _create_stripe_customer_only(email: str):
+    """Customer record with NO subscription — the free-tier signup path.
+
+    We still want the customer row so an upgrade later has something to attach
+    to, but no metered subscription exists, so no usage can ever bill.  Free
+    keys hard-stop at their allowance instead (see _allowance_exhausted).
+    """
+    try:
+        customer = stripe.Customer.create(email=email)
+        return customer.id, None
+    except Exception as e:
+        print(f"Stripe error: {e}")
+        return None, None
+
+
+def _is_paid_plan(api_key) -> bool:
+    """True when this key is entitled to keep serving past its included calls.
+
+    Paid plans roll into metered overage; free keys do not.  `unlimited` is the
+    internal/dogfood flag, which bypasses metering entirely.
+    """
+    if getattr(api_key, "unlimited", False):
+        return True
+    return (api_key.monthly_allowance or 0) > 0
+
+
+def _allowance_exhausted(api_key) -> bool:
+    """True when a FREE key has spent its allowance and must be cut off.
+
+    Note the two different clocks, which is deliberate and not a bug:
+      * free tier  -> `free_calls` is a ONE-OFF grant, so it's measured against
+                      lifetime `calls_used`.
+      * paid plans -> allowance is monthly, measured against `calls_this_month`
+                      (which the monthly reset job zeroes), and overage meters
+                      rather than blocks — so they're never "exhausted" here.
+    """
+    if _is_paid_plan(api_key):
+        return False
+    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
+    return (api_key.calls_used or 0) >= included
+
+
+_QUOTA_MESSAGE = (
+    "Free allowance used up. Your key has spent its {included} included calls. "
+    "Upgrade at https://sentimentfx.org/#pricing to continue — "
+    "check remaining calls any time at GET /v1/usage (always free)."
+)
+
+
+def _quota_message(api_key) -> str:
+    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
+    return _QUOTA_MESSAGE.format(included=included)
 
 
 # ---------------------------------------------------------------------------
@@ -468,7 +529,21 @@ async def require_admin(secret: str = None):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-def get_api_key(x_api_key: str = Header(None), db: Session = Depends(get_db)):
+# Paths that keep working after a free key is exhausted.  Introspection has to
+# stay reachable — being told "you're out of calls" is useless if the endpoint
+# that tells you how many you have left is itself blocked.  Keep in sync with
+# the free endpoints documented in CLAUDE.md.
+_QUOTA_EXEMPT_PATHS = {"/v1/usage"}
+
+
+def get_api_key(request: Request, x_api_key: str = Header(None), db: Session = Depends(get_db)):
+    """Authenticate the key AND enforce its allowance.
+
+    Enforcement lives here, rather than in a separate opt-in dependency, so
+    that a newly added /v1 route is metered by default.  The failure mode of
+    forgetting to opt in is giving the dataset away, which is the expensive
+    direction to get wrong.
+    """
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
@@ -479,6 +554,9 @@ def get_api_key(x_api_key: str = Header(None), db: Session = Depends(get_db)):
     ).first()
     if not key:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+    if request.url.path not in _QUOTA_EXEMPT_PATHS and _allowance_exhausted(key):
+        raise HTTPException(status_code=402, detail=_quota_message(key))
     return key
 
 
@@ -2631,7 +2709,10 @@ async def generate_api_key(request: Request, response: Response,
             detail="A key already exists for this email. Use /api/keys/regenerate/request to have a reset link emailed to you."
         )
 
-    stripe_customer_id, stripe_subscription_id = _create_stripe_customer(email)
+    # Customer record only -- NO metered subscription.  See
+    # _create_stripe_customer_only: this key can never bill, it hard-stops at
+    # its free allowance instead.
+    stripe_customer_id, stripe_subscription_id = _create_stripe_customer_only(email)
 
     key = _make_key()
     api_key = models.APIKey(
@@ -2816,8 +2897,15 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
         db.commit()
         return
 
+    # Only PAID plans meter.  This used to key off stripe_customer_id alone,
+    # which meant a free-tier key -- whose signup also created a metered
+    # subscription -- would quietly start accruing 0.01/call the moment it
+    # passed 100, despite having been offered "no card required".  Free keys
+    # now hard-stop in get_api_key instead and never reach this branch.
     total_allowance = api_key.free_calls + api_key.monthly_allowance
-    if api_key.calls_this_month > total_allowance and api_key.stripe_customer_id:
+    if (_is_paid_plan(api_key)
+            and api_key.calls_this_month > total_allowance
+            and api_key.stripe_customer_id):
         try:
             stripe.billing.MeterEvent.create(
                 event_name="api_call",

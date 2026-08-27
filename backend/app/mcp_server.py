@@ -63,7 +63,7 @@ mcp = FastMCP(
 # Auth + billing plumbing shared by every tool
 # ---------------------------------------------------------------------------
 
-def _open_authed_session(ctx: Context):
+def _open_authed_session(ctx: Context, enforce_quota: bool = True):
     """Extract + validate the X-API-Key header from the underlying HTTP request.
 
     Returns `(api_key, db_session)`.  Caller is responsible for closing the
@@ -71,10 +71,16 @@ def _open_authed_session(ctx: Context):
     MCP tool calls can arrive concurrently and SQLAlchemy sessions are not
     goroutine-safe.
 
+    `enforce_quota=False` is for the free introspection tools only — being told
+    you're out of calls is useless if the tool that reports your remaining
+    balance is itself blocked.  Everything else must enforce, otherwise MCP
+    becomes the way around the /v1 paywall (MCP_MIRRORS_V1).
+
     Late imports of `_hash_key` / `track_usage` avoid the main.py <-> mcp_server
     circular import — they're only needed inside the tool body.
     """
     from .main import _hash_key, track_usage  # noqa: F401 — track_usage re-exported later
+    from .main import _allowance_exhausted, _quota_message
 
     request = ctx.request_context.request
     x_api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
@@ -93,6 +99,11 @@ def _open_authed_session(ctx: Context):
     if not key:
         db.close()
         raise ValueError("Invalid or revoked API key.")
+
+    if enforce_quota and _allowance_exhausted(key):
+        message = _quota_message(key)
+        db.close()
+        raise ValueError(message)
     return key, db
 
 
@@ -137,7 +148,9 @@ def get_usage(ctx: Context) -> dict[str, Any]:
     """
     from datetime import datetime
 
-    api_key, db = _open_authed_session(ctx)
+    # Mirrors /v1/usage's quota exemption — must stay readable once a free key
+    # is spent, since this is where the caller finds out that it is.
+    api_key, db = _open_authed_session(ctx, enforce_quota=False)
     try:
         now = datetime.utcnow()
         resets_at = datetime(now.year + (1 if now.month == 12 else 0),

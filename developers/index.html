@@ -245,16 +245,23 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                         <table class="param-table" style="margin-bottom:20px;">
                             <thead><tr><th>Plan</th><th>Included Calls/mo</th><th>Overage</th></tr></thead>
                             <tbody>
-                                <tr><td style="color:var(--positive,#3fb950);">Free</td><td>100 (one-off, not monthly)</td><td>—</td></tr>
+                                <tr><td style="color:var(--positive,#3fb950);">Free</td><td>100 (one-off, not monthly)</td><td>None — requests stop at 100</td></tr>
                                 <tr><td style="color:var(--accent);">Pro</td><td>1,000</td><td>£0.01 / call via Stripe</td></tr>
                                 <tr><td style="color:var(--accent2);">Data</td><td>5,000</td><td>£0.01 / call via Stripe</td></tr>
                             </tbody>
                         </table>
-                        <p style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:20px;">
+                        <p style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:16px;">
                             Already subscribed? Keys generated from the
                             <a href="https://app.sentimentfx.org" target="_blank" style="color:var(--accent2);text-decoration:none;">dashboard</a>
                             are linked to your account and pick up your plan's monthly allowance automatically.
                         </p>
+                        <div class="notice">
+                            A free key stops serving once its 100 calls are gone — requests return
+                            <code>402</code> with <code>"type": "insufficient_quota"</code> rather than
+                            silently billing you. There is no card on a free key and no overage can accrue.
+                            <code>GET /v1/usage</code> keeps working when you're out, so you can always
+                            check where you stand.
+                        </div>
                         <div class="code-label">Example Request</div>
                         <pre><span class="c-comment"># Curl</span>
 curl https://api.sentimentfx.org/v1/sentiment/BTC \
