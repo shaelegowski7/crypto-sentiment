@@ -84,7 +84,7 @@ function pageHtml(t) {
     },
     {
       q: `How often is ${t.display} sentiment data updated?`,
-      a: `The scraper runs every 15 minutes, pulling new ${t.display} headlines from ${t.category === 'crypto' ? 'crypto-specific RSS feeds (CoinTelegraph, CoinDesk, Decrypt and others)' : t.category === 'fx' ? 'forex RSS feeds (FXStreet, ForexLive, DailyFX)' : 'Yahoo Finance RSS feeds'} alongside StockTwits and other social sources. New sentiment scores are usually live within 1–2 minutes of scrape completion.`,
+      a: `The scraper runs every 15 minutes, pulling new ${t.display} headlines from ${t.category === 'crypto' ? 'crypto-specific RSS feeds (CoinTelegraph, CoinDesk, Decrypt and others)' : t.category === 'fx' ? 'forex RSS feeds (FXStreet, ForexLive, DailyFX)' : 'Yahoo Finance RSS feeds'}. New sentiment scores are usually live within 1–2 minutes of scrape completion.`,
     },
     {
       q: `Can I correlate ${t.display} sentiment with its price?`,

@@ -634,9 +634,23 @@ def fetch_hn_headlines(
 # ---------------------------------------------------------------------------
 STOCKTWITS_URL = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
 
-# Kill switch.  Defaults ON to preserve current behaviour; set to "false" to
-# drop the source entirely without a code change.
-STOCKTWITS_ENABLED = os.getenv("STOCKTWITS_ENABLED", "true").lower() in ("true", "1", "yes")
+# Off by default since 2026-08-27 -- same treatment as GNews above, and for a
+# similar reason: the source costs more than it returns.
+#
+# Two independent problems, either of which is disqualifying:
+#   1. Cloudflare 403s the Railway IP (see the note above), so it fetches
+#      nothing in production anyway.
+#   2. More importantly, the content is poor input for FinBERT even when it
+#      DOES arrive.  FinBERT is tuned on financial news; retail chat scores
+#      near-neutral with confident misreads at the tails (sd 0.317 vs 0.489
+#      for editorial headlines), and cashtag spam is attributed to every
+#      ticker it names -- "$LUMN you $INTC cant $NVDA handle $AMZN the Truth"
+#      was stored as an AMZN headline.  That dilutes the corpus, which is now
+#      the product.
+#
+# Set STOCKTWITS_ENABLED=true to re-enable; the fetcher, breaker and tests
+# are all still here and working.
+STOCKTWITS_ENABLED = os.getenv("STOCKTWITS_ENABLED", "").lower() in ("true", "1", "yes")
 
 # Circuit breaker.  After this many consecutive failures we stop calling out
 # for the cooldown window.  Cloudflare blocks are IP-wide and persist for
