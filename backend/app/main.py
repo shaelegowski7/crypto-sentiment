@@ -444,7 +444,7 @@ def _allowance_exhausted(api_key) -> bool:
 
 _QUOTA_MESSAGE = (
     "Free allowance used up. Your key has spent its {included} included calls. "
-    "Upgrade at https://sentimentfx.org/#pricing to continue — "
+    "Upgrade at https://developers.sentimentfx.org to continue — "
     "check remaining calls any time at GET /v1/usage (always free)."
 )
 
@@ -452,6 +452,61 @@ _QUOTA_MESSAGE = (
 def _quota_message(api_key) -> str:
     included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
     return _QUOTA_MESSAGE.format(included=included)
+
+
+def _email_new_api_key(email: str, key: str, tier: str, allowance: int) -> None:
+    """Deliver a key minted by the Stripe webhook.
+
+    Only used on the path where someone paid for an API plan without ever
+    having created a free key — there is no browser session to hand the key
+    back to, so email is the only channel.  The key is shown once here and
+    never recoverable afterwards (we store a hash); losing it means using the
+    reset-link flow, same as any other key.
+    """
+    try:
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        resend.Emails.send({
+            "from": "SentimentFX <hello@sentimentfx.org>",
+            "to": email,
+            "subject": "Your SentimentFX API key",
+            "html": f"""
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#080c10;font-family:'Courier New',monospace;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#080c10;padding:40px 20px;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+      <tr><td style="border-bottom:1px solid #21262d;padding-bottom:20px;">
+        <span style="font-size:13px;font-weight:600;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;">SentimentFX</span>
+      </td></tr>
+      <tr><td style="padding:40px 0 32px;">
+        <p style="font-size:10px;letter-spacing:0.2em;color:#f0b429;text-transform:uppercase;margin:0 0 20px;">— {tier.capitalize()} plan active</p>
+        <h1 style="font-size:28px;font-weight:600;color:#e6edf3;margin:0 0 16px;line-height:1.2;">Your API key</h1>
+        <p style="font-size:14px;color:#8b949e;line-height:1.7;margin:0 0 24px;">
+          Thanks for subscribing. Your plan includes {allowance:,} API calls a month.
+          Send this key as an <code style="color:#e6edf3;">X-API-Key</code> header.
+        </p>
+        <p style="font-size:15px;color:#f0b429;background:#0d1117;border:1px solid #f0b429;padding:14px 16px;margin:0 0 24px;word-break:break-all;">{key}</p>
+        <p style="font-size:13px;color:#8b949e;line-height:1.7;margin:0 0 28px;">
+          Save it now — it is stored as a hash and cannot be shown again.
+          Check your remaining calls any time with <code style="color:#e6edf3;">GET /v1/usage</code> (free, never billed).
+        </p>
+        <a href="https://developers.sentimentfx.org" style="display:inline-block;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#080c10;background:#f0b429;padding:12px 22px;text-decoration:none;font-weight:600;">Read the docs</a>
+      </td></tr>
+      <tr><td style="border-top:1px solid #21262d;padding-top:20px;">
+        <p style="font-size:11px;color:#484f58;margin:0;">SentimentFX · sentimentfx.org</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+""",
+        })
+    except Exception as e:
+        # Never let a mail failure roll back a completed purchase.  The key row
+        # is already committed; the buyer can recover it via the reset link.
+        print(f"[BILLING] failed to email new API key to {email}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -2492,7 +2547,25 @@ def preview_trade_card(
 
 
 @app.post("/create-checkout-session")
-def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
+def create_checkout_session(price_id: str, email: str = None, db: Session = Depends(get_db)):
+    """Start a Stripe Checkout session.
+
+    `email` is optional but matters a lot when it's available.  The Data tier is
+    an API product, and an API key is keyed on the email the developer typed
+    into the portal — which is a completely separate free-text field from the
+    one they type into Stripe Checkout.  When the caller knows which email the
+    key belongs to (the portal does), we pass it through two ways:
+
+      * `customer_email` prefills Checkout, so the buyer is nudged to pay with
+        the address their key is already under.
+      * `metadata.sfx_email` records the address we intend to credit, so the
+        webhook can act on our value rather than trusting whatever the buyer
+        ended up typing into Stripe's form.
+
+    Callers that don't know (the landing page, where nobody has identified
+    themselves yet) omit it; the webhook then falls back to the Checkout email
+    and mints a key for it.
+    """
     # Map price → tier.  Brief tier is the cheapest, no API allowance; Data
     # tier is the most expensive, gets the largest allowance; default is Pro.
     if price_id in BRIEF_PRICE_IDS:
@@ -2501,16 +2574,33 @@ def create_checkout_session(price_id: str, db: Session = Depends(get_db)):
         tier = "data"
     else:
         tier = "pro"
+
+    email = (email or "").strip().lower() or None
+    if email and not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="That doesn't look like a valid email address.")
+
+    # Data is bought for the API, so land the buyer on the developer portal;
+    # everything else is a dashboard product.
+    success_url = ("https://developers.sentimentfx.org?purchased=data"
+                   if tier == "data" else
+                   "https://app.sentimentfx.org?success=true")
+    cancel_url = ("https://developers.sentimentfx.org?cancelled=true"
+                  if tier == "data" else
+                  "https://app.sentimentfx.org?cancelled=true")
+
     try:
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{"price": price_id, "quantity": 1}],
-            mode="subscription",
-            allow_promotion_codes=True,
-            metadata={"tier": tier},
-            success_url="https://app.sentimentfx.org?success=true",
-            cancel_url="https://app.sentimentfx.org?cancelled=true",
-        )
+        params = {
+            "payment_method_types": ["card"],
+            "line_items": [{"price": price_id, "quantity": 1}],
+            "mode": "subscription",
+            "allow_promotion_codes": True,
+            "metadata": {"tier": tier, "sfx_email": email or ""},
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+        }
+        if email:
+            params["customer_email"] = email
+        session = stripe.checkout.Session.create(**params)
         return {"url": session.url}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -2551,9 +2641,26 @@ async def stripe_webhook(request: Request):
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        customer_email = session["customer_details"]["email"]
-        tier = session.get("metadata", {}).get("tier", "pro")
+        metadata = session.get("metadata") or {}
+        tier = metadata.get("tier", "pro")
+
+        # Which address gets credited.  Prefer the one WE put on the session
+        # (the portal knows which key the buyer already owns); fall back to
+        # whatever they typed into Stripe.  Normalise, because the API key
+        # table stores lowercase and Stripe echoes back the raw input — an
+        # exact-match lookup here used to silently no-op on any case
+        # difference, leaving a paying customer on the free tier.
+        customer_email = (metadata.get("sfx_email")
+                          or (session.get("customer_details") or {}).get("email")
+                          or "").strip().lower()
+
         if customer_email:
+            # Stays .eq, deliberately: PostgREST's ilike treats _ and % as
+            # wildcards, and underscores are ordinary in email addresses, so
+            # first_last@acme.io would also match firstXlast@acme.io and set a
+            # stranger's tier.  Supabase Auth already lowercases the addresses
+            # it stores, and customer_email is lowercased above, so an exact
+            # match is both correct and safe here.
             supabase_client.table("profiles").update({"tier": tier}).eq("email", customer_email).execute()
             # Brief tier intentionally gets zero API allowance — it's a
             # content product, not a data product.  Pro/Data get allowances.
@@ -2565,10 +2672,38 @@ async def stripe_webhook(request: Request):
                 allowance = 0
             webhook_db = SessionLocal()
             try:
-                api_key = webhook_db.query(models.APIKey).filter(models.APIKey.email == customer_email).first()
+                api_key = webhook_db.query(models.APIKey).filter(
+                    sa_func.lower(models.APIKey.email) == customer_email
+                ).first()
                 if api_key:
                     api_key.monthly_allowance = allowance
+                    # A key created through the free portal path has a customer
+                    # record but no subscription.  Point it at the customer that
+                    # actually holds the paid subscription, but never clobber an
+                    # existing id — a generate-linked key's customer owns the
+                    # metered subscription that overage bills against.
+                    if not api_key.stripe_customer_id and session.get("customer"):
+                        api_key.stripe_customer_id = session["customer"]
                     webhook_db.commit()
+                elif allowance > 0:
+                    # Nobody had a key under this address.  Before this branch
+                    # existed the purchase completed and the buyer got nothing:
+                    # the Data tier is bought FOR the API, and the only way to
+                    # obtain a key afterwards was to guess that you had to go
+                    # create a dashboard account under the same email.  Mint it
+                    # here and email it, so paying is sufficient.
+                    new_key = _make_key()
+                    api_key = models.APIKey(
+                        key_hash=_hash_key(new_key),
+                        key_prefix=new_key[:12],
+                        email=customer_email,
+                        stripe_customer_id=session.get("customer"),
+                        monthly_allowance=allowance,
+                        free_calls=0,
+                    )
+                    webhook_db.add(api_key)
+                    webhook_db.commit()
+                    _email_new_api_key(customer_email, new_key, tier, allowance)
             finally:
                 webhook_db.close()
         refresh_subscription_gauge()
@@ -2903,6 +3038,19 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
     # subscription -- would quietly start accruing 0.01/call the moment it
     # passed 100, despite having been offered "no card required".  Free keys
     # now hard-stop in get_api_key instead and never reach this branch.
+    # KNOWN GAP -- overage does not actually invoice for plans bought through
+    # Stripe Checkout.  Checkout creates a subscription containing only the
+    # licensed price (Pro/Data); the metered price price_1TO3DG... is attached
+    # only by _create_stripe_customer, i.e. the generate-linked path.  The
+    # meter event below is still recorded against the customer, but with no
+    # metered subscription item there is nothing for Stripe to bill it on, so
+    # calls past the allowance are served free rather than at £0.01.
+    #
+    # Fixing it means adding the metered price as a second line item on the
+    # Checkout Session -- which Stripe only permits when the intervals match,
+    # so the annual plans (£499.99/yr against a monthly meter) need a separate
+    # subscription rather than a second item.  Deliberately left alone: it
+    # under-charges rather than over-charges, and only past 5,000 calls/month.
     total_allowance = api_key.free_calls + api_key.monthly_allowance
     if (_is_paid_plan(api_key)
             and api_key.calls_this_month > total_allowance

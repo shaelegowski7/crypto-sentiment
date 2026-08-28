@@ -250,6 +250,19 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                                 <tr><td style="color:var(--accent2);">Data</td><td>5,000</td><td>£0.01 / call via Stripe</td></tr>
                             </tbody>
                         </table>
+                        <div class="signup" id="upgrade-box">
+                            <div class="signup-title" style="color:var(--accent2);">Upgrade to Data — 5,000 calls / month</div>
+                            <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6;">
+                                Full history on all 42 tickers, every endpoint, REST and MCP.
+                                If you've already made a free key above, enter the same email and
+                                we'll raise that key's allowance rather than issuing a second one.
+                            </p>
+                            <div class="signup-row">
+                                <button class="tester-btn" onclick="startCheckout('price_1TUqVG2NzVdYK0wrKrPTE28e', this)">£49.99 / month</button>
+                                <button class="tester-btn" onclick="startCheckout('price_1TUqVx2NzVdYK0wryheortJg', this)">£499.99 / year</button>
+                            </div>
+                            <div class="signup-msg" id="upgrade-msg"></div>
+                        </div>
                         <p style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:16px;">
                             Already subscribed? Keys generated from the
                             <a href="https://app.sentimentfx.org" target="_blank" style="color:var(--accent2);text-decoration:none;">dashboard</a>
@@ -674,7 +687,55 @@ window.addEventListener('DOMContentLoaded', () => {
     if (currentKey) document.getElementById('tester-api-key').value = currentKey
     initScrollSpy()
     handleResetLink()
+    handlePurchaseReturn()
 })
+
+// --- Upgrade ---------------------------------------------------------------
+// The Data tier is bought for the API, so it's sold here rather than only
+// behind a dashboard login.  Passing the email the developer already typed
+// into the signup box is the load-bearing part: an API key is keyed on that
+// address, and without it the webhook has nothing to match on but whatever
+// they happen to type into Stripe's form.
+
+function upgradeMsg(text, kind) {
+    const el = document.getElementById('upgrade-msg')
+    el.textContent = text
+    el.className = 'signup-msg' + (kind ? ' ' + kind : '')
+}
+
+async function startCheckout(priceId, btn) {
+    const email = document.getElementById('signup-email').value.trim()
+    const original = btn.textContent
+    btn.textContent = 'Redirecting...'
+    btn.disabled = true
+    upgradeMsg(email
+        ? `Upgrading the key for ${email}.`
+        : "No email entered above — we'll use whatever you pay with and email you a key.", '')
+    try {
+        const qs = `price_id=${encodeURIComponent(priceId)}` +
+                   (email ? `&email=${encodeURIComponent(email)}` : '')
+        const res = await fetch(`${API_BASE}/create-checkout-session?${qs}`, { method: 'POST' })
+        const data = await res.json()
+        if (data.url) { window.location.href = data.url; return }
+        throw new Error(data.detail || 'no checkout url')
+    } catch (e) {
+        btn.textContent = original
+        btn.disabled = false
+        upgradeMsg('Could not start checkout. Try again, or email hello@sentimentfx.org.', 'err')
+    }
+}
+
+// Stripe sends Data buyers back here rather than to the dashboard.
+function handlePurchaseReturn() {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('purchased') === 'data') {
+        upgradeMsg('Payment received. If you already had a key it now has 5,000 calls/month — '
+                 + 'otherwise check your email, we just sent you one.', 'ok')
+        document.getElementById('upgrade-box').scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else if (params.get('cancelled')) {
+        upgradeMsg('Checkout cancelled — nothing was charged.', '')
+    }
+}
 
 // --- Free-key signup -------------------------------------------------------
 // POSTs to /api/keys/generate (unauthenticated, 5/hour/IP, 100 free calls).

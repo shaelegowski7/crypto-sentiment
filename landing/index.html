@@ -1246,8 +1246,15 @@
             <li class="included">Sentiment, OHLCV &amp; correlation endpoints</li>
             <li class="included">Everything in Pro</li>
           </ul>
-          <a href="https://developers.sentimentfx.org"
-            class="price-btn price-btn-filled">Get an API key</a>
+          <div style="display:flex;gap:8px;">
+            <button type="button" onclick="startCheckout('price_1TUqVG2NzVdYK0wrKrPTE28e', this)"
+              class="price-btn price-btn-filled" style="flex:1;cursor:pointer;border:none;">£49.99 / mo</button>
+            <button type="button" onclick="startCheckout('price_1TUqVx2NzVdYK0wryheortJg', this)"
+              class="price-btn price-btn-outline" style="flex:1;cursor:pointer;">£499.99 / yr</button>
+          </div>
+          <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted);">
+            or <a href="https://developers.sentimentfx.org" style="color:var(--accent2);">try it free first</a> — 100 calls, no card
+          </div>
         </div>
 
         <div class="price-card">
@@ -1310,6 +1317,28 @@
 
     <script>
       const API = "https://api.sentimentfx.org";
+
+      // Data tier is an API product, so it's sold here rather than behind a
+      // dashboard login.  No email is collected first — Stripe takes it, and
+      // the webhook mints a key for whatever address they pay with and emails
+      // it.  (The developer portal passes the address it already knows, so an
+      // existing free key gets upgraded in place instead of a second one made.)
+      async function startCheckout(priceId, btn) {
+        const original = btn.textContent;
+        btn.textContent = 'Redirecting…';
+        btn.disabled = true;
+        try {
+          const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, { method: 'POST' });
+          const data = await res.json();
+          if (data.url) { window.location.href = data.url; return; }
+          throw new Error(data.detail || 'no checkout url');
+        } catch (e) {
+          btn.textContent = original;
+          btn.disabled = false;
+          alert('Could not start checkout. Please try again, or email hello@sentimentfx.org.');
+        }
+      }
+
       const CRYPTO = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'];
       const FX = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD'];
       const STOCKS = ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','JPM','BAC','GS','V','MA','XOM','JNJ','AMD','NFLX','WMT','UBER','CRM','PLTR'];
