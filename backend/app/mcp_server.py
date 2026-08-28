@@ -206,8 +206,9 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
     """Return the most recent FinBERT-scored headlines for `ticker`.
 
     Each headline has a `sentiment_score` in [-1, +1] (positive_prob -
-    negative_prob) and a categorical `sentiment_label`.  Costs
-    ceil(limit / 25) API credits — same billing as GET /v1/sentiment/{ticker}.
+    negative_prob) and a categorical `sentiment_label`.  Costs 1 API credit
+    per 25 headlines actually returned — same billing as
+    GET /v1/sentiment/{ticker}.  An empty result costs nothing.
 
     `limit` is capped at 100.  Titles come back reverse-chronological so the
     first item is the freshest.
@@ -215,9 +216,6 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
     limit = max(1, min(limit, 100))
     api_key, db = _open_authed_session(ctx)
     try:
-        calls = math.ceil(limit / 25)
-        _bill(api_key, db, calls, endpoint="sentiment")
-
         rows = db.query(models.Headline).filter(
             models.Headline.ticker == ticker.upper(),
         ).order_by(models.Headline.published_at.desc()).limit(limit).all()
@@ -225,9 +223,15 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
         if not rows:
             return {"ticker": ticker.upper(), "data": [], "note": "No data found."}
 
+        # Billed after the query, on rows actually returned — an empty result
+        # costs nothing.  Mirrors api_sentiment (MCP_MIRRORS_V1).
+        calls = math.ceil(len(rows) / 25)
+        _bill(api_key, db, calls, endpoint="sentiment")
+
         return {
             "ticker": ticker.upper(),
             "limit": limit,
+            "returned": len(rows),
             "calls_used": calls,
             "data": [
                 {
@@ -249,13 +253,13 @@ def get_summary(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
 
     Each entry has `avg_sentiment` (unweighted mean of that day's scores),
     `article_count`, and a directional `label` (positive / negative /
-    neutral, thresholded at ±0.1).  Costs `days` API credits — same as
-    GET /v1/summary/{ticker}.
+    neutral, thresholded at ±0.1).  Costs 1 API credit per day actually
+    returned — same as GET /v1/summary/{ticker}.  A window with no coverage
+    costs nothing.
     """
     days = max(1, min(days, 365))
     api_key, db = _open_authed_session(ctx)
     try:
-        _bill(api_key, db, days, endpoint="summary")
         since = datetime.utcnow() - timedelta(days=days)
         rows = db.query(models.Headline).filter(
             models.Headline.ticker == ticker.upper(),
@@ -280,10 +284,16 @@ def get_summary(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
                 "label": "positive" if avg > 0.1 else "negative" if avg < -0.1 else "neutral",
             })
 
+        # Per day RETURNED, after the query — asking for 365 days of a ticker
+        # with a week of coverage costs 7.  Mirrors api_summary.
+        calls = len(out)
+        _bill(api_key, db, calls, endpoint="summary")
+
         return {
             "ticker": ticker.upper(),
             "days": days,
-            "calls_used": days,
+            "returned": len(out),
+            "calls_used": calls,
             "data": out,
         }
     finally:
@@ -295,7 +305,8 @@ def get_prices(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
     """Return daily close prices for `ticker` over the last `days`, in the
     ticker's native currency -- see the `currency` field on the response.
 
-    Costs `days` API credits — same as GET /v1/prices/{ticker}.  Prices come
+    Costs 1 API credit per day actually returned — same as
+    GET /v1/prices/{ticker}.  Prices come
     back reverse-chronological.  Crypto is GBP (yfinance BTC-GBP etc.), FX
     pairs are a raw exchange rate in the pair's native convention (e.g.
     USDJPY is yen per dollar), and everything else (stocks/ETFs/commodity
@@ -304,7 +315,6 @@ def get_prices(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
     days = max(1, min(days, 365))
     api_key, db = _open_authed_session(ctx)
     try:
-        _bill(api_key, db, days, endpoint="prices")
         since = datetime.utcnow() - timedelta(days=days)
         rows = db.query(models.Price).filter(
             models.Price.ticker == ticker.upper(),
@@ -318,10 +328,15 @@ def get_prices(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
         category = _category_for(ticker.upper())
         currency = "GBP" if category == "crypto" else "RATE" if category == "fx" else "USD"
 
+        # Per day RETURNED, after the query.  Mirrors api_prices.
+        calls = len(rows)
+        _bill(api_key, db, calls, endpoint="prices")
+
         return {
             "ticker": ticker.upper(),
             "days": days,
-            "calls_used": days,
+            "returned": len(rows),
+            "calls_used": calls,
             "currency": currency,
             "data": [
                 {

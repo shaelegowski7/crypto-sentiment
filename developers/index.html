@@ -307,7 +307,7 @@ const res = await fetch(
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
                                         <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
-                                        <tr><td>limit</td><td>integer</td><td>25</td><td>Number of headlines to return</td></tr>
+                                        <tr><td>limit</td><td>integer</td><td>25</td><td>Headlines to return, 1–100. Costs 1 credit per 25 returned.</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -333,7 +333,7 @@ const res = await fetch(
                                             <optgroup label="Crypto"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option></optgroup><optgroup label="FX"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>AUDUSD</option><option>USDCAD</option><option>USDCHF</option><option>NZDUSD</option></optgroup><optgroup label="Stocks"><option>AAPL</option><option>MSFT</option><option>GOOGL</option><option>AMZN</option><option>META</option><option>NVDA</option><option>TSLA</option><option>JPM</option><option>BAC</option><option>GS</option><option>V</option><option>MA</option><option>XOM</option><option>JNJ</option><option>AMD</option><option>NFLX</option><option>WMT</option><option>UBER</option><option>CRM</option><option>PLTR</option></optgroup><optgroup label="ETFs"><option>SPY</option><option>QQQ</option><option>GLD</option><option>SLV</option><option>USO</option><option>ARKK</option></optgroup><optgroup label="Commodities"><option value="GC=F">Gold (GC=F)</option><option value="SI=F">Silver (SI=F)</option><option value="CL=F">Oil (CL=F)</option><option value="NG=F">Nat Gas (NG=F)</option></optgroup>
                                         </select>
                                         <span class="tester-label" style="margin-left:8px;">Limit</span>
-                                        <input class="tester-input" type="number" id="t-sentiment-limit" value="25" min="1" max="500" style="width:80px;">
+                                        <input class="tester-input" type="number" id="t-sentiment-limit" value="25" min="1" max="100" style="width:80px;">
                                         <button class="tester-btn" onclick="runTester('sentiment')">Send</button>
                                     </div>
                                     <div class="tester-result" id="tester-sentiment-result">
@@ -357,12 +357,12 @@ const res = await fetch(
                                 <span class="endpoint-path">/v1/summary/<span style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns daily averaged sentiment scores. Default 30 days = 30 calls.</p>
+                                <p class="endpoint-desc">Returns daily averaged sentiment scores. Costs 1 credit per day actually returned — a window with no coverage costs nothing.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
                                         <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
-                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number of days of history</td></tr>
+                                        <tr><td>days</td><td>integer</td><td>30</td><td>Days of history, 1–365. Costs 1 credit per day returned.</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -387,7 +387,7 @@ const res = await fetch(
                                             <optgroup label="Crypto"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option></optgroup><optgroup label="FX"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>AUDUSD</option><option>USDCAD</option><option>USDCHF</option><option>NZDUSD</option></optgroup><optgroup label="Stocks"><option>AAPL</option><option>MSFT</option><option>GOOGL</option><option>AMZN</option><option>META</option><option>NVDA</option><option>TSLA</option><option>JPM</option><option>BAC</option><option>GS</option><option>V</option><option>MA</option><option>XOM</option><option>JNJ</option><option>AMD</option><option>NFLX</option><option>WMT</option><option>UBER</option><option>CRM</option><option>PLTR</option></optgroup><optgroup label="ETFs"><option>SPY</option><option>QQQ</option><option>GLD</option><option>SLV</option><option>USO</option><option>ARKK</option></optgroup><optgroup label="Commodities"><option value="GC=F">Gold (GC=F)</option><option value="SI=F">Silver (SI=F)</option><option value="CL=F">Oil (CL=F)</option><option value="NG=F">Nat Gas (NG=F)</option></optgroup>
                                         </select>
                                         <span class="tester-label" style="margin-left:8px;">Days</span>
-                                        <input class="tester-input" type="number" id="t-summary-days" value="7" min="1" max="880" style="width:80px;">
+                                        <input class="tester-input" type="number" id="t-summary-days" value="7" min="1" max="365" style="width:80px;">
                                         <button class="tester-btn" onclick="runTester('summary')">Send</button>
                                     </div>
                                     <div class="tester-result" id="tester-summary-result">
@@ -411,12 +411,12 @@ const res = await fetch(
                                 <span class="endpoint-path">/v1/prices/<span style="color:var(--accent);">{ticker}</span></span>
                             </div>
                             <div class="endpoint-body">
-                                <p class="endpoint-desc">Returns daily closing prices in the asset's native currency: GBP for crypto, exchange rates for FX pairs, USD for stocks, ETFs and commodity futures. Default 30 days = 30 calls.</p>
+                                <p class="endpoint-desc">Returns daily closing prices in the asset's native currency: GBP for crypto, exchange rates for FX pairs, USD for stocks, ETFs and commodity futures. Costs 1 credit per day actually returned — a window with no coverage costs nothing.</p>
                                 <table class="param-table">
                                     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                                     <tbody>
                                         <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
-                                        <tr><td>days</td><td>integer</td><td>30</td><td>Number of days of history</td></tr>
+                                        <tr><td>days</td><td>integer</td><td>30</td><td>Days of history, 1–365. Costs 1 credit per day returned.</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
@@ -441,7 +441,7 @@ const res = await fetch(
                                             <optgroup label="Crypto"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>DOGE</option></optgroup><optgroup label="FX"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>AUDUSD</option><option>USDCAD</option><option>USDCHF</option><option>NZDUSD</option></optgroup><optgroup label="Stocks"><option>AAPL</option><option>MSFT</option><option>GOOGL</option><option>AMZN</option><option>META</option><option>NVDA</option><option>TSLA</option><option>JPM</option><option>BAC</option><option>GS</option><option>V</option><option>MA</option><option>XOM</option><option>JNJ</option><option>AMD</option><option>NFLX</option><option>WMT</option><option>UBER</option><option>CRM</option><option>PLTR</option></optgroup><optgroup label="ETFs"><option>SPY</option><option>QQQ</option><option>GLD</option><option>SLV</option><option>USO</option><option>ARKK</option></optgroup><optgroup label="Commodities"><option value="GC=F">Gold (GC=F)</option><option value="SI=F">Silver (SI=F)</option><option value="CL=F">Oil (CL=F)</option><option value="NG=F">Nat Gas (NG=F)</option></optgroup>
                                         </select>
                                         <span class="tester-label" style="margin-left:8px;">Days</span>
-                                        <input class="tester-input" type="number" id="t-prices-days" value="7" min="1" max="880" style="width:80px;">
+                                        <input class="tester-input" type="number" id="t-prices-days" value="7" min="1" max="365" style="width:80px;">
                                         <button class="tester-btn" onclick="runTester('prices')">Send</button>
                                     </div>
                                     <div class="tester-result" id="tester-prices-result">
@@ -524,9 +524,9 @@ const res = await fetch(
                             <thead><tr><th>Tool</th><th>Args</th><th>Cost</th></tr></thead>
                             <tbody>
                                 <tr><td><code>list_tickers</code></td><td>—</td><td>free</td></tr>
-                                <tr><td><code>get_sentiment</code></td><td>ticker, limit (≤100)</td><td>ceil(limit/25) credits</td></tr>
-                                <tr><td><code>get_summary</code></td><td>ticker, days (≤365)</td><td>1 credit / day</td></tr>
-                                <tr><td><code>get_prices</code></td><td>ticker, days (≤365)</td><td>1 credit / day</td></tr>
+                                <tr><td><code>get_sentiment</code></td><td>ticker, limit (≤100)</td><td>1 credit / 25 headlines returned</td></tr>
+                                <tr><td><code>get_summary</code></td><td>ticker, days (≤365)</td><td>1 credit / day returned</td></tr>
+                                <tr><td><code>get_prices</code></td><td>ticker, days (≤365)</td><td>1 credit / day returned</td></tr>
                                 <tr><td><code>get_correlation</code></td><td>ticker</td><td>1 credit</td></tr>
                             </tbody>
                         </table>

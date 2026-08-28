@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_ as sa_or, func as sa_func
 from fastapi import Request
@@ -440,6 +440,22 @@ def _allowance_exhausted(api_key) -> bool:
         return False
     included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
     return (api_key.calls_used or 0) >= included
+
+
+def _quota_snapshot(api_key) -> tuple[int | None, int, int | None]:
+    """(limit, used, remaining) on whichever clock actually gates this key.
+
+    Mirrors _allowance_exhausted's two-clock rule exactly -- free keys are
+    measured against lifetime `calls_used` because the grant is a one-off,
+    paid keys against `calls_this_month`.  Reporting the wrong clock would be
+    worse than reporting nothing, so this stays next to the function it
+    mirrors.  Unlimited keys have no limit and no remaining.
+    """
+    if getattr(api_key, "unlimited", False):
+        return None, api_key.calls_used or 0, None
+    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
+    used = (api_key.calls_this_month or 0) if _is_paid_plan(api_key) else (api_key.calls_used or 0)
+    return included, used, max(included - used, 0)
 
 
 _QUOTA_MESSAGE = (
@@ -3020,10 +3036,24 @@ async def regenerate_linked_api_key(db: Session = Depends(get_db), user=Depends(
 # Usage tracking
 # ---------------------------------------------------------------------------
 
-def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: str = "unknown"):
+def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: str = "unknown",
+                response: Response = None):
     api_key.calls_used += count
     api_key.calls_this_month += count
     API_CALLS.labels(endpoint=endpoint).inc(count)
+
+    # Quota headers, alongside the X-RateLimit-* ones slowapi already stamps.
+    # Credits are NOT one-per-request -- /v1/prices and /v1/summary charge per
+    # day returned -- so without an in-band signal a developer's first hint
+    # that the trial is spent is a 402. X-Quota-Cost makes each call's price
+    # visible at the point it's paid.
+    if response is not None:
+        limit, used, remaining = _quota_snapshot(api_key)
+        response.headers["X-Quota-Cost"] = str(count)
+        response.headers["X-Quota-Limit"] = "unlimited" if limit is None else str(limit)
+        response.headers["X-Quota-Used"] = str(used)
+        if remaining is not None:
+            response.headers["X-Quota-Remaining"] = str(remaining)
 
     # Internal / dogfood keys skip metering entirely — counters still tick for
     # observability (calls_used, calls_this_month, Prometheus API_CALLS) so we
@@ -3116,13 +3146,12 @@ def api_usage(request: Request, response: Response, api_key=Depends(get_api_key)
     }
 
 
-@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored headlines for a given ticker. Use `limit` to control how many results are returned (max 100). Each call costs 1 API credit per 25 headlines.")
+@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored headlines for a given ticker. Use `limit` to control how many results are returned (1-100). Costs 1 API credit per 25 headlines actually returned; a 404 costs nothing.")
 @limiter.limit("30/minute")
-def api_sentiment(request: Request, response: Response, ticker: str, limit: int = 25, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+def api_sentiment(request: Request, response: Response, ticker: str,
+                  limit: int = Query(25, ge=1, le=100),
+                  db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
-    calls = math.ceil(limit / 25)
-    track_usage(api_key, db, calls, endpoint="sentiment")
-
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
     ).order_by(models.Headline.published_at.desc()).limit(limit).all()
@@ -3130,9 +3159,16 @@ def api_sentiment(request: Request, response: Response, ticker: str, limit: int 
     if not headlines:
         raise HTTPException(status_code=404, detail="No data found")
 
+    # Charged on rows actually returned, and only once the query succeeded --
+    # asking for 100 headlines on a ticker that has 3 costs 1 credit, and a
+    # 404 costs nothing.  See the note above api_prices.
+    calls = math.ceil(len(headlines) / 25)
+    track_usage(api_key, db, calls, endpoint="sentiment", response=response)
+
     return {
         "ticker": ticker.upper(),
         "limit": limit,
+        "returned": len(headlines),
         "calls_used": calls,
         "data": [
             {
@@ -3146,11 +3182,11 @@ def api_sentiment(request: Request, response: Response, ticker: str, limit: int 
     }
 
 
-@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily sentiment scores for a given ticker over the specified number of days. Each day costs 1 API credit.")
+@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily sentiment scores for a given ticker over the specified number of days (1-365). Costs 1 API credit per day actually returned; a 404 costs nothing.")
 @limiter.limit("20/minute")
-def api_summary(request: Request, response: Response, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db, days, endpoint="summary")
-
+def api_summary(request: Request, response: Response, ticker: str,
+                days: int = Query(30, ge=1, le=365),
+                db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     since = datetime.utcnow() - timedelta(days=days)
     headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper(),
@@ -3179,19 +3215,35 @@ def api_summary(request: Request, response: Response, ticker: str, days: int = 3
 
     summary.sort(key=lambda x: x["date"], reverse=True)
 
+    # Per DAY RETURNED, which is what the docs have always promised -- this
+    # used to charge `days` requested, so ?days=365 on a ticker with a week of
+    # coverage billed 365.  See the note above api_prices.
+    calls = len(summary)
+    track_usage(api_key, db, calls, endpoint="summary", response=response)
+
     return {
         "ticker": ticker.upper(),
         "days": days,
-        "calls_used": days,
+        "returned": len(summary),
+        "calls_used": calls,
         "data": summary
     }
 
 
-@app.get("/v1/prices/{ticker}", summary="Get historical prices", description="Returns daily close prices for a given ticker over the specified number of days, in the ticker's native currency (GBP for crypto, USD for stocks/ETFs/commodities, or a raw exchange rate for FX pairs) -- see the `currency` field on each row. Each day costs 1 API credit.")
+@app.get("/v1/prices/{ticker}", summary="Get historical prices", description="Returns daily close prices for a given ticker over the specified number of days (1-365), in the ticker's native currency (GBP for crypto, USD for stocks/ETFs/commodities, or a raw exchange rate for FX pairs) -- see the `currency` field on each row. Costs 1 API credit per day actually returned; a 404 costs nothing.")
 @limiter.limit("20/minute")
-def api_prices(request: Request, response: Response, ticker: str, days: int = 30, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db, days, endpoint="prices")
-
+def api_prices(request: Request, response: Response, ticker: str,
+               days: int = Query(30, ge=1, le=365),
+               db: Session = Depends(get_db), api_key=Depends(get_api_key)):
+    # Billing here is deliberately AFTER the query and sized to the rows that
+    # came back, for three reasons this endpoint got wrong at once:
+    #   * `days` was unbounded and drove the charge directly, so ?days=100000
+    #     billed 100,000 credits from a single unvalidated integer;
+    #   * a 404 still charged, because track_usage ran before the lookup;
+    #   * asking for 30 days of a ticker holding 5 cost 30 credits, though the
+    #     documented price has always been "1 call per day returned".
+    # Query(le=365) now rejects out-of-range input at validation time, i.e.
+    # before this function runs, so an oversized request costs nothing at all.
     since = datetime.utcnow() - timedelta(days=days)
     prices = db.query(models.Price).filter(
         models.Price.ticker == ticker.upper(),
@@ -3208,10 +3260,14 @@ def api_prices(request: Request, response: Response, ticker: str, days: int = 30
     category = _category_for(ticker.upper())
     currency = "GBP" if category == "crypto" else "RATE" if category == "fx" else "USD"
 
+    calls = len(prices)
+    track_usage(api_key, db, calls, endpoint="prices", response=response)
+
     return {
         "ticker": ticker.upper(),
         "days": days,
-        "calls_used": days,
+        "returned": len(prices),
+        "calls_used": calls,
         "currency": currency,
         "data": [
             {
@@ -3226,7 +3282,6 @@ def api_prices(request: Request, response: Response, ticker: str, days: int = 30
 @app.get("/v1/correlation/{ticker}", summary="Get sentiment-price correlation", description="Returns a 180-day Pearson correlation analysis between sentiment shifts and next-day price returns, including signal strength, direction, and 95% confidence interval. Costs 1 API credit.")
 @limiter.limit("10/minute")
 def api_correlation(request: Request, response: Response, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
-    track_usage(api_key, db, endpoint="correlation")
     since = datetime.utcnow() - timedelta(days=180)
 
     headlines = db.query(models.Headline).filter(
@@ -3241,6 +3296,10 @@ def api_correlation(request: Request, response: Response, ticker: str, db: Sessi
 
     if len(headlines) < 30 or len(prices) < 30:
         raise HTTPException(status_code=404, detail="Not enough data")
+
+    # Flat 1 credit, but charged only once we know we can answer -- this used
+    # to bill ahead of the "Not enough data" 404 above.
+    track_usage(api_key, db, endpoint="correlation", response=response)
 
     daily = defaultdict(lambda: {"scores": [], "weights": []})
     for h in headlines:
