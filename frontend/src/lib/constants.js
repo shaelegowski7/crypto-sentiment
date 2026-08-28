@@ -137,10 +137,18 @@ export function toSentimentDelta(v) {
   return Math.round(v * 50)
 }
 
-export const redirectToCheckout = async (priceId) => {
-  const res = await fetch(`${API}/create-checkout-session?price_id=${priceId}`, {
+// `email` is optional but should be passed whenever a user is signed in.
+// The webhook credits the purchase by email, and the address typed into
+// Stripe Checkout is a different free-text field from the account's own —
+// without this, paying with a second address silently upgrades nobody.
+// Sent as metadata.sfx_email, which the webhook prefers over Stripe's echo.
+export const redirectToCheckout = async (priceId, email) => {
+  const qs = `price_id=${encodeURIComponent(priceId)}`
+    + (email ? `&email=${encodeURIComponent(email)}` : "")
+  const res = await fetch(`${API}/create-checkout-session?${qs}`, {
     method: "POST",
   })
   const data = await res.json()
+  if (!data.url) throw new Error(data.detail || "Checkout unavailable")
   window.location.href = data.url
 }

@@ -191,8 +191,8 @@ function DetailView({ date, session, openAuth }) {
               </span>
               {session ? (
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw")}>£11.99 / mo</button>
-                  <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0K2NzVdYK0wrcGf1mz1s")}>£99.99 / yr</button>
+                  <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw", session?.user?.email)}>£11.99 / mo</button>
+                  <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0K2NzVdYK0wrcGf1mz1s", session?.user?.email)}>£99.99 / yr</button>
                 </div>
               ) : (
                 <button className="upgrade-btn" onClick={() => openAuth("signup")}>Sign In / Sign Up</button>

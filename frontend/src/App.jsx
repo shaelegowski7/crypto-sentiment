@@ -1407,9 +1407,16 @@ function Dashboard() {
   const [candleData, setCandleData] = useState([])
   const [candleLoading, setCandleLoading] = useState(false)
 
-  const urlParams = new URLSearchParams(window.location.search)
-  const checkoutSuccess = urlParams.get("success")
-  const checkoutCancelled = urlParams.get("cancelled")
+  // Captured once at mount, NOT read live from the URL on every render: the
+  // effect below strips these params via replaceState, so a derived-on-render
+  // version blanks itself as soon as anything re-renders (the session fetch
+  // resolving, a few hundred ms in) and the confirmation never gets read.
+  const [checkoutStatus] = useState(() => {
+    const p = new URLSearchParams(window.location.search)
+    return p.get("success") ? "success" : p.get("cancelled") ? "cancelled" : null
+  })
+  const checkoutSuccess = checkoutStatus === "success"
+  const checkoutCancelled = checkoutStatus === "cancelled"
 
   const isPro = profile?.tier === "pro" || profile?.tier === "data"
   const isFX = FX_TICKERS.includes(ticker)
@@ -1488,6 +1495,25 @@ function Dashboard() {
       .single()
       .then(({ data }) => setProfile(data ?? {}))
   }, [user])
+
+  // Stripe redirects the buyer back here the moment payment clears, but the
+  // tier only changes when our webhook lands — a separate, asynchronous trip.
+  // Without this the first thing a new subscriber sees is "Payment successful"
+  // sitting above a FREE badge and still-locked tickers, which reads as the
+  // payment having failed. Re-poll the profile briefly until the tier catches
+  // up, then stop; the effect is inert for everyone not returning from checkout.
+  useEffect(() => {
+    if (checkoutStatus !== "success" || !user || isPro) return
+    let attempts = 0
+    const id = setInterval(async () => {
+      attempts += 1
+      const { data } = await supabase
+        .from("profiles").select("*").eq("id", user.id).single()
+      if (data?.tier && data.tier !== "free") { setProfile(data); clearInterval(id) }
+      else if (attempts >= 10) clearInterval(id)   // ~20s, then leave it to a reload
+    }, 2000)
+    return () => clearInterval(id)
+  }, [checkoutStatus, user, isPro])
 
   useEffect(() => {
     fetchDashboard(range, 1, ticker)
@@ -1900,10 +1926,10 @@ function Dashboard() {
                 <strong>Free tier:</strong> {FREE_TICKERS.length} top tickers · 30 day history · Upgrade to Pro for all 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, 1,000 API calls/mo, alerts and morning brief.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw")}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw", user?.email)}>
                   £11.99 / mo
                 </button>
-                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0K2NzVdYK0wrcGf1mz1s")}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0K2NzVdYK0wrcGf1mz1s", user?.email)}>
                   £99.99 / yr
                 </button>
               </div>
@@ -1916,10 +1942,10 @@ function Dashboard() {
                 <strong style={{ color: "var(--accent2)" }}>Pro plan active.</strong> Upgrade to Data for 5,000 API calls/mo included.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TUqVG2NzVdYK0wrKrPTE28e")}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TUqVG2NzVdYK0wrKrPTE28e", user?.email)}>
                   £49.99 / mo
                 </button>
-                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TUqVx2NzVdYK0wryheortJg")}>
+                <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TUqVx2NzVdYK0wryheortJg", user?.email)}>
                   £499.99 / yr
                 </button>
               </div>
@@ -1929,7 +1955,10 @@ function Dashboard() {
           {checkoutSuccess && (
             <div className="upgrade-banner" style={{ borderColor: "rgba(63,185,80,0.3)", background: "rgba(63,185,80,0.04)" }}>
               <span className="upgrade-text">
-                <strong style={{ color: "var(--positive)" }}>Payment successful!</strong> Your Pro account is now active. Welcome aboard.
+                <strong style={{ color: "var(--positive)" }}>Payment successful!</strong>{" "}
+                {isPro
+                  ? `Your ${profile?.tier === "data" ? "Data" : "Pro"} account is now active. Welcome aboard.`
+                  : "Activating your account — this takes a few seconds. If the badge above still says FREE in a minute, reload the page."}
               </span>
             </div>
           )}
