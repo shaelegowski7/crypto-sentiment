@@ -1092,6 +1092,7 @@ function BacktestPanel({ ticker }) {
   const [btThresholdS, setBtThresholdS] = useState("")
   const [btThresholdP, setBtThresholdP] = useState("")
   const [btShiftThresh, setBtShiftThresh] = useState("")
+  const [btDonchianN, setBtDonchianN] = useState("")
 
   useEffect(() => {
     let cancelled = false
@@ -1110,11 +1111,12 @@ function BacktestPanel({ ticker }) {
     if (btThresholdS !== "") params.set("threshold_s", btThresholdS)
     if (btThresholdP !== "") params.set("threshold_p", btThresholdP)
     if (btShiftThresh !== "") params.set("shift_thresh", btShiftThresh)
+    if (btDonchianN !== "") params.set("donchian_n", btDonchianN)
     axios.get(`${API}/backtest/${ticker}?${params.toString()}`)
       .then(r => { if (!cancelled) { setBtData(r.data); setBtLoading(false) } })
       .catch(() => { if (!cancelled) { setBtData({ error: true }); setBtLoading(false) } })
     return () => { cancelled = true }
-  }, [ticker, btSignal, btHoldDays, btDirection, btCostsMode, btCostsCustom, btStopLoss, btTakeProfit, btSize, btThresholdS, btThresholdP, btShiftThresh])
+  }, [ticker, btSignal, btHoldDays, btDirection, btCostsMode, btCostsCustom, btStopLoss, btTakeProfit, btSize, btThresholdS, btThresholdP, btShiftThresh, btDonchianN])
 
   const summary = btData?.summary?.[btView]
   const costsPctPerTrade = btData?.summary?.costs_pct_per_trade
@@ -1164,9 +1166,9 @@ function BacktestPanel({ ticker }) {
         <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={ctrlLabelStyle}>SIGNAL</span>
-            {["divergence", "shift"].map(s => (
+            {["divergence", "shift", "donchian"].map(s => (
               <button key={s} className={`seg-btn ${btSignal === s ? "active" : ""}`} onClick={() => setBtSignal(s)}>
-                {s === "divergence" ? "DIVERGENCE" : "SHIFT"}
+                {s === "divergence" ? "DIVERGENCE" : s === "shift" ? "SHIFT" : "TREND"}
               </button>
             ))}
           </div>
@@ -1235,6 +1237,12 @@ function BacktestPanel({ ticker }) {
                       value={btThresholdP} onChange={e => setBtThresholdP(e.target.value)} />
                   </div>
                 </>
+              ) : btSignal === "donchian" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={ctrlLabelStyle}>LOOKBACK (D)</span>
+                  <input className="alert-input" style={numInputStyle} type="number" step="1" min="5" max="200" placeholder="20"
+                    value={btDonchianN} onChange={e => setBtDonchianN(e.target.value)} />
+                </div>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span style={ctrlLabelStyle}>SHIFT THRESH</span>
@@ -1552,7 +1560,10 @@ function BacktestPanel({ ticker }) {
             )}
 
             <div className="disclaimer">
-              ⚠ {btDirection === "contrarian" ? "Contrarian (buy-the-panic)" : "Long-only momentum"} strategy. Entry at next close after signal
+              ⚠ {btSignal === "donchian"
+                ? `Price-only trend signal (${btDonchianN || 20}-day breakout), no sentiment involved. Historically a drawdown-reduction overlay on crypto — it cut the losing years hard but earned less than buy-and-hold overall. `
+                : ""}
+              {btDirection === "contrarian" ? "Contrarian (buy-the-panic)" : "Long-only momentum"} strategy. Entry at next close after signal
               {(btStopLoss || btTakeProfit) ? ", exits early on stop-loss/take-profit or " : ", exit "}
               after {btHoldDays} calendar days. Past results do not predict future performance. Not financial advice.
             </div>
