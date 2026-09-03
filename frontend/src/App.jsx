@@ -454,7 +454,7 @@ function TodaysSignalCard({ signal, trend, loading }) {
             Sentiment Score
             <InfoTip text="Average FinBERT score across today's headlines. Ranges from 0 (very negative) to 100 (very positive), 50 is neutral. Scored using a financial-domain AI model." />
           </div>
-          <SentimentGauge score={toSentimentScale(signal.score)} />
+          <SentimentGauge score={signal.scoreDisplay ?? toSentimentScale(signal.score)} />
         </div>
 
         <div className="signal-divider" />
@@ -475,19 +475,26 @@ function TodaysSignalCard({ signal, trend, loading }) {
                 Predictive Link
                 <InfoTip text="How reliably sentiment shifts have led next-day price moves over the last 180 days, measured as a Pearson correlation (r). r runs -1 to +1 — positive means price tends to follow sentiment, negative means it moves opposite, and near 0 means no relationship. Strength accounts for both effect size and statistical significance." />
               </div>
-              {/* Lead with the plain-English verdict; r stays on its standard
-                  -1..+1 scale underneath (deliberately NOT rescaled to 0-100
-                  like sentiment — the sign carries the meaning, and the CI /
-                  p-value alongside it are defined on that same scale). */}
-              <div className="signal-metric-value signal-strength-value" style={{
+              {/* Lead with r, like every other metric in this row leads with
+                  its number — a word in the number slot broke the rhythm and
+                  made the weakest card the loudest. r stays on its standard
+                  -1..+1 scale (deliberately NOT rescaled to 0-100 like
+                  sentiment: the sign carries meaning, and the CI / p-value
+                  alongside it are defined on that scale).
+
+                  Colour still encodes CONFIDENCE, not direction — a muted
+                  +0.044 reads as "don't lean on this", which is the honest
+                  rendering of an inconclusive correlation. */}
+              <div className="signal-metric-value" style={{
                 color: signal.strength === "strong" ? "var(--positive)"
                   : signal.strength === "weak" ? "var(--accent)"
                   : "var(--muted)",
               }}>
-                {(signal.strength ?? "unknown").toUpperCase()}
+                <span className="signal-metric-unit">r</span>
+                {signal.correlation > 0 ? "+" : ""}{signal.correlation}
               </div>
               <div className="signal-metric-sub">
-                r = {signal.correlation > 0 ? "+" : ""}{signal.correlation} · n={signal.sampleSize ?? "?"}
+                {(signal.strength ?? "unknown").toUpperCase()} · n={signal.sampleSize ?? "?"}
               </div>
             </div>
           </>
@@ -1674,6 +1681,11 @@ function Dashboard() {
       : "NEUTRAL",
     sentimentLabel: signalData.today.sentiment_label,
     score: signalData.today.sentiment,
+    // Backend-computed 0-100 score. Rescaling `sentiment` here instead
+    // double-rounds and can disagree with the summary sentence by a point.
+    // Falls back to the local rescale so this still renders against an API
+    // that predates the field.
+    scoreDisplay: signalData.today.sentiment_display ?? null,
     strength: getPrimary(correlation)?.strength ?? "inconclusive",
     isMomentum: getPrimary(correlation)?.direction?.includes("momentum") ?? null,
     correlation: getPrimary(correlation)?.correlation ?? null,

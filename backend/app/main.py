@@ -2193,7 +2193,15 @@ def get_signal(ticker: str, db: Session = Depends(get_db)):
         "date": str(most_recent),
         "today": {
             "sentiment": round(today_sentiment, 3),
+            # The 0-100 number the UI shows, computed here from the
+            # full-precision value. The frontend used to rescale `sentiment`
+            # itself, which double-rounds: at today_sentiment ≈ 0.0496 the
+            # summary said 52 while the gauge said 53, because 0.0496 -> 0.05
+            # -> 52.5 -> 53. Python's banker's rounding and JS's round-half-up
+            # disagree on .5 too. One computation, one number, both places.
+            "sentiment_display": display_sentiment,
             "shift": round(today_shift, 3),
+            "shift_display": display_shift,
             "shift_direction": shift_direction,
             "shift_percentile": percentile,
             "shift_magnitude": magnitude,
