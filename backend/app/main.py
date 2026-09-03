@@ -3842,6 +3842,7 @@ def get_backtest(
     threshold_s: float | None = None,
     threshold_p: float | None = None,
     shift_thresh: float | None = None,
+    donchian_n: int | None = None,
     db: Session = Depends(get_db),
 ):
     """Interactive backtest for any tracked ticker (crypto/FX/stocks/ETFs/
@@ -3862,10 +3863,21 @@ def get_backtest(
 
     `summary` now reports both `gross` and `net` (cost-adjusted) blocks, same
     convention as the admin board — `net` is the honest number.
+
+    `signal=donchian` is the price-only trend signal (`donchian_n` lookback,
+    default 20): long above the trailing n-day high, flat below the low. It
+    is the only one of the three with out-of-sample support — the sentiment
+    signals test as null — but it is a drawdown-reduction overlay, not an
+    alpha engine: it historically earns *less* than buy-and-hold on crypto
+    while cutting the losing years hard. Deliberately NOT wired into alert
+    generation or /admin/backtest-board, both of which stay pinned to
+    `shift` so the SignalQuality gate keeps measuring the shipped strategy.
     """
     hold_days = max(1, min(hold_days, 30))
-    if signal not in ("divergence", "shift"):
-        raise HTTPException(status_code=400, detail="signal must be 'divergence' or 'shift'")
+    if signal not in ("divergence", "shift", "donchian"):
+        raise HTTPException(status_code=400, detail="signal must be 'divergence', 'shift' or 'donchian'")
+    if donchian_n is not None and not (5 <= donchian_n <= 200):
+        raise HTTPException(status_code=400, detail="donchian_n must be between 5 and 200")
     if direction_mode not in ("momentum", "contrarian"):
         raise HTTPException(status_code=400, detail="direction_mode must be 'momentum' or 'contrarian'")
     if costs_bps is not None:
@@ -3894,13 +3906,17 @@ def get_backtest(
         models.Price.date >= since
     ).order_by(models.Price.date).all()
 
-    if len(headlines) < 20 or len(prices) < 30:
+    # donchian is price-only, so the headline/overlap floors don't apply to it
+    # — that's what lets it run on thinly-covered tickers (FX, commodities)
+    # where the sentiment signals have never had enough news to fire.
+    needs_sentiment = signal != "donchian"
+    if len(prices) < 30 or (needs_sentiment and len(headlines) < 20):
         return {"message": "Not enough data", "trades": [], "equity_curve": []}
 
     daily_sentiment, daily_price, common = _build_daily_series(headlines, prices)
     sorted_price_dates = sorted(daily_price.keys())
 
-    if len(common) < 20:
+    if needs_sentiment and len(common) < 20:
         return {"message": "Not enough overlapping data", "trades": [], "equity_curve": []}
 
     costs_pct = _costs_pct_for(ticker, costs_bps)
@@ -3911,6 +3927,7 @@ def get_backtest(
         direction_mode=direction_mode,
         threshold_s=threshold_s, threshold_p=threshold_p, shift_thresh=shift_thresh,
         stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct, size_pct=size_pct,
+        donchian_n=donchian_n,
     )
 
     if not trades_raw:
@@ -4088,6 +4105,7 @@ def _simulate_trades(
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     size_pct: float = 100.0,
+    donchian_n: int | None = None,
 ) -> list:
     """Shared trade-simulation core for get_backtest, _compact_backtest_summary
     and _regime_split_stats — the single place the divergence/shift signal
@@ -4121,17 +4139,51 @@ def _simulate_trades(
     `size_pct` (0-100, default 100) scales each trade's contribution to
     compounding — the untraded remainder is implicitly flat cash. At the
     default 100 this is a no-op (sized_return_pct == gross_return_pct).
+
+    `donchian_n` (default 20) is the lookback for the price-only "donchian"
+    trend signal. Unlike divergence/shift it uses no sentiment at all, so it
+    runs on every price date rather than the sentiment∩price intersection.
+
+    NOTE on donchian fidelity: the strategy this signal is derived from is a
+    *stateful* position — long from an upside break until the next downside
+    break, trading only on state changes. This engine is discrete-trade
+    (enter, hold `hold_days`, exit), so it re-enters while the trend state
+    stays long and therefore pays more turnover than the continuous version.
+    Larger `hold_days` tracks the original more closely; small values
+    overstate costs. Same signal, different execution model.
     """
-    if len(common) < 14:
+    sorted_price_dates = sorted(daily_price.keys())
+    dn = donchian_n if donchian_n is not None else 20
+    if signal == "donchian":
+        # Needs price only, so the sentiment-intersection floor doesn't apply.
+        if len(sorted_price_dates) < dn + 5:
+            return []
+    elif len(common) < 14:
         return []
 
-    sorted_price_dates = sorted(daily_price.keys())
     ts = threshold_s if threshold_s is not None else 0.02
     tp_thr = threshold_p if threshold_p is not None else 0.5
     st = shift_thresh if shift_thresh is not None else 0.05
 
     signal_series = {}
-    if signal == "divergence":
+    if signal == "donchian":
+        # Trend state: long once price breaks the trailing dn-day high, flat
+        # once it breaks the low, carried forward in between. Emitted every
+        # day (not just on the break) so the trade loop keeps re-entering
+        # while the trend holds, rather than firing once and going quiet.
+        state = None
+        for i, d in enumerate(sorted_price_dates):
+            if i < dn:
+                continue
+            window = [daily_price[x] for x in sorted_price_dates[i - dn:i]]
+            px_d = daily_price[d]
+            if px_d > max(window):
+                state = "bullish"
+            elif px_d < min(window):
+                state = "bearish"
+            if state:
+                signal_series[d] = state
+    elif signal == "divergence":
         for i in range(14, len(common) + 1):
             window = common[i - 14:i]
             p7, r7 = window[:7], window[7:]
