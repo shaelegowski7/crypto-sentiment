@@ -1110,12 +1110,15 @@
   margin-top: 5px;
 }
 
-/* Word-length verdict (STRONG / WEAK / INCONCLUSIVE) in a slot sized for a
-   short number — needs to be smaller so "INCONCLUSIVE" doesn't blow out the
-   column on narrow screens. */
-.signal-strength-value {
-  font-size: 15px;
-  letter-spacing: 0.06em;
+/* Small unit prefix inside a metric value ("r" before the correlation), so
+   the number reads as the value and the symbol as its label rather than
+   competing for the same weight. */
+.signal-metric-unit {
+  font-size: 0.55em;
+  font-weight: 500;
+  color: var(--muted);
+  margin-right: 3px;
+  vertical-align: 0.12em;
 }
 
 .signal-divider {
