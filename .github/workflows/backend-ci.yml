@@ -48,4 +48,10 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run smoke tests
-        run: pytest tests/ -v
+        # `python -m pytest`, not bare `pytest`. tests/ has no __init__.py, so
+        # pytest's default "prepend" import mode puts backend/tests on
+        # sys.path instead of backend/, and `from app.main import app` dies at
+        # collection with ModuleNotFoundError: No module named 'app'. The -m
+        # form puts the working directory (backend/) on sys.path first, which
+        # is why this passes locally and the console script never did.
+        run: python -m pytest tests/ -v
