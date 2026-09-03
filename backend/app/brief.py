@@ -261,7 +261,10 @@ def build_email_html(ticker_data: list[dict], ai_summary: str, unsubscribe_url: 
         &nbsp;&middot;&nbsp;
         <a href="{unsubscribe_url}" style="color:#8b95a7;text-decoration:none;">UNSUBSCRIBE</a>
       </div>
-      <div style="font-family:{MONO};font-size:9px;color:#2a2f3a;margin-top:8px;letter-spacing:0.05em;">NOT FINANCIAL ADVICE</div>
+      <!-- Same colour as the links above it: #2a2f3a on this near-black
+           ground was ~1.4:1 contrast, i.e. invisible. A disclaimer nobody
+           can read is worse than none — it looks deliberate. -->
+      <div style="font-family:{MONO};font-size:10px;color:#8b95a7;margin-top:8px;letter-spacing:0.05em;">NOT FINANCIAL ADVICE</div>
     </div>
 
   </div>

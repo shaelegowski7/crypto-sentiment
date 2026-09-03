@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react"
+import { useState, useEffect, useMemo, lazy, Suspense } from "react"
 import axios from "axios"
 import { supabase } from "./supabaseClient"
 import AuthModal from "./AuthModal"
@@ -965,6 +965,124 @@ const BT_DATE_FMT = (s) => {
   return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" })
 }
 
+// ─── Edge quality ──────────────────────────────────────────────────────────
+// Win rate on its own decides nothing: what matters is whether the average
+// win covers the average loss plus costs.  Breakeven win rate is the bar the
+// actual win rate has to clear —
+//     expectancy = w·avgWin + (1-w)·avgLoss − costs = 0
+//   → w = (costs + |avgLoss|) / (avgWin + |avgLoss|)
+// Trade `return_pct` from the API is gross, so costs are applied here and
+// only in the "net" view.
+//
+// `drag` is the gap between the arithmetic mean per trade and the compounded
+// (geometric) mean — the penalty variance imposes on compounding, ≈ σ²/2.
+// A strategy has to beat costs *and* drag, which is why a positive average
+// trade can still end the year down.
+function _edgeStats(trades, costsPct, windowDays) {
+  const rets = trades.map(t => t.return_pct).filter(v => typeof v === "number" && isFinite(v))
+  const n = rets.length
+  if (n < 2) return null
+  const c = costsPct || 0
+  const wins = rets.filter(r => r > 0)
+  const losses = rets.filter(r => r <= 0)
+  const avgWin = wins.length ? wins.reduce((a, b) => a + b, 0) / wins.length : 0
+  const avgLoss = losses.length ? losses.reduce((a, b) => a + b, 0) / losses.length : 0
+  const spread = avgWin + Math.abs(avgLoss)
+
+  const arith = rets.reduce((a, b) => a + b, 0) / n - c
+  let eq = 1
+  for (const r of rets) eq *= 1 + (r - c) / 100
+  // A single -100% trade would zero the product; guard the log-space step.
+  const geo = eq > 0 ? (Math.pow(eq, 1 / n) - 1) * 100 : null
+
+  let daysIn = 0
+  for (const t of trades) {
+    const a = Date.parse(t.entry_date), b = Date.parse(t.exit_date)
+    if (isFinite(a) && isFinite(b) && b > a) daysIn += (b - a) / 86400000
+  }
+
+  return {
+    n,
+    payoff: avgLoss !== 0 ? avgWin / Math.abs(avgLoss) : null,
+    breakeven: spread > 0 ? (c + Math.abs(avgLoss)) / spread : null,
+    expectancy: arith,
+    drag: geo == null ? null : arith - geo,
+    avgWin,
+    avgLoss,
+    timeInMarket: windowDays > 0 ? daysIn / windowDays : null,
+  }
+}
+
+// Deterministic PRNG so the null model returns the same number on every
+// re-render rather than flickering.
+function _mulberry32(seed) {
+  return function () {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// ─── Random-entry null model ───────────────────────────────────────────────
+// The honest test of a signal: replace it with a coin and change nothing
+// else.  Same trade count, same holding period, same costs, same window,
+// entries drawn at random.  A strategy sitting mid-distribution has no edge
+// however good its equity curve looks, and on fat-tailed assets the random
+// spread is wide enough that most "good" results sit well inside it.
+//
+// Runs entirely client-side: `equity_curve[].buy_hold` is the cumulative
+// return of holding, so 1 + buy_hold/100 recovers the relative price path
+// that's already in the response.  Holding period is taken as the median
+// span of the real trades measured in curve rows, so the null matches
+// whatever the strategy actually did (including non-trading days).
+function _randomEntryNull({ equityCurve, trades, costsPct, strategyReturnPct, trials = 6000 }) {
+  if (!equityCurve?.length || !trades?.length || typeof strategyReturnPct !== "number") return null
+  const px = equityCurve.map(r => 1 + (r.buy_hold ?? 0) / 100)
+  if (px.length < 10 || px.some(v => !(v > 0))) return null
+
+  const idxOf = new Map()
+  equityCurve.forEach((r, i) => { if (r.date && !idxOf.has(r.date)) idxOf.set(r.date, i) })
+  const spans = []
+  for (const t of trades) {
+    const a = idxOf.get(t.entry_date), b = idxOf.get(t.exit_date)
+    if (a != null && b != null && b > a) spans.push(b - a)
+  }
+  if (spans.length < 3) return null
+  spans.sort((a, b) => a - b)
+  const hold = spans[Math.floor(spans.length / 2)]
+
+  const n = trades.length
+  const room = px.length - 1 - hold * n
+  if (hold < 1 || room < 0) return null   // window can't fit n disjoint holds
+
+  const c = costsPct || 0
+  const rand = _mulberry32((n * 73856093) ^ (hold * 19349663) ^ px.length)
+  const out = new Float64Array(trials)
+  const picks = new Int32Array(n)
+  for (let k = 0; k < trials; k++) {
+    for (let i = 0; i < n; i++) picks[i] = Math.floor(rand() * (room + 1))
+    picks.sort()                       // TypedArray sorts numerically
+    let eq = 1
+    for (let i = 0; i < n; i++) {
+      const a = picks[i] + hold * i
+      const b = Math.min(a + hold, px.length - 1)
+      eq *= 1 + ((px[b] - px[a]) / px[a] * 100 - c) / 100
+    }
+    out[k] = (eq - 1) * 100
+  }
+  out.sort()
+
+  let below = 0
+  for (let i = 0; i < trials; i++) if (out[i] < strategyReturnPct) below++
+  const at = (q) => out[Math.min(trials - 1, Math.max(0, Math.floor(q * trials)))]
+  return {
+    percentile: (below / trials) * 100,
+    median: at(0.5), p5: at(0.05), p95: at(0.95),
+    hold, n, trials,
+  }
+}
+
 function BacktestPanel({ ticker }) {
   const [btData, setBtData] = useState(null)
   const [btLoading, setBtLoading] = useState(false)
@@ -981,6 +1099,7 @@ function BacktestPanel({ ticker }) {
   const [btThresholdS, setBtThresholdS] = useState("")
   const [btThresholdP, setBtThresholdP] = useState("")
   const [btShiftThresh, setBtShiftThresh] = useState("")
+  const [btDonchianN, setBtDonchianN] = useState("")
 
   useEffect(() => {
     let cancelled = false
@@ -999,20 +1118,39 @@ function BacktestPanel({ ticker }) {
     if (btThresholdS !== "") params.set("threshold_s", btThresholdS)
     if (btThresholdP !== "") params.set("threshold_p", btThresholdP)
     if (btShiftThresh !== "") params.set("shift_thresh", btShiftThresh)
+    if (btDonchianN !== "") params.set("donchian_n", btDonchianN)
     axios.get(`${API}/backtest/${ticker}?${params.toString()}`)
       .then(r => { if (!cancelled) { setBtData(r.data); setBtLoading(false) } })
       .catch(() => { if (!cancelled) { setBtData({ error: true }); setBtLoading(false) } })
     return () => { cancelled = true }
-  }, [ticker, btSignal, btHoldDays, btDirection, btCostsMode, btCostsCustom, btStopLoss, btTakeProfit, btSize, btThresholdS, btThresholdP, btShiftThresh])
+  }, [ticker, btSignal, btHoldDays, btDirection, btCostsMode, btCostsCustom, btStopLoss, btTakeProfit, btSize, btThresholdS, btThresholdP, btShiftThresh, btDonchianN])
 
   const summary = btData?.summary?.[btView]
   const costsPctPerTrade = btData?.summary?.costs_pct_per_trade
-  const trades = btData?.trades ?? []
+  // Memoised so the `?? []` fallback can't hand the null model a fresh array
+  // identity on every render and re-run 6,000 simulated trials for nothing.
+  const trades = useMemo(() => btData?.trades ?? [], [btData])
   const byRegime = btData?.by_regime
   const walkForward = btData?.walk_forward
   const btNativeCurrency = nativeCurrencyFor(ticker)
   const priceUnitLabel = btNativeCurrency === "GBP" ? " (£)" : btNativeCurrency === "USD" ? " ($)" : ""
-  const equityCurve = btData?.equity_curve ?? []
+  const equityCurve = useMemo(() => btData?.equity_curve ?? [], [btData])
+
+  // Costs only bite in the net view; the gross view compares like for like.
+  const btCostsApplied = btView === "net" ? (costsPctPerTrade ?? 0) : 0
+  const edge = useMemo(
+    () => (trades.length ? _edgeStats(trades, btCostsApplied, btData?.window_days ?? 0) : null),
+    [trades, btCostsApplied, btData?.window_days],
+  )
+  const nullModel = useMemo(
+    () => _randomEntryNull({
+      equityCurve,
+      trades,
+      costsPct: btCostsApplied,
+      strategyReturnPct: summary?.total_return_pct,
+    }),
+    [equityCurve, trades, btCostsApplied, summary?.total_return_pct],
+  )
 
   const retColor = (v) => v > 0 ? "var(--positive)" : v < 0 ? "var(--negative)" : "var(--muted)"
   const ctrlLabelStyle = { fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", letterSpacing: "0.08em" }
@@ -1035,9 +1173,9 @@ function BacktestPanel({ ticker }) {
         <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={ctrlLabelStyle}>SIGNAL</span>
-            {["divergence", "shift"].map(s => (
+            {["divergence", "shift", "donchian"].map(s => (
               <button key={s} className={`seg-btn ${btSignal === s ? "active" : ""}`} onClick={() => setBtSignal(s)}>
-                {s === "divergence" ? "DIVERGENCE" : "SHIFT"}
+                {s === "divergence" ? "DIVERGENCE" : s === "shift" ? "SHIFT" : "TREND"}
               </button>
             ))}
           </div>
@@ -1106,6 +1244,12 @@ function BacktestPanel({ ticker }) {
                       value={btThresholdP} onChange={e => setBtThresholdP(e.target.value)} />
                   </div>
                 </>
+              ) : btSignal === "donchian" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={ctrlLabelStyle}>LOOKBACK (D)</span>
+                  <input className="alert-input" style={numInputStyle} type="number" step="1" min="5" max="200" placeholder="20"
+                    value={btDonchianN} onChange={e => setBtDonchianN(e.target.value)} />
+                </div>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span style={ctrlLabelStyle}>SHIFT THRESH</span>
@@ -1162,12 +1306,22 @@ function BacktestPanel({ ticker }) {
                 </div>
                 <div className="stat-sub">compounded</div>
               </div>
+              {/* Graded against breakeven, not against 50%.  With a payoff
+                  ratio below 1 a coin-flip win rate still loses money, so
+                  colouring on 50% marks losing strategies green. */}
               <div className="stat-card">
                 <div className="stat-label">Win Rate</div>
-                <div className="stat-value" style={{ color: summary.win_rate >= 0.5 ? "var(--positive)" : "var(--negative)" }}>
+                <div className="stat-value" style={{
+                  color: edge?.breakeven != null
+                    ? (summary.win_rate >= edge.breakeven ? "var(--positive)" : "var(--negative)")
+                    : "var(--text)",
+                }}>
                   {(summary.win_rate * 100).toFixed(0)}%
                 </div>
-                <div className="stat-sub">{summary.winning_trades}/{summary.total_trades} trades</div>
+                <div className="stat-sub">
+                  {summary.winning_trades}/{summary.total_trades} trades
+                  {edge?.breakeven != null && ` · needs ${(edge.breakeven * 100).toFixed(0)}%`}
+                </div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Avg / Trade</div>
@@ -1191,6 +1345,83 @@ function BacktestPanel({ ticker }) {
                 <div className="stat-sub">annualised</div>
               </div>
             </div>
+
+            {/* Edge quality.  The row above describes what happened; this one
+                describes whether it means anything.  Kept separate on
+                purpose — total return and win rate are the two numbers most
+                often read as proof when they are nothing of the kind. */}
+            {edge && (
+              <div>
+                <div style={sectionLabelStyle}>EDGE QUALITY</div>
+                <div className="stat-row">
+                  <div className="stat-card">
+                    <div className="stat-label">Expectancy / Trade</div>
+                    <div className="stat-value" style={{ color: retColor(edge.expectancy) }}>
+                      {edge.expectancy > 0 ? "+" : ""}{edge.expectancy.toFixed(2)}%
+                    </div>
+                    <div className="stat-sub">
+                      {btView === "net" ? `after ${btCostsApplied.toFixed(2)}% cost/trade` : "before costs"}
+                    </div>
+                  </div>
+
+                  {/* Deliberately uncoloured: a payoff ratio is neither good
+                      nor bad on its own, only against the win rate. */}
+                  <div className="stat-card">
+                    <div className="stat-label">Payoff Ratio</div>
+                    <div className="stat-value" style={{ color: "var(--text)" }}>
+                      {edge.payoff != null ? edge.payoff.toFixed(2) : "—"}
+                    </div>
+                    <div className="stat-sub">
+                      avg +{edge.avgWin.toFixed(2)}% / {edge.avgLoss.toFixed(2)}%
+                    </div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-label">vs Random Entry</div>
+                    <div className="stat-value" style={{
+                      color: !nullModel ? "var(--muted)"
+                        : nullModel.percentile >= 95 ? "var(--positive)"
+                        : nullModel.percentile <= 5 ? "var(--negative)"
+                        : "var(--muted)",
+                    }}>
+                      {nullModel ? `${nullModel.percentile.toFixed(0)}%ile` : "—"}
+                    </div>
+                    <div className="stat-sub">
+                      {!nullModel ? "window too short to simulate"
+                        : nullModel.percentile >= 95 ? `beats ${nullModel.percentile.toFixed(0)}% of coin flips`
+                        : nullModel.percentile <= 5 ? `worse than ${(100 - nullModel.percentile).toFixed(0)}% of coin flips`
+                        : `inside the noise band · median ${nullModel.median.toFixed(1)}%`}
+                    </div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-label">Time in Market</div>
+                    <div className="stat-value" style={{ color: "var(--text)" }}>
+                      {edge.timeInMarket != null ? `${(edge.timeInMarket * 100).toFixed(0)}%` : "—"}
+                    </div>
+                    <div className="stat-sub">exposure behind the alpha</div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-label">Friction</div>
+                    <div className="stat-value" style={{ color: "var(--text)" }}>
+                      {(edge.n * btCostsApplied).toFixed(1)}%
+                    </div>
+                    <div className="stat-sub">
+                      costs over {edge.n} trades
+                      {edge.drag != null && ` · drag ${edge.drag.toFixed(2)}%/trade`}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontFamily: "var(--mono)", fontSize: "10px", color: "var(--muted)", marginTop: "10px", lineHeight: 1.6 }}>
+                  Win rate is graded against breakeven, not 50% — with a payoff ratio under 1.00 a coin-flip win
+                  rate still loses money.
+                  {nullModel && ` "vs Random Entry" replays ${nullModel.trials.toLocaleString()} runs that take the same ${nullModel.n} trades and same ${nullModel.hold}-day hold at random dates in this window: anything between the 5th and 95th percentile is indistinguishable from chance.`}
+                  {edge.drag != null && ` Drag is the gap between the average trade and the compounded result — an edge has to beat costs and variance, not just costs.`}
+                </div>
+              </div>
+            )}
 
             {/* Equity curve */}
             {equityCurve.length > 1 && (
@@ -1336,7 +1567,10 @@ function BacktestPanel({ ticker }) {
             )}
 
             <div className="disclaimer">
-              ⚠ {btDirection === "contrarian" ? "Contrarian (buy-the-panic)" : "Long-only momentum"} strategy. Entry at next close after signal
+              ⚠ {btSignal === "donchian"
+                ? `Price-only trend signal (${btDonchianN || 20}-day breakout), no sentiment involved. Historically a drawdown-reduction overlay on crypto — it cut the losing years hard but earned less than buy-and-hold overall. `
+                : ""}
+              {btDirection === "contrarian" ? "Contrarian (buy-the-panic)" : "Long-only momentum"} strategy. Entry at next close after signal
               {(btStopLoss || btTakeProfit) ? ", exits early on stop-loss/take-profit or " : ", exit "}
               after {btHoldDays} calendar days. Past results do not predict future performance. Not financial advice.
             </div>
