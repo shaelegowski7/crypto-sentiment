@@ -383,6 +383,37 @@ def _hash_key(key: str) -> str:
 def _make_key() -> str:
     return "sfx_" + secrets.token_hex(24)
 
+def _sget(obj, key, default=None):
+    """Read a field from a Stripe resource OR a plain dict.
+
+    stripe-python's StripeObject no longer subclasses dict, so `.get()` on any
+    Stripe resource raises `AttributeError: get` — the attribute lookup falls
+    through __getattr__, which treats "get" as a missing *field name* rather
+    than a method.  requirements.txt pins `stripe` unpinned, so a rebuild can
+    move across that boundary with no code change and no warning; the webhook
+    handlers below then 500 on every event, Stripe retries for ~3 days and
+    gives up, and paying customers get nothing.  Subscript access works on both
+    shapes, and nested values that come back as plain dicts still need .get(),
+    so this handles either.
+    """
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    try:
+        return obj[key]
+    except (KeyError, AttributeError, TypeError):
+        return default
+
+
+# The £0.01/call metered price that overage bills against.  Env-overridable so
+# a test-mode price can be swapped in without a code change; the default is the
+# live one.  Referenced by both the generate-linked path (_create_stripe_customer)
+# and the Checkout path (_ensure_metered_overage) — they must agree, or
+# track_usage's meter events land on a price nothing is subscribed to.
+METERED_PRICE_ID = os.getenv("STRIPE_METERED_PRICE_ID", "price_1TO3DG2NzVdYK0wrxIRggage")
+
+
 def _create_stripe_customer(email: str):
     """Customer + metered subscription. For PAID plans only.
 
@@ -394,12 +425,89 @@ def _create_stripe_customer(email: str):
         customer = stripe.Customer.create(email=email)
         subscription = stripe.Subscription.create(
             customer=customer.id,
-            items=[{"price": "price_1TO3DG2NzVdYK0wrxIRggage"}],
+            items=[{"price": METERED_PRICE_ID}],
         )
         return customer.id, subscription.id
     except Exception as e:
         print(f"Stripe error: {e}")
         return None, None
+
+
+def _sub_items(sub) -> list:
+    """The line items on a subscription, across stripe-python shapes."""
+    return _sget(_sget(sub, "items"), "data", []) or []
+
+
+def _has_metered_item(customer_id: str) -> bool:
+    """True when any live subscription on this customer already carries the
+    metered price.  The idempotency guard for _ensure_metered_overage:
+    `checkout.session.completed` is retried by Stripe on any non-2xx, and a
+    second attach would bill the customer twice for the same usage.
+    """
+    subs = stripe.Subscription.list(customer=customer_id, status="all", limit=100)
+    for sub in subs.auto_paging_iter():
+        if _sget(sub, "status") in ("canceled", "incomplete_expired"):
+            continue
+        for item in _sub_items(sub):
+            if _sget(_sget(item, "price"), "id") == METERED_PRICE_ID:
+                return True
+    return False
+
+
+def _ensure_metered_overage(customer_id: str, subscription_id: str | None) -> str | None:
+    """Attach the metered price so calls past the allowance actually invoice.
+
+    Checkout only ever puts the LICENSED price on the subscription it creates,
+    so before this existed track_usage emitted meter events against a customer
+    with nothing subscribed to meter them — overage was recorded and then served
+    free.  Two shapes, because Stripe refuses to mix billing intervals inside one
+    subscription:
+
+      * monthly plan  -> add the metered price as an item on the SAME
+        subscription, so the customer gets one subscription and one invoice.
+      * annual plan    -> intervals don't match, so the meter goes on its own
+        monthly subscription against the same customer.
+
+    The interval is read from the subscription rather than inferred from the
+    price id, so a new annual/monthly price needs no change here.
+
+    Returns the subscription id carrying the meter, or None if nothing was done.
+    NEVER raises: the caller is the webhook, and the buyer has already paid — a
+    billing-attach failure must not stop their tier from being applied.  A miss
+    here reverts to the old behaviour (overage served free), which is the safe
+    direction to fail in.
+    """
+    if not customer_id:
+        return None
+    try:
+        if _has_metered_item(customer_id):
+            print(f"[BILLING] {customer_id} already has the metered price — no change")
+            return None
+
+        interval = None
+        if subscription_id:
+            sub = stripe.Subscription.retrieve(subscription_id)
+            for item in _sub_items(sub):
+                recurring = _sget(_sget(item, "price"), "recurring") or {}
+                if _sget(recurring, "interval"):
+                    interval = _sget(recurring, "interval")
+                    break
+
+        if interval == "month":
+            stripe.SubscriptionItem.create(subscription=subscription_id, price=METERED_PRICE_ID)
+            print(f"[BILLING] metered price added to monthly subscription {subscription_id}")
+            return subscription_id
+
+        metered_sub = stripe.Subscription.create(
+            customer=customer_id,
+            items=[{"price": METERED_PRICE_ID}],
+        )
+        print(f"[BILLING] separate metered subscription {metered_sub.id} created "
+              f"for {customer_id} (plan interval={interval})")
+        return metered_sub.id
+    except Exception as e:
+        print(f"[BILLING] could not attach metered price for {customer_id}: {e}")
+        return None
 
 
 def _create_stripe_customer_only(email: str):
@@ -2500,6 +2608,57 @@ def admin_trend_signal_send(secret: str = None, db: Session = Depends(get_db)):
     return {"message": "trend signal run triggered — check logs / TrendSignalLog for results"}
 
 
+@app.post("/admin/billing/backfill-metered")
+def admin_backfill_metered(secret: str = None, apply: bool = False, db: Session = Depends(get_db)):
+    """Find paid keys whose Stripe customer has no metered price attached.
+
+    Everyone who bought through Checkout before _ensure_metered_overage shipped
+    is in this state: allowance enforced, overage silently free.  Nothing
+    back-fills them automatically, because attaching a meter to an existing
+    customer changes what they are charged — that is a decision, not a
+    migration.
+
+    DRY RUN BY DEFAULT.  `apply=true` performs the attach.  Read the report
+    first: anyone listed starts paying £0.01/call past their allowance from the
+    moment it runs, so they should be told before, not after.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    keys = db.query(models.APIKey).filter(
+        models.APIKey.monthly_allowance > 0,
+        models.APIKey.stripe_customer_id.isnot(None),
+        models.APIKey.active == True,  # noqa: E712
+    ).all()
+
+    missing, already, failed = [], 0, []
+    for k in keys:
+        try:
+            if _has_metered_item(k.stripe_customer_id):
+                already += 1
+                continue
+        except Exception as e:
+            failed.append({"email": k.email, "error": str(e)[:200]})
+            continue
+        row = {"email": k.email, "customer": k.stripe_customer_id,
+               "allowance": k.monthly_allowance, "calls_this_month": k.calls_this_month}
+        if apply:
+            # No Checkout subscription id to reuse here, so this always creates
+            # the standalone monthly metered subscription — correct for both
+            # plan intervals, just less tidy than a second line item.
+            row["attached"] = _ensure_metered_overage(k.stripe_customer_id, None) or "FAILED"
+        missing.append(row)
+
+    return {
+        "mode": "APPLIED" if apply else "dry-run (pass apply=true to attach)",
+        "paid_keys_checked": len(keys),
+        "already_metered": already,
+        "missing_metered": len(missing),
+        "keys": missing,
+        "errors": failed,
+    }
+
+
 @app.get("/admin/funding-status")
 def admin_funding_status(secret: str = None, db: Session = Depends(get_db)):
     """Current annualised funding + recent readings. Personal-use monitor
@@ -2743,8 +2902,8 @@ async def stripe_webhook(request: Request):
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        metadata = session.get("metadata") or {}
-        tier = metadata.get("tier", "pro")
+        metadata = _sget(session, "metadata") or {}
+        tier = _sget(metadata, "tier", "pro") or "pro"
 
         # Which address gets credited.  Prefer the one WE put on the session
         # (the portal knows which key the buyer already owns); fall back to
@@ -2752,8 +2911,8 @@ async def stripe_webhook(request: Request):
         # table stores lowercase and Stripe echoes back the raw input — an
         # exact-match lookup here used to silently no-op on any case
         # difference, leaving a paying customer on the free tier.
-        customer_email = (metadata.get("sfx_email")
-                          or (session.get("customer_details") or {}).get("email")
+        customer_email = (_sget(metadata, "sfx_email")
+                          or _sget(_sget(session, "customer_details"), "email")
                           or "").strip().lower()
 
         if customer_email:
@@ -2784,9 +2943,17 @@ async def stripe_webhook(request: Request):
                     # actually holds the paid subscription, but never clobber an
                     # existing id — a generate-linked key's customer owns the
                     # metered subscription that overage bills against.
-                    if not api_key.stripe_customer_id and session.get("customer"):
+                    if not api_key.stripe_customer_id and _sget(session, "customer"):
                         api_key.stripe_customer_id = session["customer"]
                     webhook_db.commit()
+                    # Overage bills against the metered price, which Checkout
+                    # never attaches on its own.  Idempotent, so the webhook
+                    # retry Stripe fires on any non-2xx can't double-bill.
+                    if allowance > 0:
+                        _ensure_metered_overage(
+                            api_key.stripe_customer_id or _sget(session, "customer"),
+                            _sget(session, "subscription"),
+                        )
                 elif allowance > 0:
                     # Nobody had a key under this address.  Before this branch
                     # existed the purchase completed and the buyer got nothing:
@@ -2799,12 +2966,13 @@ async def stripe_webhook(request: Request):
                         key_hash=_hash_key(new_key),
                         key_prefix=new_key[:12],
                         email=customer_email,
-                        stripe_customer_id=session.get("customer"),
+                        stripe_customer_id=_sget(session, "customer"),
                         monthly_allowance=allowance,
                         free_calls=0,
                     )
                     webhook_db.add(api_key)
                     webhook_db.commit()
+                    _ensure_metered_overage(_sget(session, "customer"), _sget(session, "subscription"))
                     _email_new_api_key(customer_email, new_key, tier, allowance)
             finally:
                 webhook_db.close()
@@ -2814,14 +2982,14 @@ async def stripe_webhook(request: Request):
         subscription = event["data"]["object"]
         customer_id = subscription["customer"]
         customer = stripe.Customer.retrieve(customer_id)
-        customer_email = customer.get("email")
+        customer_email = _sget(customer, "email")
         if customer_email:
             supabase_client.table("profiles").update({"tier": "free"}).eq("email", customer_email).execute()
         refresh_subscription_gauge()
 
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
-        customer_email = invoice.get("customer_email")
+        customer_email = _sget(invoice, "customer_email")
         if customer_email:
             try:
                     resend.api_key = os.getenv("RESEND_API_KEY")
@@ -3154,19 +3322,18 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
     # subscription -- would quietly start accruing 0.01/call the moment it
     # passed 100, despite having been offered "no card required".  Free keys
     # now hard-stop in get_api_key instead and never reach this branch.
-    # KNOWN GAP -- overage does not actually invoice for plans bought through
-    # Stripe Checkout.  Checkout creates a subscription containing only the
-    # licensed price (Pro/Data); the metered price price_1TO3DG... is attached
-    # only by _create_stripe_customer, i.e. the generate-linked path.  The
-    # meter event below is still recorded against the customer, but with no
-    # metered subscription item there is nothing for Stripe to bill it on, so
-    # calls past the allowance are served free rather than at £0.01.
+    # The meter event below only invoices if the customer is actually subscribed
+    # to METERED_PRICE_ID.  Checkout alone never attaches it (its subscription
+    # carries just the licensed Pro/Data price), which used to mean every
+    # Checkout-bought plan served overage free while faithfully recording meter
+    # events nothing could bill.  _ensure_metered_overage now attaches it in the
+    # webhook -- on the same subscription for monthly plans, on a separate
+    # monthly one for annual plans, since Stripe won't mix intervals.
     #
-    # Fixing it means adding the metered price as a second line item on the
-    # Checkout Session -- which Stripe only permits when the intervals match,
-    # so the annual plans (£499.99/yr against a monthly meter) need a separate
-    # subscription rather than a second item.  Deliberately left alone: it
-    # under-charges rather than over-charges, and only past 5,000 calls/month.
+    # Plans bought BEFORE that fix shipped still have no metered item, and
+    # nothing back-fills them: /admin/billing/backfill-metered reports and
+    # repairs those on demand.  So a meter event landing nowhere is still
+    # possible for old customers and must stay non-fatal.
     total_allowance = api_key.free_calls + api_key.monthly_allowance
     if (_is_paid_plan(api_key)
             and api_key.calls_this_month > total_allowance
