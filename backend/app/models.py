@@ -212,6 +212,26 @@ class TrendSignalLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class DatasetEnquiry(Base):
+    """Inbound interest in a bulk dataset licence.
+
+    The archive (FinBERT-scored headlines + daily/intraday prices) is the one
+    asset with no way to buy it — the subscription tiers sell API *access*, not
+    the corpus. A licence is a high-touch sale at a price worth negotiating, so
+    this captures the lead rather than pretending it's self-serve checkout.
+    """
+    __tablename__ = "dataset_enquiries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, index=True)
+    name = Column(String, nullable=True)
+    organisation = Column(String, nullable=True)
+    use_case = Column(Text, nullable=True)          # what they want it for
+    volume = Column(String, nullable=True)          # coarse "how much" from the form
+    contacted = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class FundingReading(Base):
     """Daily snapshot of annualised perp funding across the majors (see
     funding_monitor.py) — personal use, not a product feature.

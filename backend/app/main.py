@@ -2608,6 +2608,137 @@ def admin_trend_signal_send(secret: str = None, db: Session = Depends(get_db)):
     return {"message": "trend signal run triggered — check logs / TrendSignalLog for results"}
 
 
+@app.post("/dataset/enquiry")
+@limiter.limit("5/minute")
+def dataset_enquiry(request: Request, response: Response, payload: dict, db: Session = Depends(get_db)):
+    """Public: register interest in a bulk dataset licence.
+
+    Deliberately a lead form, not a checkout. The corpus sells at a price worth
+    a conversation, terms vary by use (redistribution vs internal research vs
+    model training), and there's no sane self-serve SKU for "the archive".
+    Every other product here is self-serve; this one is the exception on
+    purpose.
+    """
+    email = (payload.get("email") or "").strip().lower()
+    if not email or not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    enquiry = models.DatasetEnquiry(
+        email=email,
+        name=(payload.get("name") or "").strip()[:200] or None,
+        organisation=(payload.get("organisation") or "").strip()[:200] or None,
+        use_case=(payload.get("use_case") or "").strip()[:2000] or None,
+        volume=(payload.get("volume") or "").strip()[:100] or None,
+    )
+    db.add(enquiry)
+    db.commit()
+
+    # Notify, best-effort. A delivery failure must not lose the lead — it's
+    # already committed above, and /admin/dataset/enquiries can read it back.
+    try:
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        resend.Emails.send({
+            "from": "SentimentFX <hello@sentimentfx.org>",
+            "to": os.getenv("DATASET_ENQUIRY_EMAIL", "hello@sentimentfx.org"),
+            "subject": f"Dataset enquiry — {enquiry.organisation or email}",
+            "html": (f"<p><strong>{enquiry.name or '(no name)'}</strong> "
+                     f"&lt;{email}&gt;<br>Org: {enquiry.organisation or '—'}<br>"
+                     f"Volume: {enquiry.volume or '—'}</p>"
+                     f"<p>{(enquiry.use_case or '(no use case given)')}</p>"),
+        })
+    except Exception as e:
+        print(f"[DATASET] enquiry email failed (lead still saved): {e}")
+
+    return {"message": "Thanks — we'll be in touch about dataset access."}
+
+
+@app.get("/admin/dataset/enquiries")
+def admin_dataset_enquiries(secret: str = None, db: Session = Depends(get_db)):
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    rows = db.query(models.DatasetEnquiry).order_by(models.DatasetEnquiry.created_at.desc()).limit(200).all()
+    return {"enquiries": [
+        {"id": r.id, "email": r.email, "name": r.name, "organisation": r.organisation,
+         "use_case": r.use_case, "volume": r.volume, "contacted": r.contacted,
+         "created_at": r.created_at.isoformat() + "Z"}
+        for r in rows
+    ]}
+
+
+@app.get("/admin/dataset/export")
+def admin_dataset_export(
+    secret: str = None,
+    table: str = Query("headlines", pattern="^(headlines|prices)$"),
+    fmt: str = Query("csv", pattern="^(csv|jsonl)$"),
+    ticker: str = None,
+    start: str = None,
+    end: str = None,
+    include_body: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Bulk export — the actual deliverable handed to a licensee.
+
+    Streams row-by-row with a server-side cursor: the corpus is six figures of
+    rows and materialising it would sit on Railway's memory ceiling. `body` is
+    opt-in because full article text dwarfs everything else in the payload and
+    most buyers want the scored headline, not the prose.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if table == "headlines":
+        cols = ["id", "ticker", "title", "source", "url", "sentiment_score",
+                "sentiment_label", "published_at", "created_at"]
+        if include_body:
+            cols.append("body")
+        q = db.query(models.Headline)
+        if ticker:
+            q = q.filter(models.Headline.ticker == ticker.upper())
+        if start:
+            q = q.filter(models.Headline.published_at >= datetime.fromisoformat(start))
+        if end:
+            q = q.filter(models.Headline.published_at <= datetime.fromisoformat(end))
+        q = q.order_by(models.Headline.published_at)
+    else:
+        cols = ["id", "ticker", "close_price", "open_price", "high_price",
+                "low_price", "volume", "date"]
+        q = db.query(models.Price)
+        if ticker:
+            q = q.filter(models.Price.ticker == ticker.upper())
+        if start:
+            q = q.filter(models.Price.date >= datetime.fromisoformat(start))
+        if end:
+            q = q.filter(models.Price.date <= datetime.fromisoformat(end))
+        q = q.order_by(models.Price.date)
+
+    def rows():
+        if fmt == "csv":
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(cols)
+            yield buf.getvalue()
+            for obj in q.yield_per(1000):
+                buf.seek(0); buf.truncate(0)
+                writer.writerow([getattr(obj, c) for c in cols])
+                yield buf.getvalue()
+        else:
+            for obj in q.yield_per(1000):
+                out = {}
+                for c in cols:
+                    v = getattr(obj, c)
+                    out[c] = v.isoformat() if isinstance(v, datetime) else v
+                yield json.dumps(out, default=str) + "\n"
+
+    stamp = datetime.utcnow().strftime("%Y%m%d")
+    ext = "csv" if fmt == "csv" else "jsonl"
+    return StreamingResponse(
+        rows(),
+        media_type="text/csv" if fmt == "csv" else "application/x-ndjson",
+        headers={"Content-Disposition":
+                 f'attachment; filename="sentimentfx-{table}-{stamp}.{ext}"'},
+    )
+
+
 @app.post("/admin/billing/backfill-metered")
 def admin_backfill_metered(secret: str = None, apply: bool = False, db: Session = Depends(get_db)):
     """Find paid keys whose Stripe customer has no metered price attached.

@@ -183,6 +183,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('correlation');return false;" data-section="correlation">Correlation</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('mcp');return false;" data-section="mcp">MCP (Claude / Cursor)</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('errors');return false;" data-section="errors">Error Codes</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('dataset');return false;" data-section="dataset">Bulk Dataset</a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-label">Methodology</div>
@@ -579,6 +580,46 @@ resp = client.beta.messages.create(
                             </tbody>
                         </table>
                     </div>
+
+                    <div id="dataset" class="scroll-section">
+                        <h2>Bulk dataset licence</h2>
+                        <p>The API is metered per call, which suits an application reading current
+                        sentiment. If you need the <strong>whole corpus at once</strong> — to backtest
+                        against, to train on, or to join to your own data — that's a licence rather
+                        than a subscription, delivered as CSV or JSONL.</p>
+                        <table>
+                            <thead><tr><th>Contents</th><th>Detail</th></tr></thead>
+                            <tbody>
+                                <tr><td>Headlines</td><td id="ds-headlines">180,000+ FinBERT-scored</td></tr>
+                                <tr><td>Price rows</td><td id="ds-prices">120,000+ daily OHLCV</td></tr>
+                                <tr><td>Tickers</td><td>42 — crypto, FX, US equities, ETFs, commodity futures</td></tr>
+                                <tr><td>Per headline</td><td>ticker, title, source, URL, FinBERT score (-1 to +1), label, published timestamp</td></tr>
+                                <tr><td>Formats</td><td>CSV or JSONL, one-off snapshot or refreshed periodically</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="font-size:12px;color:var(--muted);">Scores come from the same FinBERT
+                        pipeline behind the live API, so a backtest on the archive and a signal read
+                        from <code>/v1/sentiment</code> are directly comparable. Methodology is
+                        documented in full under Sentiment Scoring.</p>
+
+                        <div class="signup" id="dataset-box">
+                            <div class="signup-title" style="color:var(--accent2);">Request dataset access</div>
+                            <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6;">
+                                Pricing depends on scope and whether you're redistributing, so this
+                                starts a conversation rather than a checkout. Tell us what you need and
+                                we'll come back with terms.
+                            </p>
+                            <div class="signup-row" style="flex-wrap:wrap;gap:8px;">
+                                <input class="signup-input" id="ds-email" type="email" placeholder="you@company.com" style="flex:1;min-width:200px;" />
+                                <input class="signup-input" id="ds-org" type="text" placeholder="Organisation (optional)" style="flex:1;min-width:180px;" />
+                            </div>
+                            <div class="signup-row" style="margin-top:8px;">
+                                <input class="signup-input" id="ds-use" type="text" placeholder="What are you using it for?" style="flex:1;" />
+                                <button class="tester-btn" onclick="submitDatasetEnquiry(this)">Request access</button>
+                            </div>
+                            <div class="signup-msg" id="ds-msg"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- METHODOLOGY -->
@@ -724,6 +765,52 @@ async function startCheckout(priceId, btn) {
         upgradeMsg('Could not start checkout. Try again, or email hello@sentimentfx.org.', 'err')
     }
 }
+
+// Bulk dataset is a lead form, not a checkout — pricing depends on scope and
+// redistribution rights, so there's no sane self-serve SKU for "the archive".
+async function submitDatasetEnquiry(btn) {
+    const msg = document.getElementById('ds-msg')
+    const email = document.getElementById('ds-email').value.trim()
+    const setMsg = (t, kind) => { msg.textContent = t; msg.className = 'signup-msg' + (kind ? ' ' + kind : '') }
+    if (!email) { setMsg('An email address is required so we can reply.', 'err'); return }
+    const original = btn.textContent
+    btn.textContent = 'Sending...'
+    btn.disabled = true
+    try {
+        const res = await fetch(`${API_BASE}/dataset/enquiry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                organisation: document.getElementById('ds-org').value.trim(),
+                use_case: document.getElementById('ds-use').value.trim(),
+            }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.detail || 'request failed')
+        setMsg(data.message || "Thanks — we'll be in touch.", 'ok')
+        document.getElementById('ds-use').value = ''
+    } catch (e) {
+        setMsg(String(e.message || e) + ' — or email hello@sentimentfx.org directly.', 'err')
+    } finally {
+        btn.textContent = original
+        btn.disabled = false
+    }
+}
+
+// Live corpus size, so the dataset pitch never goes stale against the archive.
+async function loadDatasetStats() {
+    try {
+        const res = await fetch(`${API_BASE}/stats`)
+        const d = await res.json()
+        // Keep the descriptor — the number alone loses what the row is telling you.
+        if (d.total_headlines) document.getElementById('ds-headlines').textContent =
+            d.total_headlines.toLocaleString() + ' FinBERT-scored'
+        if (d.total_prices) document.getElementById('ds-prices').textContent =
+            d.total_prices.toLocaleString() + ' daily OHLCV'
+    } catch (e) {}
+}
+loadDatasetStats()
 
 // Stripe sends Data buyers back here rather than to the dashboard.
 function handlePurchaseReturn() {
