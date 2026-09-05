@@ -8,6 +8,39 @@ import os
 BASE_URL = "https://gnews.io/api/v4/search"
 HN_ALGOLIA_URL = "https://hn.algolia.com/api/v1/search_by_date"
 
+# Earliest plausible published_at from a LIVE RSS/social feed. Not a claim about
+# when the product started — HN backfill and ai_sources.py both set dates their
+# own way and don't call this. Only guards feedparser's published_parsed, which
+# is trusted blindly at every call site below with no bounds check: a malformed
+# <pubDate> in the source XML (seen in production as an RFC822 2-digit year —
+# feedparser/email.utils reads "00" as 2000, not 2020) parses into a
+# structurally valid but nonsensical datetime, and nothing catches it. Found via
+# a dataset sweep before the archive's first bulk-licence sale: one Investing.com
+# RSS entry landed as 2000-12-31, one Gadgets 360 entry as 2019-08-16, both
+# scraped in 2026 by the live RSS job and stored with no other symptom.
+_MIN_PLAUSIBLE_PUBLISHED_AT = datetime(2015, 1, 1, tzinfo=timezone.utc)
+
+
+def _safe_published_at(published_struct) -> datetime:
+    """feedparser's published_parsed/updated_parsed -> a sane published_at.
+
+    Falls back to "now" (matching this codebase's existing behaviour when the
+    field is simply absent) for anything missing, unparseable, implausibly old,
+    or more than a day in the future — clock skew and timezone slop are normal
+    on RSS timestamps, an actual future date is not.
+    """
+    now = datetime.now(timezone.utc)
+    if not published_struct:
+        return now
+    try:
+        candidate = datetime(*published_struct[:6], tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return now
+    if candidate < _MIN_PLAUSIBLE_PUBLISHED_AT or candidate > now + timedelta(days=1):
+        print(f"[SCRAPER] implausible published_at {candidate.isoformat()} from feed, using now() instead")
+        return now
+    return candidate
+
 TICKERS = {
     "BTC":    "bitcoin BTC",
     "ETH":    "ethereum ETH",
@@ -182,7 +215,7 @@ def fetch_background_headlines(ticker: str) -> list:
         for entry in feed.entries[:25]:
             try:
                 published = entry.get("published_parsed") or entry.get("updated_parsed")
-                pub_date = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
+                pub_date = _safe_published_at(published)
                 headlines.append({
                     "ticker": ticker.upper(),
                     "title": entry.title,
@@ -273,7 +306,7 @@ def fetch_rss_headlines(ticker: str) -> list:
                         continue
 
                     published = entry.get("published_parsed") or entry.get("updated_parsed")
-                    pub_date = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
+                    pub_date = _safe_published_at(published)
 
                     headlines.append({
                         "ticker": ticker.upper(),
@@ -802,7 +835,7 @@ def fetch_x_headlines(ticker: str) -> list:
         for entry in feed.entries[:15]:
             try:
                 published = entry.get("published_parsed") or entry.get("updated_parsed")
-                pub_dt = datetime(*published[:6], tzinfo=timezone.utc) if published else datetime.now(timezone.utc)
+                pub_dt = _safe_published_at(published)
                 headlines.append({
                     "ticker": ticker.upper(),
                     "title": entry.title,
