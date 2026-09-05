@@ -5642,3 +5642,38 @@ async def _lifespan(_app: FastAPI):
 
 app.router.lifespan_context = _lifespan
 app.mount("/mcp", _mcp_streamable_app)
+
+
+# 3. TRAILING SLASH.  Starlette compiles a Mount at "/mcp" to the regex
+#    ^/mcp/(?P<path>.*)$ -- so a request to bare "/mcp" doesn't match it, falls
+#    through to Router.redirect_slashes, and comes back 307 -> "/mcp/".
+#    Everything advertises the bare URL: server.json (the MCP registry
+#    manifest), the developer portal's copy-paste client configs, the landing
+#    page, and CLAUDE.md.
+#
+#    A 307 preserves method and body, so clients that follow redirects survive
+#    it -- TypeScript clients use fetch(), which follows by default, which is
+#    why Claude Desktop/Code never surfaced this.  The Python MCP SDK is built
+#    on httpx, which does NOT follow redirects by default (unlike requests), so
+#    those clients fail on the documented URL.  The registry's own reachability
+#    check may likewise not follow the redirect.
+#
+#    Rewriting the scope path is preferred over a second Mount/Route because it
+#    keeps ONE mounted app (so the session manager, lifespan and auth all stay
+#    on a single code path).  It's raw ASGI rather than @app.middleware("http")
+#    deliberately: that decorator installs BaseHTTPMiddleware, which is known to
+#    interfere with streaming responses, and this endpoint streams SSE.
+class _MCPBarePathFix:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path") == "/mcp":
+            scope = dict(scope)
+            scope["path"] = "/mcp/"
+            if scope.get("raw_path"):
+                scope["raw_path"] = b"/mcp/"
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(_MCPBarePathFix)

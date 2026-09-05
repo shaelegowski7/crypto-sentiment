@@ -21,18 +21,36 @@ curl -s -X POST https://api.sentimentfx.org/mcp \
   -D- -o /dev/null | grep -i 'HTTP\|mcp-session-id'
 ```
 
-Expect `HTTP/1.1 200` **and** an `mcp-session-id` header. A `307` means the
-old path-doubling mount is still live (see CLAUDE.md's MCP gotchas); a `421`
-means the Host isn't in `MCP_ALLOWED_HOSTS`.
+Expect `HTTP/1.1 200` **and** an `mcp-session-id` header. A `404` means the
+old path-doubling mount is back (the endpoint would be on `/mcp/mcp` — see
+CLAUDE.md's MCP gotchas); a `421` means the Host isn't in `MCP_ALLOWED_HOSTS`.
+
+A `307 -> /mcp/` means the `_MCPBarePathFix` ASGI middleware in `main.py` has
+been removed or is no longer reached. Starlette compiles a Mount at `/mcp` to
+`^/mcp/(?P<path>.*)$`, so bare `/mcp` misses it and falls through to
+`redirect_slashes`. That redirect is survivable for TypeScript clients
+(`fetch` follows redirects by default, which is why Claude Desktop/Code never
+surfaced it) but **not** for the Python MCP SDK, which is built on `httpx` —
+that does not follow redirects by default, unlike `requests`. The registry's
+own reachability check may not follow it either. Restore the middleware
+rather than changing the advertised URL: `server.json`, the developer portal
+configs and the landing page all publish the bare path.
 
 ## Namespace: two options
 
 The `name` field must be a namespace you can prove you own.
 
-### Option A — `org.sentimentfx/sentimentfx` (what server.json uses)
+### Option A — `org.sentimentfx/market-sentiment` (what server.json uses)
 
 Better identity for a commercial product, but needs a DNS TXT record and an
 Ed25519 key.
+
+The `org.sentimentfx` half is fixed — it's `sentimentfx.org` reversed, which is
+what the DNS proof binds to. Only the part after the slash is a free choice, and
+it's an identifier, not a display name: registries show the `title` field
+(`SentimentFX`). Hence `market-sentiment` rather than a stuttering
+`org.sentimentfx/sentimentfx`. **Don't rename after publishing** — that string
+lives in every user's client config, so a change means they all re-install.
 
 ```bash
 # 1. generate a keypair

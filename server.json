@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "org.sentimentfx/sentimentfx",
+  "name": "org.sentimentfx/market-sentiment",
   "title": "SentimentFX",
   "description": "FinBERT news sentiment and price history for 42 crypto, FX, stock, ETF and commodity tickers.",
   "version": "1.0.0",
