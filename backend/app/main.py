@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.brief import send_morning_briefs
+from app.trend_signal import send_trend_signal_email
+from app.funding_monitor import check_funding_season
 from app.trade_card import build_trade_card, format_trade_card_html, format_trade_card_text
 from . import models
 import math
@@ -381,6 +383,37 @@ def _hash_key(key: str) -> str:
 def _make_key() -> str:
     return "sfx_" + secrets.token_hex(24)
 
+def _sget(obj, key, default=None):
+    """Read a field from a Stripe resource OR a plain dict.
+
+    stripe-python's StripeObject no longer subclasses dict, so `.get()` on any
+    Stripe resource raises `AttributeError: get` — the attribute lookup falls
+    through __getattr__, which treats "get" as a missing *field name* rather
+    than a method.  requirements.txt pins `stripe` unpinned, so a rebuild can
+    move across that boundary with no code change and no warning; the webhook
+    handlers below then 500 on every event, Stripe retries for ~3 days and
+    gives up, and paying customers get nothing.  Subscript access works on both
+    shapes, and nested values that come back as plain dicts still need .get(),
+    so this handles either.
+    """
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    try:
+        return obj[key]
+    except (KeyError, AttributeError, TypeError):
+        return default
+
+
+# The £0.01/call metered price that overage bills against.  Env-overridable so
+# a test-mode price can be swapped in without a code change; the default is the
+# live one.  Referenced by both the generate-linked path (_create_stripe_customer)
+# and the Checkout path (_ensure_metered_overage) — they must agree, or
+# track_usage's meter events land on a price nothing is subscribed to.
+METERED_PRICE_ID = os.getenv("STRIPE_METERED_PRICE_ID", "price_1TO3DG2NzVdYK0wrxIRggage")
+
+
 def _create_stripe_customer(email: str):
     """Customer + metered subscription. For PAID plans only.
 
@@ -392,12 +425,89 @@ def _create_stripe_customer(email: str):
         customer = stripe.Customer.create(email=email)
         subscription = stripe.Subscription.create(
             customer=customer.id,
-            items=[{"price": "price_1TO3DG2NzVdYK0wrxIRggage"}],
+            items=[{"price": METERED_PRICE_ID}],
         )
         return customer.id, subscription.id
     except Exception as e:
         print(f"Stripe error: {e}")
         return None, None
+
+
+def _sub_items(sub) -> list:
+    """The line items on a subscription, across stripe-python shapes."""
+    return _sget(_sget(sub, "items"), "data", []) or []
+
+
+def _has_metered_item(customer_id: str) -> bool:
+    """True when any live subscription on this customer already carries the
+    metered price.  The idempotency guard for _ensure_metered_overage:
+    `checkout.session.completed` is retried by Stripe on any non-2xx, and a
+    second attach would bill the customer twice for the same usage.
+    """
+    subs = stripe.Subscription.list(customer=customer_id, status="all", limit=100)
+    for sub in subs.auto_paging_iter():
+        if _sget(sub, "status") in ("canceled", "incomplete_expired"):
+            continue
+        for item in _sub_items(sub):
+            if _sget(_sget(item, "price"), "id") == METERED_PRICE_ID:
+                return True
+    return False
+
+
+def _ensure_metered_overage(customer_id: str, subscription_id: str | None) -> str | None:
+    """Attach the metered price so calls past the allowance actually invoice.
+
+    Checkout only ever puts the LICENSED price on the subscription it creates,
+    so before this existed track_usage emitted meter events against a customer
+    with nothing subscribed to meter them — overage was recorded and then served
+    free.  Two shapes, because Stripe refuses to mix billing intervals inside one
+    subscription:
+
+      * monthly plan  -> add the metered price as an item on the SAME
+        subscription, so the customer gets one subscription and one invoice.
+      * annual plan    -> intervals don't match, so the meter goes on its own
+        monthly subscription against the same customer.
+
+    The interval is read from the subscription rather than inferred from the
+    price id, so a new annual/monthly price needs no change here.
+
+    Returns the subscription id carrying the meter, or None if nothing was done.
+    NEVER raises: the caller is the webhook, and the buyer has already paid — a
+    billing-attach failure must not stop their tier from being applied.  A miss
+    here reverts to the old behaviour (overage served free), which is the safe
+    direction to fail in.
+    """
+    if not customer_id:
+        return None
+    try:
+        if _has_metered_item(customer_id):
+            print(f"[BILLING] {customer_id} already has the metered price — no change")
+            return None
+
+        interval = None
+        if subscription_id:
+            sub = stripe.Subscription.retrieve(subscription_id)
+            for item in _sub_items(sub):
+                recurring = _sget(_sget(item, "price"), "recurring") or {}
+                if _sget(recurring, "interval"):
+                    interval = _sget(recurring, "interval")
+                    break
+
+        if interval == "month":
+            stripe.SubscriptionItem.create(subscription=subscription_id, price=METERED_PRICE_ID)
+            print(f"[BILLING] metered price added to monthly subscription {subscription_id}")
+            return subscription_id
+
+        metered_sub = stripe.Subscription.create(
+            customer=customer_id,
+            items=[{"price": METERED_PRICE_ID}],
+        )
+        print(f"[BILLING] separate metered subscription {metered_sub.id} created "
+              f"for {customer_id} (plan interval={interval})")
+        return metered_sub.id
+    except Exception as e:
+        print(f"[BILLING] could not attach metered price for {customer_id}: {e}")
+        return None
 
 
 def _create_stripe_customer_only(email: str):
@@ -1095,6 +1205,24 @@ scheduler.add_job(
     lambda: send_morning_briefs(next(get_db())),
     CronTrigger(hour=7, minute=0, timezone="Europe/London"),
     id="morning_brief",
+    replace_existing=True,
+)
+# Personal-use diversified trend signal (see trend_signal.py) — NOT the
+# sentiment signal, NOT a product feature. Day 2 rather than day 1 so it
+# never races a weekend/holiday-shifted month-end close still settling.
+scheduler.add_job(
+    lambda: send_trend_signal_email(next(get_db())),
+    CronTrigger(day=2, hour=8, minute=0, timezone="Europe/London"),
+    id="trend_signal",
+    replace_existing=True,
+)
+# Basis-carry season monitor (see funding_monitor.py) — personal use. Daily
+# because the whole point is not having to check manually; it only mails on
+# a below->above hurdle crossing, so a quiet regime is silent.
+scheduler.add_job(
+    lambda: check_funding_season(next(get_db())),
+    CronTrigger(hour=9, minute=0, timezone="Europe/London"),
+    id="funding_monitor",
     replace_existing=True,
 )
 def reset_monthly_api_usage():
@@ -2467,6 +2595,246 @@ def backfill_hn(
     }
 
 
+@app.post("/admin/trend-signal/send")
+def admin_trend_signal_send(secret: str = None, db: Session = Depends(get_db)):
+    """Manual trigger for the personal monthly trend signal (trend_signal.py)
+    — for testing the scheduler job without waiting for day 2 of the month.
+    Same idempotency as the scheduled run: a second call in the same month
+    is a no-op (TrendSignalLog already has that month's rows).
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    send_trend_signal_email(db)
+    return {"message": "trend signal run triggered — check logs / TrendSignalLog for results"}
+
+
+@app.post("/dataset/enquiry")
+@limiter.limit("5/minute")
+def dataset_enquiry(request: Request, response: Response, payload: dict, db: Session = Depends(get_db)):
+    """Public: register interest in a bulk dataset licence.
+
+    Deliberately a lead form, not a checkout. The corpus sells at a price worth
+    a conversation, terms vary by use (redistribution vs internal research vs
+    model training), and there's no sane self-serve SKU for "the archive".
+    Every other product here is self-serve; this one is the exception on
+    purpose.
+    """
+    email = (payload.get("email") or "").strip().lower()
+    if not email or not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    enquiry = models.DatasetEnquiry(
+        email=email,
+        name=(payload.get("name") or "").strip()[:200] or None,
+        organisation=(payload.get("organisation") or "").strip()[:200] or None,
+        use_case=(payload.get("use_case") or "").strip()[:2000] or None,
+        volume=(payload.get("volume") or "").strip()[:100] or None,
+    )
+    db.add(enquiry)
+    db.commit()
+
+    # Notify, best-effort. A delivery failure must not lose the lead — it's
+    # already committed above, and /admin/dataset/enquiries can read it back.
+    try:
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        resend.Emails.send({
+            "from": "SentimentFX <hello@sentimentfx.org>",
+            "to": os.getenv("DATASET_ENQUIRY_EMAIL", "hello@sentimentfx.org"),
+            "subject": f"Dataset enquiry — {enquiry.organisation or email}",
+            "html": (f"<p><strong>{enquiry.name or '(no name)'}</strong> "
+                     f"&lt;{email}&gt;<br>Org: {enquiry.organisation or '—'}<br>"
+                     f"Volume: {enquiry.volume or '—'}</p>"
+                     f"<p>{(enquiry.use_case or '(no use case given)')}</p>"),
+        })
+    except Exception as e:
+        print(f"[DATASET] enquiry email failed (lead still saved): {e}")
+
+    return {"message": "Thanks — we'll be in touch about dataset access."}
+
+
+@app.get("/admin/dataset/enquiries")
+def admin_dataset_enquiries(secret: str = None, db: Session = Depends(get_db)):
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    rows = db.query(models.DatasetEnquiry).order_by(models.DatasetEnquiry.created_at.desc()).limit(200).all()
+    return {"enquiries": [
+        {"id": r.id, "email": r.email, "name": r.name, "organisation": r.organisation,
+         "use_case": r.use_case, "volume": r.volume, "contacted": r.contacted,
+         "created_at": r.created_at.isoformat() + "Z"}
+        for r in rows
+    ]}
+
+
+@app.get("/admin/dataset/export")
+def admin_dataset_export(
+    secret: str = None,
+    table: str = Query("headlines", pattern="^(headlines|prices)$"),
+    fmt: str = Query("csv", pattern="^(csv|jsonl)$"),
+    ticker: str = None,
+    start: str = None,
+    end: str = None,
+    include_body: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Bulk export — the actual deliverable handed to a licensee.
+
+    Streams row-by-row with a server-side cursor: the corpus is six figures of
+    rows and materialising it would sit on Railway's memory ceiling. `body` is
+    opt-in because full article text dwarfs everything else in the payload and
+    most buyers want the scored headline, not the prose.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if table == "headlines":
+        cols = ["id", "ticker", "title", "source", "url", "sentiment_score",
+                "sentiment_label", "published_at", "created_at"]
+        if include_body:
+            cols.append("body")
+        q = db.query(models.Headline)
+        if ticker:
+            q = q.filter(models.Headline.ticker == ticker.upper())
+        if start:
+            q = q.filter(models.Headline.published_at >= datetime.fromisoformat(start))
+        if end:
+            q = q.filter(models.Headline.published_at <= datetime.fromisoformat(end))
+        q = q.order_by(models.Headline.published_at)
+    else:
+        cols = ["id", "ticker", "close_price", "open_price", "high_price",
+                "low_price", "volume", "date"]
+        q = db.query(models.Price)
+        if ticker:
+            q = q.filter(models.Price.ticker == ticker.upper())
+        if start:
+            q = q.filter(models.Price.date >= datetime.fromisoformat(start))
+        if end:
+            q = q.filter(models.Price.date <= datetime.fromisoformat(end))
+        q = q.order_by(models.Price.date)
+
+    def rows():
+        if fmt == "csv":
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(cols)
+            yield buf.getvalue()
+            for obj in q.yield_per(1000):
+                buf.seek(0); buf.truncate(0)
+                writer.writerow([getattr(obj, c) for c in cols])
+                yield buf.getvalue()
+        else:
+            for obj in q.yield_per(1000):
+                out = {}
+                for c in cols:
+                    v = getattr(obj, c)
+                    out[c] = v.isoformat() if isinstance(v, datetime) else v
+                yield json.dumps(out, default=str) + "\n"
+
+    stamp = datetime.utcnow().strftime("%Y%m%d")
+    ext = "csv" if fmt == "csv" else "jsonl"
+    return StreamingResponse(
+        rows(),
+        media_type="text/csv" if fmt == "csv" else "application/x-ndjson",
+        headers={"Content-Disposition":
+                 f'attachment; filename="sentimentfx-{table}-{stamp}.{ext}"'},
+    )
+
+
+@app.post("/admin/billing/backfill-metered")
+def admin_backfill_metered(secret: str = None, apply: bool = False, db: Session = Depends(get_db)):
+    """Find paid keys whose Stripe customer has no metered price attached.
+
+    Everyone who bought through Checkout before _ensure_metered_overage shipped
+    is in this state: allowance enforced, overage silently free.  Nothing
+    back-fills them automatically, because attaching a meter to an existing
+    customer changes what they are charged — that is a decision, not a
+    migration.
+
+    DRY RUN BY DEFAULT.  `apply=true` performs the attach.  Read the report
+    first: anyone listed starts paying £0.01/call past their allowance from the
+    moment it runs, so they should be told before, not after.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    keys = db.query(models.APIKey).filter(
+        models.APIKey.monthly_allowance > 0,
+        models.APIKey.stripe_customer_id.isnot(None),
+        models.APIKey.active == True,  # noqa: E712
+    ).all()
+
+    missing, already, failed = [], 0, []
+    for k in keys:
+        try:
+            if _has_metered_item(k.stripe_customer_id):
+                already += 1
+                continue
+        except Exception as e:
+            failed.append({"email": k.email, "error": str(e)[:200]})
+            continue
+        row = {"email": k.email, "customer": k.stripe_customer_id,
+               "allowance": k.monthly_allowance, "calls_this_month": k.calls_this_month}
+        if apply:
+            # No Checkout subscription id to reuse here, so this always creates
+            # the standalone monthly metered subscription — correct for both
+            # plan intervals, just less tidy than a second line item.
+            row["attached"] = _ensure_metered_overage(k.stripe_customer_id, None) or "FAILED"
+        missing.append(row)
+
+    return {
+        "mode": "APPLIED" if apply else "dry-run (pass apply=true to attach)",
+        "paid_keys_checked": len(keys),
+        "already_metered": already,
+        "missing_metered": len(missing),
+        "keys": missing,
+        "errors": failed,
+    }
+
+
+@app.get("/admin/funding-status")
+def admin_funding_status(secret: str = None, db: Session = Depends(get_db)):
+    """Current annualised funding + recent readings. Personal-use monitor
+    (funding_monitor.py) — token-gated, not part of the public API.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    from .funding_monitor import current_annualised_funding, THRESHOLD
+    live = current_annualised_funding()
+    recent = db.query(models.FundingReading).order_by(
+        models.FundingReading.ts.desc()
+    ).limit(30).all()
+    return {
+        "live": {"ew_annualised": live["ew"], "per_symbol": live["per_symbol"]},
+        "threshold": THRESHOLD,
+        "in_season": (live["ew"] or 0) > THRESHOLD,
+        "recent": [
+            {"ts": r.ts.isoformat() + "Z", "ew_annualised": r.ew_annualised,
+             "above_threshold": r.above_threshold, "alerted": r.alerted}
+            for r in recent
+        ],
+    }
+
+
+@app.get("/admin/trend-signal/history")
+def admin_trend_signal_history(secret: str = None, months: int = 12, db: Session = Depends(get_db)):
+    """Read back the forward-test log — what the strategy said each month,
+    logged before the outcome was known. Token-gated, personal-use only.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    rows = db.query(models.TrendSignalLog).order_by(
+        models.TrendSignalLog.month.desc(), models.TrendSignalLog.ticker
+    ).limit(months * 26).all()
+    return {
+        "rows": [
+            {
+                "month": r.month.date().isoformat(), "ticker": r.ticker, "category": r.category,
+                "signal": r.signal, "position": r.position, "price": r.price, "vol_ann": r.vol_ann,
+            }
+            for r in rows
+        ]
+    }
+
+
 @app.get("/admin/coverage")
 def admin_coverage(secret: str = None, db: Session = Depends(get_db)):
     """Per-ticker oldest/newest headline + count.  Used to decide what gap to
@@ -2665,8 +3033,8 @@ async def stripe_webhook(request: Request):
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        metadata = session.get("metadata") or {}
-        tier = metadata.get("tier", "pro")
+        metadata = _sget(session, "metadata") or {}
+        tier = _sget(metadata, "tier", "pro") or "pro"
 
         # Which address gets credited.  Prefer the one WE put on the session
         # (the portal knows which key the buyer already owns); fall back to
@@ -2674,8 +3042,8 @@ async def stripe_webhook(request: Request):
         # table stores lowercase and Stripe echoes back the raw input — an
         # exact-match lookup here used to silently no-op on any case
         # difference, leaving a paying customer on the free tier.
-        customer_email = (metadata.get("sfx_email")
-                          or (session.get("customer_details") or {}).get("email")
+        customer_email = (_sget(metadata, "sfx_email")
+                          or _sget(_sget(session, "customer_details"), "email")
                           or "").strip().lower()
 
         if customer_email:
@@ -2706,9 +3074,17 @@ async def stripe_webhook(request: Request):
                     # actually holds the paid subscription, but never clobber an
                     # existing id — a generate-linked key's customer owns the
                     # metered subscription that overage bills against.
-                    if not api_key.stripe_customer_id and session.get("customer"):
+                    if not api_key.stripe_customer_id and _sget(session, "customer"):
                         api_key.stripe_customer_id = session["customer"]
                     webhook_db.commit()
+                    # Overage bills against the metered price, which Checkout
+                    # never attaches on its own.  Idempotent, so the webhook
+                    # retry Stripe fires on any non-2xx can't double-bill.
+                    if allowance > 0:
+                        _ensure_metered_overage(
+                            api_key.stripe_customer_id or _sget(session, "customer"),
+                            _sget(session, "subscription"),
+                        )
                 elif allowance > 0:
                     # Nobody had a key under this address.  Before this branch
                     # existed the purchase completed and the buyer got nothing:
@@ -2721,12 +3097,13 @@ async def stripe_webhook(request: Request):
                         key_hash=_hash_key(new_key),
                         key_prefix=new_key[:12],
                         email=customer_email,
-                        stripe_customer_id=session.get("customer"),
+                        stripe_customer_id=_sget(session, "customer"),
                         monthly_allowance=allowance,
                         free_calls=0,
                     )
                     webhook_db.add(api_key)
                     webhook_db.commit()
+                    _ensure_metered_overage(_sget(session, "customer"), _sget(session, "subscription"))
                     _email_new_api_key(customer_email, new_key, tier, allowance)
             finally:
                 webhook_db.close()
@@ -2736,14 +3113,14 @@ async def stripe_webhook(request: Request):
         subscription = event["data"]["object"]
         customer_id = subscription["customer"]
         customer = stripe.Customer.retrieve(customer_id)
-        customer_email = customer.get("email")
+        customer_email = _sget(customer, "email")
         if customer_email:
             supabase_client.table("profiles").update({"tier": "free"}).eq("email", customer_email).execute()
         refresh_subscription_gauge()
 
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
-        customer_email = invoice.get("customer_email")
+        customer_email = _sget(invoice, "customer_email")
         if customer_email:
             try:
                     resend.api_key = os.getenv("RESEND_API_KEY")
@@ -3076,19 +3453,18 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
     # subscription -- would quietly start accruing 0.01/call the moment it
     # passed 100, despite having been offered "no card required".  Free keys
     # now hard-stop in get_api_key instead and never reach this branch.
-    # KNOWN GAP -- overage does not actually invoice for plans bought through
-    # Stripe Checkout.  Checkout creates a subscription containing only the
-    # licensed price (Pro/Data); the metered price price_1TO3DG... is attached
-    # only by _create_stripe_customer, i.e. the generate-linked path.  The
-    # meter event below is still recorded against the customer, but with no
-    # metered subscription item there is nothing for Stripe to bill it on, so
-    # calls past the allowance are served free rather than at £0.01.
+    # The meter event below only invoices if the customer is actually subscribed
+    # to METERED_PRICE_ID.  Checkout alone never attaches it (its subscription
+    # carries just the licensed Pro/Data price), which used to mean every
+    # Checkout-bought plan served overage free while faithfully recording meter
+    # events nothing could bill.  _ensure_metered_overage now attaches it in the
+    # webhook -- on the same subscription for monthly plans, on a separate
+    # monthly one for annual plans, since Stripe won't mix intervals.
     #
-    # Fixing it means adding the metered price as a second line item on the
-    # Checkout Session -- which Stripe only permits when the intervals match,
-    # so the annual plans (£499.99/yr against a monthly meter) need a separate
-    # subscription rather than a second item.  Deliberately left alone: it
-    # under-charges rather than over-charges, and only past 5,000 calls/month.
+    # Plans bought BEFORE that fix shipped still have no metered item, and
+    # nothing back-fills them: /admin/billing/backfill-metered reports and
+    # repairs those on demand.  So a meter event landing nowhere is still
+    # possible for old customers and must stay non-fatal.
     total_allowance = api_key.free_calls + api_key.monthly_allowance
     if (_is_paid_plan(api_key)
             and api_key.calls_this_month > total_allowance
@@ -5564,3 +5940,38 @@ async def _lifespan(_app: FastAPI):
 
 app.router.lifespan_context = _lifespan
 app.mount("/mcp", _mcp_streamable_app)
+
+
+# 3. TRAILING SLASH.  Starlette compiles a Mount at "/mcp" to the regex
+#    ^/mcp/(?P<path>.*)$ -- so a request to bare "/mcp" doesn't match it, falls
+#    through to Router.redirect_slashes, and comes back 307 -> "/mcp/".
+#    Everything advertises the bare URL: server.json (the MCP registry
+#    manifest), the developer portal's copy-paste client configs, the landing
+#    page, and CLAUDE.md.
+#
+#    A 307 preserves method and body, so clients that follow redirects survive
+#    it -- TypeScript clients use fetch(), which follows by default, which is
+#    why Claude Desktop/Code never surfaced this.  The Python MCP SDK is built
+#    on httpx, which does NOT follow redirects by default (unlike requests), so
+#    those clients fail on the documented URL.  The registry's own reachability
+#    check may likewise not follow the redirect.
+#
+#    Rewriting the scope path is preferred over a second Mount/Route because it
+#    keeps ONE mounted app (so the session manager, lifespan and auth all stay
+#    on a single code path).  It's raw ASGI rather than @app.middleware("http")
+#    deliberately: that decorator installs BaseHTTPMiddleware, which is known to
+#    interfere with streaming responses, and this endpoint streams SSE.
+class _MCPBarePathFix:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path") == "/mcp":
+            scope = dict(scope)
+            scope["path"] = "/mcp/"
+            if scope.get("raw_path"):
+                scope["raw_path"] = b"/mcp/"
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(_MCPBarePathFix)

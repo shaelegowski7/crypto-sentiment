@@ -190,6 +190,70 @@ class APIKey(Base):
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TrendSignalLog(Base):
+    """One row per (month, instrument) for the personal diversified trend
+    strategy (see trend_signal.py) — NOT the sentiment signal, NOT a
+    product feature. Written by send_trend_signal_email() before the
+    month's outcome is known, so this table is the forward-test record: a
+    backtest can be re-run and re-tuned after the fact, this can't. Never
+    updated after the month it was written for — if the rule changes, new
+    months get new rows, old ones stay as-computed at the time.
+    """
+    __tablename__ = "trend_signal_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    month = Column(DateTime, index=True)          # first of the month this signal is for
+    ticker = Column(String, index=True)
+    category = Column(String)                     # equity / bonds / commodity / fx / crypto
+    signal = Column(Float)                         # -1..+1, avg sign across 60/120/250d momentum
+    position = Column(Float)                       # signal * vol-scaled size, cap 2x
+    price = Column(Float)                          # instrument price when computed
+    vol_ann = Column(Float)                        # trailing 60d annualised vol used for sizing
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DatasetEnquiry(Base):
+    """Inbound interest in a bulk dataset licence.
+
+    The archive (FinBERT-scored headlines + daily/intraday prices) is the one
+    asset with no way to buy it — the subscription tiers sell API *access*, not
+    the corpus. A licence is a high-touch sale at a price worth negotiating, so
+    this captures the lead rather than pretending it's self-serve checkout.
+    """
+    __tablename__ = "dataset_enquiries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, index=True)
+    name = Column(String, nullable=True)
+    organisation = Column(String, nullable=True)
+    use_case = Column(Text, nullable=True)          # what they want it for
+    volume = Column(String, nullable=True)          # coarse "how much" from the form
+    contacted = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class FundingReading(Base):
+    """Daily snapshot of annualised perp funding across the majors (see
+    funding_monitor.py) — personal use, not a product feature.
+
+    Logged every day regardless of whether it triggers an alert, so this
+    accumulates the live forward series (the research used bulk historical
+    pulls). `above_threshold` drives below->above transition detection;
+    `alerted` marks the rows that actually sent mail, which is what the
+    cooldown check reads.
+    """
+    __tablename__ = "funding_readings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ts = Column(DateTime, index=True)
+    ew_annualised = Column(Float)               # equal-weight across symbols, annualised
+    threshold = Column(Float)                   # hurdle in force at the time
+    above_threshold = Column(Boolean, default=False, index=True)
+    alerted = Column(Boolean, default=False, index=True)
+    detail = Column(String, nullable=True)      # "BTCUSDT:0.1234,ETHUSDT:0.0987,..."
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class KeyResetToken(Base):
     __tablename__ = "key_reset_tokens"
 

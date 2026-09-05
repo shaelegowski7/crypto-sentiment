@@ -13,7 +13,7 @@ pydantic
 scipy
 numpy
 resend
-stripe
+stripe>=12,<16   # PIN: StripeObject stopped subclassing dict, so .get() on a Stripe resource raises AttributeError. Access fields via _sget() in main.py. Re-test the webhook before widening this.
 supabase
 feedparser
 lxml>=5.0.0
