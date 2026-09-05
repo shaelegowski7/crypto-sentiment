@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.brief import send_morning_briefs
+from app.trend_signal import send_trend_signal_email
+from app.funding_monitor import check_funding_season
 from app.trade_card import build_trade_card, format_trade_card_html, format_trade_card_text
 from . import models
 import math
@@ -1095,6 +1097,24 @@ scheduler.add_job(
     lambda: send_morning_briefs(next(get_db())),
     CronTrigger(hour=7, minute=0, timezone="Europe/London"),
     id="morning_brief",
+    replace_existing=True,
+)
+# Personal-use diversified trend signal (see trend_signal.py) — NOT the
+# sentiment signal, NOT a product feature. Day 2 rather than day 1 so it
+# never races a weekend/holiday-shifted month-end close still settling.
+scheduler.add_job(
+    lambda: send_trend_signal_email(next(get_db())),
+    CronTrigger(day=2, hour=8, minute=0, timezone="Europe/London"),
+    id="trend_signal",
+    replace_existing=True,
+)
+# Basis-carry season monitor (see funding_monitor.py) — personal use. Daily
+# because the whole point is not having to check manually; it only mails on
+# a below->above hurdle crossing, so a quiet regime is silent.
+scheduler.add_job(
+    lambda: check_funding_season(next(get_db())),
+    CronTrigger(hour=9, minute=0, timezone="Europe/London"),
+    id="funding_monitor",
     replace_existing=True,
 )
 def reset_monthly_api_usage():
@@ -2464,6 +2484,64 @@ def backfill_hn(
         "days": days,
         "start_days_ago": start_days_ago,
         "chunk_days": chunk_days,
+    }
+
+
+@app.post("/admin/trend-signal/send")
+def admin_trend_signal_send(secret: str = None, db: Session = Depends(get_db)):
+    """Manual trigger for the personal monthly trend signal (trend_signal.py)
+    — for testing the scheduler job without waiting for day 2 of the month.
+    Same idempotency as the scheduled run: a second call in the same month
+    is a no-op (TrendSignalLog already has that month's rows).
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    send_trend_signal_email(db)
+    return {"message": "trend signal run triggered — check logs / TrendSignalLog for results"}
+
+
+@app.get("/admin/funding-status")
+def admin_funding_status(secret: str = None, db: Session = Depends(get_db)):
+    """Current annualised funding + recent readings. Personal-use monitor
+    (funding_monitor.py) — token-gated, not part of the public API.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    from .funding_monitor import current_annualised_funding, THRESHOLD
+    live = current_annualised_funding()
+    recent = db.query(models.FundingReading).order_by(
+        models.FundingReading.ts.desc()
+    ).limit(30).all()
+    return {
+        "live": {"ew_annualised": live["ew"], "per_symbol": live["per_symbol"]},
+        "threshold": THRESHOLD,
+        "in_season": (live["ew"] or 0) > THRESHOLD,
+        "recent": [
+            {"ts": r.ts.isoformat() + "Z", "ew_annualised": r.ew_annualised,
+             "above_threshold": r.above_threshold, "alerted": r.alerted}
+            for r in recent
+        ],
+    }
+
+
+@app.get("/admin/trend-signal/history")
+def admin_trend_signal_history(secret: str = None, months: int = 12, db: Session = Depends(get_db)):
+    """Read back the forward-test log — what the strategy said each month,
+    logged before the outcome was known. Token-gated, personal-use only.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    rows = db.query(models.TrendSignalLog).order_by(
+        models.TrendSignalLog.month.desc(), models.TrendSignalLog.ticker
+    ).limit(months * 26).all()
+    return {
+        "rows": [
+            {
+                "month": r.month.date().isoformat(), "ticker": r.ticker, "category": r.category,
+                "signal": r.signal, "position": r.position, "price": r.price, "vol_ann": r.vol_ann,
+            }
+            for r in rows
+        ]
     }
 
 
