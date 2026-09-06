@@ -55,20 +55,25 @@ METHODOLOGY = (
     "equal-weighted mean across that category's tickers (headline volume doesn't "
     "skew it). Overall = equal-weighted mean across the 5 asset classes, so equities' "
     "20 tickers can't dominate a number meant to represent all of them. "
-    "Scale: 0 = extreme negative, 50 = neutral, 100 = extreme positive."
+    "Scale: 0 = extreme fear, 50 = neutral, 100 = extreme greed."
 )
 
 
 def _label(score: float) -> str:
+    # Fear/Greed vocabulary deliberately, not Negative/Positive: it's the
+    # genre-standard wording (alternative.me, CNN) that readers already parse
+    # instantly on sight. Using the familiar words doesn't claim to BE those
+    # products -- the page is explicit that this one is built from scored
+    # news text, not positioning -- it just speaks the same visual language.
     if score >= 75:
-        return "Extreme Positive"
+        return "Extreme Greed"
     if score >= 55:
-        return "Positive"
+        return "Greed"
     if score >= 45:
         return "Neutral"
     if score >= 25:
-        return "Negative"
-    return "Extreme Negative"
+        return "Fear"
+    return "Extreme Fear"
 
 
 def _to_100_scale(avg_sentiment: float) -> float:
