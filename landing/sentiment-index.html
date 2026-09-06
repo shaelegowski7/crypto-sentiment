@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cross-Asset Sentiment Index — Crypto, FX, Stocks &amp; Commodities | SentimentFX</title>
+  <meta name="description" content="A free, live sentiment index built from real financial news — not trader positioning or social media chatter. FinBERT-scored across crypto, FX, stocks, ETFs and commodities, updated continuously by SentimentFX.">
+  <meta name="keywords" content="sentiment index, market sentiment, cross-asset sentiment, news sentiment index, FinBERT index, crypto sentiment, forex sentiment, stock market sentiment">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#0b0e14">
+  <link rel="canonical" href="https://sentimentfx.org/sentiment-index">
+
+  <meta property="og:site_name" content="SentimentFX">
+  <meta property="og:title" content="Cross-Asset Sentiment Index | SentimentFX">
+  <meta property="og:description" content="A free, live sentiment index built from real financial news — not trader positioning or social media chatter. Crypto, FX, stocks, ETFs and commodities.">
+  <meta property="og:url" content="https://sentimentfx.org/sentiment-index">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://sentimentfx.org/dashboard.jpeg">
+  <meta property="og:locale" content="en_GB">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Cross-Asset Sentiment Index | SentimentFX">
+  <meta name="twitter:description" content="A free, live sentiment index built from real financial news, not trader positioning. Crypto, FX, stocks, ETFs and commodities.">
+  <meta name="twitter:image" content="https://sentimentfx.org/dashboard.jpeg">
+
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SentimentFX","item":"https://sentimentfx.org/"},{"@type":"ListItem","position":2,"name":"Sentiment Index","item":"https://sentimentfx.org/sentiment-index"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is this different from the Crypto Fear and Greed Index?","acceptedAnswer":{"@type":"Answer","text":"Most sentiment indices, including alternative.me's Crypto Fear and Greed Index and broker-side indicators like the Daily Sentiment Index, are built from trader positioning (long/short ratios), price momentum, or volatility. The SentimentFX index is built entirely from real financial news headlines scored by FinBERT, a finance-tuned NLP model — it reflects what is being written, not what traders are doing. It also spans crypto, FX, stocks, ETFs and commodities in one index, rather than a single asset class."}},{"@type":"Question","name":"How is the score calculated?","acceptedAnswer":{"@type":"Answer","text":"Each of the 42 tracked tickers gets a 7-day trailing average of its FinBERT sentiment scores. Tickers are grouped into five asset classes (crypto, FX, equities, ETFs, commodities) and equal-weighted within each class, so high-volume tickers like Bitcoin don't drown out lower-coverage ones. The five class scores are then equal-weighted into one overall number, so equities' larger ticker count can't dominate a cross-asset reading. The result is scaled 0-100, where 50 is neutral."}},{"@type":"Question","name":"Is this index free to use?","acceptedAnswer":{"@type":"Answer","text":"Yes. GET https://api.sentimentfx.org/sentiment-index returns the current reading as JSON with no authentication and no rate limit beyond standard abuse protection. It's free to embed, cite, or build on."}}]}</script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#0b0e14;--surface:#11151d;--surface2:#171c26;
+      --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+      --text:#e8ecf3;--muted:#8b95a7;
+      --accent:#f0b429;--accent2:#6cb2ff;
+      --positive:#42c768;--negative:#f26d64;--neutral:#8b949e;
+      --mono:'IBM Plex Mono',monospace;--sans:'Geist',sans-serif;
+    }
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;}
+    a{color:var(--accent);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+
+    nav{display:flex;align-items:center;justify-content:space-between;padding:14px 40px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+    .nav-logo{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;}
+    .nav-logo span{color:var(--muted);font-weight:400;}
+    .nav-links{display:flex;gap:24px;list-style:none;align-items:center;}
+    .nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--muted);}
+    .nav-links a:hover{color:var(--text);text-decoration:none;}
+    .nav-cta{background:var(--accent);color:#0b0e14!important;padding:6px 14px;border-radius:8px;font-weight:600;}
+
+    main{max-width:1100px;margin:0 auto;padding:48px 24px;}
+    .breadcrumb{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);margin-bottom:24px;text-transform:uppercase;}
+    .breadcrumb a{color:var(--muted);}
+    .breadcrumb a:hover{color:var(--text);text-decoration:none;}
+    .breadcrumb span{margin:0 8px;color:var(--border2);}
+
+    .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;}
+    h1{font-family:var(--mono);font-size:30px;font-weight:600;line-height:1.2;margin-bottom:14px;}
+    .lede{font-size:17px;color:var(--text);max-width:760px;margin-bottom:8px;line-height:1.6;}
+    .lede strong{color:var(--accent2);}
+
+    .gauge-card{margin-top:32px;padding:36px;border:1px solid var(--border);border-radius:14px;background:var(--surface);text-align:center;}
+    .gauge-number{font-family:var(--mono);font-size:72px;font-weight:700;line-height:1;}
+    .gauge-label{font-family:var(--mono);font-size:16px;letter-spacing:0.1em;text-transform:uppercase;margin-top:8px;color:var(--muted);}
+    .gauge-track{max-width:420px;height:8px;border-radius:999px;margin:20px auto 0;background:linear-gradient(90deg,var(--negative),var(--neutral),var(--positive));position:relative;}
+    .gauge-marker{position:absolute;top:-5px;width:3px;height:18px;background:var(--text);border-radius:2px;transform:translateX(-50%);}
+
+    .cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:24px;}
+    .cat-card{padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--surface);text-align:center;}
+    .cat-name{font-family:var(--mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+    .cat-score{font-family:var(--mono);font-size:28px;font-weight:600;}
+    .cat-sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;}
+    .pos{color:var(--positive);}
+    .neg{color:var(--negative);}
+    .neutral{color:var(--neutral);}
+
+    .updated{margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.05em;text-align:right;}
+
+    .cta-card{margin-top:32px;padding:20px 24px;border:1px solid var(--border);border-radius:10px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
+    .cta-card .cta-text{font-family:var(--mono);font-size:13px;color:var(--text);margin-bottom:4px;}
+    .cta-card .cta-sub{font-family:var(--sans);font-size:12px;color:var(--muted);}
+    .cta{display:inline-block;background:var(--accent);color:#0b0e14!important;padding:10px 18px;border-radius:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
+    .cta:hover{text-decoration:none;}
+
+    h2{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:48px;margin-bottom:14px;}
+    p{margin-bottom:14px;color:#c9d1d9;}
+    code{font-family:var(--mono);background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.9em;}
+
+    .related{margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
+    .related-title{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;}
+    .related ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;}
+    .related a{display:block;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:11px;color:var(--text);}
+    .related a:hover{border-color:var(--accent);text-decoration:none;}
+
+    @media (max-width:640px){
+      nav{padding:12px 16px;}
+      .nav-links{gap:12px;}
+      main{padding:32px 16px;}
+      h1{font-size:24px;}
+      .lede{font-size:15px;}
+      .gauge-number{font-size:52px;}
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="nav-logo">SENTIMENT<span>FX</span></a>
+    <ul class="nav-links">
+      <li><a href="https://app.sentimentfx.org/">Dashboard</a></li>
+      <li><a href="https://developers.sentimentfx.org">API</a></li>
+      <li><a href="https://app.sentimentfx.org/?auth=signup" class="nav-cta">Sign Up</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <div class="breadcrumb">
+      <a href="/">SentimentFX</a><span>/</span>Sentiment Index
+    </div>
+
+    <div class="eyebrow">Free · Live · Updated continuously</div>
+    <h1>Cross-asset sentiment index</h1>
+    <p class="lede">
+      Built entirely from real financial news headlines, scored by <strong>FinBERT</strong>
+      — not trader positioning, order flow, or social-media chatter like most sentiment
+      indices you'll find elsewhere. One number for crypto, FX, stocks, ETFs and
+      commodities together, plus a breakdown by asset class below.
+    </p>
+
+    <div class="gauge-card">
+      <div class="gauge-number neutral" id="gauge-number">—</div>
+      <div class="gauge-label" id="gauge-label">LOADING…</div>
+      <div class="gauge-track">
+        <div class="gauge-marker" id="gauge-marker" style="left:50%;"></div>
+      </div>
+    </div>
+
+    <div class="cat-grid" id="cat-grid">
+      <div class="cat-card"><div class="cat-name">Crypto</div><div class="cat-score neutral">—</div></div>
+      <div class="cat-card"><div class="cat-name">FX</div><div class="cat-score neutral">—</div></div>
+      <div class="cat-card"><div class="cat-name">Equities</div><div class="cat-score neutral">—</div></div>
+      <div class="cat-card"><div class="cat-name">ETFs</div><div class="cat-score neutral">—</div></div>
+      <div class="cat-card"><div class="cat-name">Commodities</div><div class="cat-score neutral">—</div></div>
+    </div>
+
+    <div class="updated" id="updated"></div>
+
+    <div class="cta-card">
+      <div>
+        <div class="cta-text">Want the per-ticker breakdown?</div>
+        <div class="cta-sub">Full sentiment history, price correlation, and CSV export with a free account.</div>
+      </div>
+      <a href="https://app.sentimentfx.org/?auth=signup" class="cta">Open dashboard →</a>
+    </div>
+
+    <h2>Why this isn't another Fear &amp; Greed Index</h2>
+    <p>
+      Most sentiment indices — alternative.me's Crypto Fear &amp; Greed Index, CFGI, the
+      Daily Sentiment Index used by futures traders, broker-side indicators like Finlogix
+      or FastBull — are built from <strong>trader positioning</strong> (long/short ratios),
+      price momentum, or volatility. They measure what traders are <em>doing</em>.
+    </p>
+    <p>
+      This index measures what's being <em>written</em>. Every headline across 42 tracked
+      tickers is scored by FinBERT, a transformer model fine-tuned specifically on
+      financial text — the same model and pipeline behind SentimentFX's dashboard and
+      API. It's a different input entirely, which is why the two kinds of index can
+      (and often do) disagree.
+    </p>
+
+    <h2>How the score is calculated</h2>
+    <p>
+      Each ticker gets a 7-day trailing average of its FinBERT sentiment scores
+      (-1 to +1, mapped onto a 0-100 scale where 50 is neutral). Tickers are grouped into
+      five asset classes and <strong>equal-weighted within each class</strong>, so
+      high-volume tickers like Bitcoin don't drown out lower-coverage ones like Dogecoin.
+      The five class scores are then <strong>equal-weighted into the overall number</strong>
+      — equities have 20 tracked tickers against commodities' 4, so a straight average
+      across all 42 would just be an equity number wearing a cross-asset label.
+    </p>
+
+    <h2>API access</h2>
+    <p>
+      The same data is available as JSON at
+      <a href="https://api.sentimentfx.org/sentiment-index"><code>GET /sentiment-index</code></a>
+      — no authentication required, free to embed or cite. See
+      <a href="https://developers.sentimentfx.org">developers.sentimentfx.org</a> for the
+      full per-ticker API (sentiment history, prices, correlation) and the MCP server.
+    </p>
+
+    <div class="related">
+      <div class="related-title">Related</div>
+      <ul>
+        <li><a href="/leaderboard">24h Sentiment Leaderboard</a></li>
+        <li><a href="/brief">Morning Brief</a></li>
+        <li><a href="https://developers.sentimentfx.org">API Documentation</a></li>
+        <li><a href="https://developers.sentimentfx.org/#dataset">Bulk Dataset Licence</a></li>
+      </ul>
+    </div>
+  </main>
+
+  <script>
+    function colorClass(score) {
+      if (score == null) return "neutral";
+      if (score >= 55) return "pos";
+      if (score <= 45) return "neg";
+      return "neutral";
+    }
+    const CAT_ORDER = ["crypto", "fx", "equity", "etf", "commodity"];
+    const CAT_LABELS = { crypto: "Crypto", fx: "FX", equity: "Equities", etf: "ETFs", commodity: "Commodities" };
+
+    fetch("https://api.sentimentfx.org/sentiment-index")
+      .then(r => r.json())
+      .then(data => {
+        const overall = data.overall;
+        const cls = colorClass(overall);
+        const numEl = document.getElementById("gauge-number");
+        numEl.textContent = overall == null ? "—" : Math.round(overall);
+        numEl.className = "gauge-number " + cls;
+        document.getElementById("gauge-label").textContent = data.overall_label || "—";
+        if (overall != null) {
+          document.getElementById("gauge-marker").style.left = overall + "%";
+        }
+
+        const grid = document.getElementById("cat-grid");
+        grid.innerHTML = CAT_ORDER.map(key => {
+          const c = data.categories[key] || {};
+          const cCls = colorClass(c.score);
+          return `<div class="cat-card">
+            <div class="cat-name">${CAT_LABELS[key]}</div>
+            <div class="cat-score ${cCls}">${c.score == null ? "—" : Math.round(c.score)}</div>
+            <div class="cat-sub">${c.tickers_with_data || 0}/${c.tickers_total || 0} tickers · ${c.headlines || 0} headlines</div>
+          </div>`;
+        }).join("");
+
+        if (data.as_of) {
+          const dt = new Date(data.as_of);
+          document.getElementById("updated").textContent =
+            "Updated " + dt.toLocaleString() + " · " + data.window_days + "-day trailing window";
+        }
+      })
+      .catch(err => {
+        document.getElementById("gauge-label").textContent = "Failed to load: " + (err.message || err);
+      });
+  </script>
+</body>
+</html>

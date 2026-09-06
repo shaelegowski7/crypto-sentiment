@@ -2015,6 +2015,18 @@ def get_stats(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/sentiment-index")
+@limiter.limit("60/minute")
+def sentiment_index(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Free, public, cross-asset sentiment index -- see sentiment_index.py for
+    the methodology and why it's deliberately not a paid product. No API key:
+    the whole point is that anyone (a journalist, a newsletter script, an
+    embed on someone else's site) can pull it without friction.
+    """
+    from .sentiment_index import compute_index
+    return compute_index(db)
+
+
 @app.delete("/cleanup/duplicates")
 def cleanup_duplicates(db: Session = Depends(get_db), admin=Depends(require_admin)):
     all_headlines = db.query(models.Headline).order_by(models.Headline.id).all()
