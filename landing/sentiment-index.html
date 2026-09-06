@@ -80,6 +80,16 @@
 
     .updated{margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.05em;text-align:right;}
 
+    .compare-card{margin-top:24px;padding:24px;border:1px solid var(--border);border-radius:12px;background:var(--surface);}
+    .compare-title{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
+    .compare-row{display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;}
+    .compare-item{flex:1;min-width:180px;text-align:center;}
+    .compare-label{font-family:var(--mono);font-size:11px;color:var(--text);line-height:1.5;}
+    .compare-sub{color:var(--muted);font-size:10px;}
+    .compare-score{font-family:var(--mono);font-size:40px;font-weight:700;margin:8px 0 2px;}
+    .compare-vs{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.1em;}
+    .compare-note{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;margin-bottom:0;}
+
     .cta-card{margin-top:32px;padding:20px 24px;border:1px solid var(--border);border-radius:10px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
     .cta-card .cta-text{font-family:var(--mono);font-size:13px;color:var(--text);margin-bottom:4px;}
     .cta-card .cta-sub{font-family:var(--sans);font-size:12px;color:var(--muted);}
@@ -148,6 +158,24 @@
 
     <div class="updated" id="updated"></div>
 
+    <div class="compare-card" id="compare-card" hidden>
+      <div class="compare-title">How this compares to the well-known crypto index</div>
+      <div class="compare-row">
+        <div class="compare-item">
+          <div class="compare-label">alternative.me Crypto Fear &amp; Greed<br><span class="compare-sub">trader positioning, volatility, social volume</span></div>
+          <div class="compare-score neutral" id="altme-score">—</div>
+          <div class="compare-sub" id="altme-label"></div>
+        </div>
+        <div class="compare-vs">VS</div>
+        <div class="compare-item">
+          <div class="compare-label">SentimentFX — Crypto<br><span class="compare-sub">FinBERT-scored news headlines</span></div>
+          <div class="compare-score neutral" id="sfx-crypto-score">—</div>
+          <div class="compare-sub" id="sfx-crypto-label"></div>
+        </div>
+      </div>
+      <p class="compare-note" id="compare-note"></p>
+    </div>
+
     <div class="cta-card">
       <div>
         <div class="cta-text">Want the per-ticker breakdown?</div>
@@ -174,7 +202,8 @@
     <h2>How the score is calculated</h2>
     <p>
       Each ticker gets a 7-day trailing average of its FinBERT sentiment scores
-      (-1 to +1, mapped onto a 0-100 scale where 50 is neutral). Tickers are grouped into
+      (-1 to +1, mapped onto a 0-100 scale where 0 is extreme fear, 50 is neutral, and
+      100 is extreme greed). Tickers are grouped into
       five asset classes and <strong>equal-weighted within each class</strong>, so
       high-volume tickers like Bitcoin don't drown out lower-coverage ones like Dogecoin.
       The five class scores are then <strong>equal-weighted into the overall number</strong>
@@ -212,6 +241,38 @@
     const CAT_ORDER = ["crypto", "fx", "equity", "etf", "commodity"];
     const CAT_LABELS = { crypto: "Crypto", fx: "FX", equity: "Equities", etf: "ETFs", commodity: "Commodities" };
 
+    let sfxCryptoScore = null;
+    let lastAltme = null;
+
+    function renderCompareIfReady(altme) {
+      if (sfxCryptoScore == null || !altme) return;
+      const card = document.getElementById("compare-card");
+      card.hidden = false;
+
+      const altScore = Number(altme.value);
+      const altEl = document.getElementById("altme-score");
+      altEl.textContent = altScore;
+      altEl.className = "compare-score " + colorClass(altScore);
+      document.getElementById("altme-label").textContent = altme.value_classification || "";
+
+      const sfxEl = document.getElementById("sfx-crypto-score");
+      sfxEl.textContent = Math.round(sfxCryptoScore);
+      sfxEl.className = "compare-score " + colorClass(sfxCryptoScore);
+      document.getElementById("sfx-crypto-label").textContent = colorClass(sfxCryptoScore) === "pos" ? "Greed"
+        : colorClass(sfxCryptoScore) === "neg" ? "Fear" : "Neutral";
+
+      const gap = Math.abs(altScore - sfxCryptoScore);
+      const note = document.getElementById("compare-note");
+      note.textContent = gap >= 20
+        ? `Currently ${Math.round(gap)} points apart — positioning and actual news sentiment don't always agree.`
+        : `Currently within ${Math.round(gap)} points of each other today.`;
+    }
+
+    fetch("https://api.alternative.me/fng/?limit=1")
+      .then(r => r.json())
+      .then(d => { lastAltme = (d.data || [])[0]; renderCompareIfReady(lastAltme); })
+      .catch(() => {}); // comparison card just stays hidden if this fails -- non-critical
+
     fetch("https://api.sentimentfx.org/sentiment-index")
       .then(r => r.json())
       .then(data => {
@@ -240,6 +301,12 @@
           const dt = new Date(data.as_of);
           document.getElementById("updated").textContent =
             "Updated " + dt.toLocaleString() + " · " + data.window_days + "-day trailing window";
+        }
+
+        const cryptoScore = (data.categories.crypto || {}).score;
+        if (cryptoScore != null) {
+          sfxCryptoScore = cryptoScore;
+          if (lastAltme) renderCompareIfReady(lastAltme);
         }
       })
       .catch(err => {
