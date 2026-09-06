@@ -37,6 +37,12 @@
     <priority>0.95</priority>
   </url>
   <url>
+    <loc>https://sentimentfx.org/sentiment-index</loc>
+    <lastmod>2026-09-06</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
     <loc>https://sentimentfx.org/brief</loc>
     <lastmod>2026-06-24</lastmod>
     <changefreq>daily</changefreq>
