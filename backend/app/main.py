@@ -45,6 +45,7 @@ import csv
 import io
 import secrets
 import hashlib
+import hmac
 from apscheduler.triggers.cron import CronTrigger
 import time
 import base64
@@ -3194,6 +3195,98 @@ async def stripe_webhook(request: Request):
                 print(f"Payment failed email error: {e}")
         
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# TradingView alert webhook
+# ---------------------------------------------------------------------------
+# The one legitimate "TradingView talks to us" integration: a TradingView
+# alert's webhook action POSTs its Message field to a URL you give it, no
+# custom headers, no request signing. TradingView doesn't support that, so
+# the secret has to travel in the URL path instead -- constant-time compared
+# against TRADINGVIEW_WEBHOOK_SECRET so a timing attack can't shave bits off
+# it. Unset the env var and every delivery is rejected; there is no "just
+# don't check it" fallback.
+#
+# Scope is deliberately just receive -> parse -> store. No order gets
+# placed, no downstream call fires. Wiring a stored signal into anything
+# that moves money is a separate, explicit decision for later -- not
+# something this endpoint does on your behalf.
+_TRADINGVIEW_MAX_BODY_CHARS = 4000
+
+
+@app.post("/webhooks/tradingview/{secret}")
+@limiter.limit("60/minute")
+async def tradingview_webhook(secret: str, request: Request, response: Response,
+                               db: Session = Depends(get_db)):
+    """Receives a TradingView alert delivery, stores it, acks fast.
+
+    Point a TradingView alert's webhook URL at
+    `https://api.sentimentfx.org/webhooks/tradingview/<TRADINGVIEW_WEBHOOK_SECRET>`.
+    The Message field can be anything; a JSON body (using TradingView's
+    `{{ticker}}`/`{{close}}`/etc placeholders) gets `ticker`/`action`/`price`
+    parsed out, e.g. `{"ticker": "{{ticker}}", "action": "buy", "price":
+    {{close}}}`. Plain text still gets stored (`parsed_ok: false`) rather
+    than rejected -- a malformed message shouldn't silently lose the alert.
+    """
+    expected = os.getenv("TRADINGVIEW_WEBHOOK_SECRET")
+    if not expected or not hmac.compare_digest(secret, expected):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    body_bytes = await request.body()
+    body_text = body_bytes.decode("utf-8", errors="replace")[:_TRADINGVIEW_MAX_BODY_CHARS]
+
+    ticker = action = None
+    price = None
+    parsed_ok = False
+    try:
+        payload = json.loads(body_text)
+        if isinstance(payload, dict):
+            ticker = str(payload.get("ticker"))[:32] if payload.get("ticker") is not None else None
+            action = str(payload.get("action"))[:32] if payload.get("action") is not None else None
+            raw_price = payload.get("price")
+            if raw_price is not None:
+                price = float(raw_price)
+            parsed_ok = True
+    except (ValueError, TypeError):
+        pass  # not JSON, or price wasn't numeric -- keep raw_body, move on
+
+    row = models.TradingViewSignal(
+        ticker=ticker, action=action, price=price,
+        raw_body=body_text, parsed_ok=parsed_ok,
+        source_ip=get_remote_address(request),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+
+    return {"status": "received", "id": row.id, "parsed": parsed_ok}
+
+
+@app.get("/admin/tradingview-signals")
+def admin_tradingview_signals(limit: int = 50, db: Session = Depends(get_db),
+                               admin=Depends(require_super_admin)):
+    """Recent TradingView webhook deliveries, newest first -- the only way
+    to see what's landed short of querying Postgres directly."""
+    limit = max(1, min(limit, 200))
+    rows = db.query(models.TradingViewSignal).order_by(
+        models.TradingViewSignal.received_at.desc()
+    ).limit(limit).all()
+    return {
+        "count": len(rows),
+        "signals": [
+            {
+                "id": r.id,
+                "ticker": r.ticker,
+                "action": r.action,
+                "price": r.price,
+                "parsed_ok": r.parsed_ok,
+                "raw_body": r.raw_body,
+                "source_ip": r.source_ip,
+                "received_at": r.received_at.isoformat() + "Z" if r.received_at else None,
+            } for r in rows
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------

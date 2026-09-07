@@ -263,3 +263,29 @@ class KeyResetToken(Base):
     expires_at = Column(DateTime)
     used = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TradingViewSignal(Base):
+    """One row per delivery to POST /webhooks/tradingview/{secret} (see
+    main.py). A TradingView alert's "Message" field is free-form text the
+    user templates themselves (e.g. `{{ticker}}`, `{{close}}` placeholders)
+    -- there is no fixed schema TradingView guarantees, so `raw_body` keeps
+    exactly what was received and `ticker`/`action`/`price` are a
+    best-effort parse of a JSON body, nullable so a delivery is never lost
+    just because it didn't parse the way we hoped.
+
+    This table is the entire effect of the webhook today: receive, parse,
+    store. No order gets placed and no downstream action fires from a row
+    landing here -- wiring that up is a deliberate separate decision, not
+    something the receiver does on its own.
+    """
+    __tablename__ = "tradingview_signals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String, nullable=True, index=True)
+    action = Column(String, nullable=True)      # whatever the alert message says, e.g. "buy"/"sell"
+    price = Column(Float, nullable=True)
+    raw_body = Column(Text)                     # exact bytes TradingView sent
+    parsed_ok = Column(Boolean, default=False)  # True once raw_body parsed as JSON
+    source_ip = Column(String, nullable=True)
+    received_at = Column(DateTime, default=datetime.utcnow, index=True)
