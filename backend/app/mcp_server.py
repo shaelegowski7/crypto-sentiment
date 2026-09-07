@@ -74,8 +74,11 @@ mcp = FastMCP(
         "available.  `get_summary` for daily sentiment aggregates, "
         "`get_sentiment` for the raw scored headlines, `get_prices` for "
         "historical closes, `get_correlation` for a 180-day Pearson stat "
-        "between daily sentiment shifts and next-day price returns.  All "
-        "responses are in GBP; sentiment scores are pos_prob - neg_prob."
+        "between daily sentiment shifts and next-day price returns, "
+        "`run_backtest` to simulate a trading signal against real historical "
+        "data, `generate_pine_script` to export the price-only Donchian "
+        "signal as a TradingView strategy.  All responses are in GBP; "
+        "sentiment scores are pos_prob - neg_prob."
     ),
 )
 
@@ -453,3 +456,213 @@ def get_correlation(ctx: Context, ticker: str) -> dict[str, Any]:
         }
     finally:
         db.close()
+
+
+@mcp.tool()
+def run_backtest(
+    ctx: Context,
+    ticker: str,
+    signal: str = "shift",
+    hold_days: int = 7,
+    direction_mode: str = "momentum",
+    donchian_n: int | None = None,
+    costs_bps: int | None = None,
+) -> dict[str, Any]:
+    """Backtest a trading signal for `ticker` over the last 365 days using
+    SentimentFX's own historical sentiment + price data.  A real simulation
+    (long-only, one trade at a time, cost-adjusted) — not advice, and no
+    funds are moved by calling this.
+
+    `signal`: "shift" (default — sentiment shift vs its own 7-day trailing
+    average) / "divergence" (sentiment vs price moving opposite ways) /
+    "donchian" (price-only trend breakout — see `generate_pine_script` to
+    export this one as a real TradingView strategy).  `donchian` is the
+    only signal here with genuine out-of-sample support; `shift` and
+    `divergence` are in-sample research over SentimentFX's proprietary
+    sentiment feed and have not shown a durable out-of-sample edge — treat
+    their numbers as exploratory, not a strategy to trade.
+
+    `direction_mode`: "momentum" (default, trade with the signal) or
+    "contrarian" (fade it).  `hold_days` (1-30) is the fixed holding period
+    per trade.  `donchian_n` (5-200, default 20) is the breakout lookback,
+    only used when signal="donchian".  `costs_bps` overrides the built-in
+    per-asset-class round-trip cost estimate (crypto ~30bps, FX ~15bps,
+    stocks ~6bps, etc).
+
+    Costs 1 API credit regardless of outcome (the DB scan happens either
+    way) — same meter as the other tools.  Returns gross and net (after
+    costs) summaries plus buy-and-hold for comparison; `note` explains a
+    "no trades" or "not enough data" result.
+    """
+    from .main import _build_daily_series, _simulate_trades, _costs_pct_for
+
+    if signal not in ("divergence", "shift", "donchian"):
+        raise ValueError("signal must be 'divergence', 'shift' or 'donchian'")
+    if direction_mode not in ("momentum", "contrarian"):
+        raise ValueError("direction_mode must be 'momentum' or 'contrarian'")
+    hold_days = max(1, min(hold_days, 30))
+    if donchian_n is not None:
+        donchian_n = max(5, min(donchian_n, 200))
+    if costs_bps is not None:
+        costs_bps = max(0, min(costs_bps, 500))
+
+    api_key, db = _open_authed_session(ctx)
+    try:
+        # Billed up front, same as get_correlation — the 365d headline+price
+        # scan costs the same whether or not the signal ends up firing.
+        _bill(api_key, db, 1, endpoint="backtest")
+
+        since = datetime.utcnow() - timedelta(days=365)
+        headlines = db.query(models.Headline).filter(
+            models.Headline.ticker == ticker.upper(),
+            models.Headline.published_at >= since,
+        ).order_by(models.Headline.published_at).all()
+        prices = db.query(models.Price).filter(
+            models.Price.ticker == ticker.upper(),
+            models.Price.date >= since,
+        ).order_by(models.Price.date).all()
+
+        needs_sentiment = signal != "donchian"
+        if len(prices) < 30 or (needs_sentiment and len(headlines) < 20):
+            return {
+                "ticker": ticker.upper(), "signal": signal, "calls_used": 1,
+                "note": "Not enough data in the last 365d to backtest this ticker/signal.",
+            }
+
+        daily_sentiment, daily_price, common = _build_daily_series(headlines, prices)
+        if needs_sentiment and len(common) < 20:
+            return {
+                "ticker": ticker.upper(), "signal": signal, "calls_used": 1,
+                "note": "Not enough overlapping sentiment/price data to backtest this window.",
+            }
+
+        trades = _simulate_trades(
+            daily_sentiment, daily_price, common, signal, hold_days,
+            direction_mode=direction_mode, donchian_n=donchian_n,
+        )
+        if not trades:
+            return {
+                "ticker": ticker.upper(), "signal": signal, "hold_days": hold_days,
+                "calls_used": 1,
+                "note": "Signal did not fire in this window — no trades generated.",
+            }
+
+        # Mirrors get_backtest's _agg / _compact_backtest_summary's _stats in
+        # main.py (marker: MCP_MIRRORS_BACKTEST) — kept as its own small copy
+        # rather than a shared helper since the MCP shape (no equity curve,
+        # no per-trade list) genuinely differs from the HTTP response.
+        costs_pct = _costs_pct_for(ticker, costs_bps)
+        size_frac = 1.0  # run_backtest doesn't expose size_pct — full-size only
+        costs_sized = costs_pct * size_frac
+
+        def _stats(returns: list[float]) -> dict[str, Any]:
+            n = len(returns)
+            winning = sum(1 for r in returns if r > 0)
+            compounded = 100.0
+            for r in returns:
+                compounded *= (1 + r / 100)
+            return {
+                "trades": n,
+                "win_rate": round(winning / n, 3),
+                "avg_return_pct": round(sum(returns) / n, 2),
+                "total_return_pct": round(compounded - 100, 2),
+            }
+
+        sized_returns = [t["sized_return_pct"] for t in trades]
+        gross = _stats(sized_returns)
+        net = _stats([r - costs_sized for r in sized_returns])
+
+        sorted_dates = sorted(daily_price.keys())
+        first_price, last_price = daily_price[sorted_dates[0]], daily_price[sorted_dates[-1]]
+        buy_hold = round((last_price - first_price) / first_price * 100, 2)
+        net["buy_hold_return_pct"] = buy_hold
+        net["alpha_pct"] = round(net["total_return_pct"] - buy_hold, 2)
+
+        return {
+            "ticker": ticker.upper(),
+            "signal": signal,
+            "hold_days": hold_days,
+            "direction_mode": direction_mode,
+            "window_days": (sorted_dates[-1] - sorted_dates[0]).days,
+            "calls_used": 1,
+            "costs_pct_per_trade": costs_pct,
+            "summary": {"gross": gross, "net": net},
+            "recent_trades": [
+                {
+                    "entry_date": str(t["entry_date"]),
+                    "exit_date": str(t["exit_date"]),
+                    "return_pct": round(t["sized_return_pct"], 2),
+                    "exit_reason": t["exit_reason"],
+                } for t in trades[-10:]
+            ],
+        }
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def generate_pine_script(ticker: str, donchian_n: int = 20) -> dict[str, Any]:
+    """Generate a real TradingView Pine Script v5 strategy for `ticker`,
+    exporting SentimentFX's price-only Donchian breakout signal — long once
+    price closes above the trailing `donchian_n`-bar high, flat once it
+    closes below the trailing low.
+
+    This is the *only* SentimentFX signal exported here on purpose: it's
+    price-only and the one with genuine out-of-sample support (see
+    `run_backtest`'s docstring).  The sentiment-driven signals (`shift`,
+    `divergence`) can't be turned into a standalone Pine script — Pine has
+    no way to pull SentimentFX's live FinBERT scores — so those only run
+    inside `run_backtest`.  Paste the output straight into TradingView's
+    Pine Editor to chart or backtest it there; nothing here places trades
+    or touches TradingView on your behalf.
+
+    Free — no API key required, doesn't hit the billing meter.
+
+    Note on fidelity: this Pine strategy is *continuous* (stays long from
+    breakout to breakdown); `run_backtest(signal="donchian")` simulates the
+    same rule as discrete fixed `hold_days` trades instead, so the two
+    won't produce identical numbers on the same window — same signal,
+    different execution model.
+    """
+    ticker = ticker.upper()
+    donchian_n = max(5, min(donchian_n, 200))
+    script = f"""//@version=5
+strategy("SentimentFX Donchian Breakout - {ticker}", overlay=true,
+     initial_capital=100, default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100)
+
+// Price-only trend signal, long-only. Long once price closes above the
+// trailing n-bar high, flat once it closes below the trailing n-bar low.
+// Same rule SentimentFX's run_backtest(signal="donchian") tool tests
+// out-of-sample -- see that tool's docstring before trading this on size.
+n = input.int({donchian_n}, "Lookback (bars)", minval=5, maxval=200)
+
+upper = ta.highest(close, n)[1]
+lower = ta.lowest(close, n)[1]
+
+var bool inUptrend = na
+if close > upper
+    inUptrend := true
+if close < lower
+    inUptrend := false
+
+if inUptrend and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+if not inUptrend and strategy.position_size > 0
+    strategy.close("Long")
+
+plot(upper, "Donchian Upper", color=color.new(color.green, 0))
+plot(lower, "Donchian Lower", color=color.new(color.red, 0))
+"""
+    return {
+        "ticker": ticker,
+        "strategy": "donchian",
+        "donchian_n": donchian_n,
+        "pine_script": script,
+        "note": (
+            "Price-only strategy, safe to paste directly into TradingView's "
+            "Pine Editor. SentimentFX's sentiment-driven signals (shift, "
+            "divergence) aren't exportable this way — run them via "
+            "run_backtest instead."
+        ),
+    }

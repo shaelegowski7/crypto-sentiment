@@ -117,14 +117,16 @@ For those, the useful blurb is:
 
 > SentimentFX — FinBERT-scored news sentiment plus matched OHLCV price history
 > for 42 tickers across crypto, FX, US equities, ETFs and commodity futures.
-> 178,000+ headlines from 12,500+ sources since 2019. Six tools; free key with
-> 100 calls, no card required. The correlation tool reports its own p-value and
+> 178,000+ headlines from 12,500+ sources since 2019. Eight tools, including a
+> real backtest engine and TradingView Pine Script export; free key with 100
+> calls, no card required. The correlation tool reports its own p-value and
 > confidence interval, and returns "inconclusive" when that is the honest
 > answer — which, on most tickers, it is.
 
 ## Keeping it current
 
 Bump `version` in `server.json` and re-run `mcp-publisher publish` when the
-tool surface changes. The manifest currently describes 6 tools:
-`list_tickers`, `get_usage` (both free) and `get_sentiment`, `get_summary`,
-`get_prices`, `get_correlation` (billed, mirroring `/v1/*`).
+tool surface changes. The manifest currently describes 8 tools:
+`list_tickers`, `get_usage`, `generate_pine_script` (all three free) and
+`get_sentiment`, `get_summary`, `get_prices`, `get_correlation`,
+`run_backtest` (billed, mirroring `/v1/*` where an HTTP equivalent exists).
