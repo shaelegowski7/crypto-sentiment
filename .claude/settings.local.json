@@ -8,7 +8,8 @@
       "Bash(npm run *)",
       "WebFetch(domain:en.wikipedia.org)",
       "WebFetch(domain:fonts.googleapis.com)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(node -e ' *)"
     ]
   }
 }
