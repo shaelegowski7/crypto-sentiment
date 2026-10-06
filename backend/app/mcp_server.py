@@ -4,12 +4,13 @@ Exposes the same read endpoints partners can hit via /v1/* — but as an MCP
 server so Claude Code, Claude.ai desktop, Claude API apps, Cursor, Cline, and
 any other MCP-speaking client can call them as native tools.  Mounted into
 the existing FastAPI app at /mcp; partners point their client at
-`https://api.sentimentfx.org/mcp` with header `X-API-Key: sk_...`.
+`https://api.sentimentfx.org/mcp` with header `X-API-Key: sfx_...` (or
+`Authorization: Bearer sfx_...` — see `_api_key_from_headers`).
 
 Design decisions worth pinning:
 
 * **Auth reuses existing SentimentFX API keys.**  Each tool call re-extracts
-  the X-API-Key header from the underlying HTTP request, validates it against
+  the key from the underlying HTTP request, validates it against
   the APIKey table, and calls the same `track_usage(...)` billing hook as the
   /v1/* endpoints.  A partner's Claude usage bills identically to their
   direct HTTP usage — no separate MCP metering plane.
@@ -84,8 +85,26 @@ mcp = FastMCP(
 # Auth + billing plumbing shared by every tool
 # ---------------------------------------------------------------------------
 
+def _api_key_from_headers(headers) -> str | None:
+    """The caller's API key: `X-API-Key`, else `Authorization: Bearer <key>`.
+
+    Bearer is not optional.  The Claude API's MCP connector has no custom-header
+    field — `mcp_servers` takes only `authorization_token`, which it sends as
+    `Authorization: Bearer ...` — so a server that reads only X-API-Key is
+    unreachable from Claude API apps, which the portal advertises.  X-API-Key
+    wins when both are sent, matching what every other client is told to use.
+    """
+    key = headers.get("x-api-key")
+    if key:
+        return key
+    scheme, _, token = headers.get("authorization", "").partition(" ")
+    if scheme.lower() == "bearer" and token.strip():
+        return token.strip()
+    return None
+
+
 def _open_authed_session(ctx: Context, enforce_quota: bool = True):
-    """Extract + validate the X-API-Key header from the underlying HTTP request.
+    """Extract + validate the API key from the underlying HTTP request.
 
     Returns `(api_key, db_session)`.  Caller is responsible for closing the
     session (use a try/finally).  We do NOT reuse a global session because
@@ -104,11 +123,12 @@ def _open_authed_session(ctx: Context, enforce_quota: bool = True):
     from .main import _allowance_exhausted, _quota_message
 
     request = ctx.request_context.request
-    x_api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
+    x_api_key = _api_key_from_headers(request.headers)
     if not x_api_key:
         raise ValueError(
-            "Missing X-API-Key header. Add it to your MCP client config — "
-            "generate a key at https://developers.sentimentfx.org."
+            "Missing API key. Send it as an X-API-Key header, or as "
+            "Authorization: Bearer <key> — generate a key at "
+            "https://developers.sentimentfx.org."
         )
 
     db = SessionLocal()

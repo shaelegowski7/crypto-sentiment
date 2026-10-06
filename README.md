@@ -81,7 +81,7 @@ The Sentiment Index is public and needs no key: `GET https://api.sentimentfx.org
 
 ### MCP server (`api.sentimentfx.org/mcp`)
 
-The same data is exposed as six Model Context Protocol tools: `list_tickers` and `get_usage` (both free), plus `get_sentiment`, `get_summary`, `get_prices` and `get_correlation`, which bill exactly like their `/v1` equivalents. It uses streamable HTTP with the same `X-API-Key` header. The registry manifest is [server.json](server.json), and publishing steps are in [docs/publishing-mcp-registry.md](docs/publishing-mcp-registry.md).
+The same data is exposed as six Model Context Protocol tools: `list_tickers` and `get_usage` (both free), plus `get_sentiment`, `get_summary`, `get_prices` and `get_correlation`, which bill exactly like their `/v1` equivalents. It uses streamable HTTP with the same `X-API-Key` header, or `Authorization: Bearer <key>` for clients that can't set custom headers (the Claude API's MCP connector is one). The registry manifest is [server.json](server.json), and publishing steps are in [docs/publishing-mcp-registry.md](docs/publishing-mcp-registry.md).
 
 ```json
 {
