@@ -179,7 +179,13 @@ class APIKey(Base):
     stripe_subscription_id = Column(String, nullable=True)
     calls_used = Column(Integer, default=0)
     calls_this_month = Column(Integer, default=0)
-    free_calls = Column(Integer, default=100)
+    # Free keys: `free_calls` per rolling 30-day window.  The window opens on
+    # the first billable call, and the first billable call after it lapses
+    # opens the next one.  Null start = no window running.  Paid keys ignore
+    # these and use `monthly_allowance` against `calls_this_month` instead.
+    free_calls = Column(Integer, default=1000)
+    free_window_started_at = Column(DateTime, nullable=True)
+    free_window_calls = Column(Integer, default=0, nullable=False)
     monthly_allowance = Column(Integer, default=0)
     # Internal / dogfood / partner keys.  When True, track_usage still increments
     # the counters (useful for observability) but skips the Stripe meter event

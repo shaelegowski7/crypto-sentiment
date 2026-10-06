@@ -118,7 +118,7 @@ For those, the useful blurb is:
 > SentimentFX — FinBERT-scored news sentiment plus matched OHLCV price history
 > for 42 tickers across crypto, FX, US equities, ETFs and commodity futures.
 > 178,000+ headlines from 12,500+ sources since 2019. Six tools; free key with
-> 100 calls, no card required. The correlation tool reports its own p-value and
+> 1,000 calls every 30 days, no card required. The correlation tool reports its own p-value and
 > confidence interval, and returns "inconclusive" when that is the honest
 > answer — which, on most tickers, it is.
 

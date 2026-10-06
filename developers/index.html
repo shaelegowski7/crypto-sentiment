@@ -4,7 +4,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>SentimentFX API — Sentiment, Price &amp; Correlation REST API for 42 Tickers</title>
-        <meta name="description" content="SentimentFX REST API: FinBERT-scored news sentiment, daily price data, and sentiment-price correlation for 42 tickers across crypto, FX, stocks, ETFs and commodities. Free API key with 100 calls, no card required. Also available as an MCP server." />
+        <meta name="description" content="SentimentFX REST API: FinBERT-scored news sentiment, daily price data, and sentiment-price correlation for 42 tickers across crypto, FX, stocks, ETFs and commodities. Free API key with 1,000 calls every 30 days, no card required. Also available as an MCP server." />
         <meta name="keywords" content="sentiment API, financial NLP API, crypto sentiment API, FX sentiment API, FinBERT API, market sentiment REST API, news sentiment endpoint" />
         <meta name="author" content="SentimentFX" />
         <meta name="robots" content="index, follow, max-image-preview:large" />
@@ -13,7 +13,7 @@
 
         <meta property="og:site_name" content="SentimentFX" />
         <meta property="og:title" content="SentimentFX API — Sentiment, Price &amp; Correlation REST API" />
-        <meta property="og:description" content="FinBERT-scored news sentiment, price data, and correlation endpoints for 42 tickers. Free key with 100 calls, no card required." />
+        <meta property="og:description" content="FinBERT-scored news sentiment, price data, and correlation endpoints for 42 tickers. Free key with 1,000 calls every 30 days, no card required." />
         <meta property="og:url" content="https://developers.sentimentfx.org/" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://sentimentfx.org/dashboard.jpeg" />
@@ -214,13 +214,13 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                         <span class="key-bar-label">API Key</span>
                         <input class="key-bar-input" type="password" id="tester-api-key" placeholder="sfx_••••••••••••••••••••••••••••••••••••••••••••••••" oninput="saveKey(this.value)" autocomplete="off" />
                         <span class="key-bar-hint">
-                            No key yet? <a href="#" onclick="nav('docs');scrollToId('auth');return false;">Get a free one</a> — 100 calls, no card.
+                            No key yet? <a href="#" onclick="nav('docs');scrollToId('auth');return false;">Get a free one</a> — 1,000 calls every 30 days, no card.
                         </span>
                     </div>
 
                     <div id="auth" class="scroll-section">
                         <h2>Authentication</h2>
-                        <p>All API endpoints require an API key passed as the <code style="color:var(--accent2);">X-API-Key</code> request header. Get one below — no card, no account, 100 free calls to try it with.</p>
+                        <p>All API endpoints require an API key passed as the <code style="color:var(--accent2);">X-API-Key</code> request header. Get one below — no card, no account, 1,000 free calls every 30 days.</p>
 
                         <div class="signup">
                             <div class="signup-title">Get a free API key</div>
@@ -270,7 +270,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                             are linked to your account and pick up your plan's monthly allowance automatically.
                         </p>
                         <div class="notice">
-                            A free key stops serving once its 100 calls are gone — requests return
+                            A free key gets 1,000 calls per 30-day window, which starts at its first call. Once they are gone it stops serving until the window ends — requests return
                             <code>402</code> with <code>"type": "insufficient_quota"</code> rather than
                             silently billing you. There is no card on a free key and no overage can accrue.
                             <code>GET /v1/usage</code> keeps working when you're out, so you can always
@@ -830,7 +830,7 @@ function handlePurchaseReturn() {
 }
 
 // --- Free-key signup -------------------------------------------------------
-// POSTs to /api/keys/generate (unauthenticated, 5/hour/IP, 100 free calls).
+// POSTs to /api/keys/generate (unauthenticated, 5/hour/IP, 1,000 calls per 30 days).
 // On success the key is dropped straight into the tester's key field, so the
 // next thing a new developer can do is make a real call without copy-pasting
 // anything anywhere.
@@ -865,7 +865,7 @@ async function requestKey() {
         })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.key) {
-            signupMsg(`Key created with ${data.free_calls ?? 100} free calls. It's in the tester below too.`, 'ok')
+            signupMsg(`Key created with ${(data.free_calls ?? 1000).toLocaleString()} free calls every 30 days. It's in the tester below too.`, 'ok')
             showKey(data.key)
         } else if (res.status === 409) {
             signupMsg("You already have a key for that email. Use the reset link below to get a fresh one.", 'err')

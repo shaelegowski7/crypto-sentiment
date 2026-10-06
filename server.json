@@ -16,7 +16,7 @@
       "headers": [
         {
           "name": "X-API-Key",
-          "description": "SentimentFX API key. Free key (100 calls, no card) at developers.sentimentfx.org",
+          "description": "SentimentFX API key. Free key (1,000 calls every 30 days, no card) at developers.sentimentfx.org",
           "isRequired": true,
           "isSecret": true
         }

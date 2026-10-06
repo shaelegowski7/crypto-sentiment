@@ -48,7 +48,7 @@ Alerts only fire for tickers whose backtest passes a quality gate: positive out-
 | Free | £0 | 15 top tickers (3 per category), 30-day history, candlesticks, backtests, correlation |
 | Pro | £11.99/mo or £99.99/yr | All 42 tickers, full history, CSV export, alerts, morning brief, 1,000 API calls/mo |
 | Data | £49.99/mo or £499.99/yr | Everything in Pro, 5,000 API calls/mo, £0.01/call after that |
-| Free API key | £0 | 100 calls, no card, hard stop at the limit |
+| Free API key | £0 | 1,000 calls per 30 days, no card, hard stop at the limit |
 
 The bulk archive (every scored headline and price row, as CSV or JSONL) is sold separately. Ask through the dataset form on the [developer portal](https://developers.sentimentfx.org).
 
@@ -67,7 +67,7 @@ Authenticate with an `X-API-Key` header. Full docs are at [developers.sentimentf
 Billing happens after the query, on rows actually returned. A 404 costs nothing, and out-of-range parameters are rejected with a 422 before any work is done. Every response carries `X-Quota-*` and `X-RateLimit-*` headers. Errors use one envelope: `{"error": {"type": "...", "message": "..."}}`.
 
 ```bash
-# Get a free key (100 calls, no card)
+# Get a free key (1,000 calls every 30 days, no card)
 curl -X POST https://api.sentimentfx.org/api/keys/generate \
   -H "Content-Type: application/json" \
   -d '{"email": "you@example.com"}'

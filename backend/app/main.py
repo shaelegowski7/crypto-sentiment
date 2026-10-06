@@ -68,6 +68,16 @@ def _apply_startup_ddl_patches():
     from sqlalchemy import text as _text
     patches = [
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS unlimited BOOLEAN DEFAULT FALSE NOT NULL",
+        # Free keys moved from a one-off 100 calls to 1000 per rolling 30-day
+        # window (see models.APIKey).  The UPDATE is data, not schema, but it
+        # belongs with the change that needs it: lift existing free keys to the
+        # new allowance.  Idempotent -- nothing matches once it has run.  The
+        # monthly_allowance guard matters: a free key upgraded through Checkout
+        # keeps its old free_calls=100 on top of the plan, and must not gain 900.
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS free_window_started_at TIMESTAMP",
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS free_window_calls INTEGER DEFAULT 0 NOT NULL",
+        "UPDATE api_keys SET free_calls = 1000 WHERE free_calls = 100 "
+        "AND COALESCE(monthly_allowance, 0) = 0 AND NOT unlimited",
         # Widened deal sources (ScraperAI / StockTwits / X): body holds full
         # article text where available, source_type tags the origin.  Both
         # nullable so existing rows are unaffected.
@@ -536,48 +546,120 @@ def _is_paid_plan(api_key) -> bool:
     return (api_key.monthly_allowance or 0) > 0
 
 
+FREE_WINDOW = timedelta(days=30)
+
+
+def _free_window_end(api_key, now: datetime | None = None) -> datetime | None:
+    """When the free key's current 30-day window lapses; None if none is running.
+
+    A window opens on the key's first billable call (see track_usage), not on a
+    calendar boundary and not at key creation, so an unused key never burns
+    days of its allowance.  Once it lapses, the next billable call opens a
+    fresh one.
+    """
+    start = getattr(api_key, "free_window_started_at", None)
+    if start is None:
+        return None
+    end = start + FREE_WINDOW
+    return end if (now or datetime.utcnow()) < end else None
+
+
+def _free_window_calls(api_key, now: datetime | None = None) -> int:
+    """Calls counted against the current free window -- 0 once it has lapsed."""
+    if _free_window_end(api_key, now) is None:
+        return 0
+    return api_key.free_window_calls or 0
+
+
 def _allowance_exhausted(api_key) -> bool:
     """True when a FREE key has spent its allowance and must be cut off.
 
     Note the two different clocks, which is deliberate and not a bug:
-      * free tier  -> `free_calls` is a ONE-OFF grant, so it's measured against
-                      lifetime `calls_used`.
-      * paid plans -> allowance is monthly, measured against `calls_this_month`
-                      (which the monthly reset job zeroes), and overage meters
-                      rather than blocks — so they're never "exhausted" here.
+      * free tier  -> `free_calls` per rolling 30-day window that starts at
+                      the key's first billable call, measured against
+                      `free_window_calls` (see _free_window_end).
+      * paid plans -> allowance is per calendar month, measured against
+                      `calls_this_month` (which the monthly reset job zeroes),
+                      and overage meters rather than blocks — so they're never
+                      "exhausted" here.
     """
     if _is_paid_plan(api_key):
         return False
-    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
-    return (api_key.calls_used or 0) >= included
+    return _free_window_calls(api_key) >= (api_key.free_calls or 0)
 
 
 def _quota_snapshot(api_key) -> tuple[int | None, int, int | None]:
     """(limit, used, remaining) on whichever clock actually gates this key.
 
     Mirrors _allowance_exhausted's two-clock rule exactly -- free keys are
-    measured against lifetime `calls_used` because the grant is a one-off,
-    paid keys against `calls_this_month`.  Reporting the wrong clock would be
-    worse than reporting nothing, so this stays next to the function it
-    mirrors.  Unlimited keys have no limit and no remaining.
+    measured against their current 30-day window, paid keys against
+    `calls_this_month`.  Reporting the wrong clock would be worse than
+    reporting nothing, so this stays next to the function it mirrors.
+    Unlimited keys have no limit and no remaining.
     """
     if getattr(api_key, "unlimited", False):
         return None, api_key.calls_used or 0, None
     included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
-    used = (api_key.calls_this_month or 0) if _is_paid_plan(api_key) else (api_key.calls_used or 0)
+    used = (api_key.calls_this_month or 0) if _is_paid_plan(api_key) else _free_window_calls(api_key)
     return included, used, max(included - used, 0)
 
 
+def _quota_resets_at(api_key, now: datetime | None = None) -> datetime | None:
+    """When this key's included calls next refill.
+
+    Paid (and unlimited) keys: 00:00 UTC on the 1st, when the monthly reset job
+    runs.  Free keys: the end of the running 30-day window, or None when no
+    window is running -- the next billable call starts one with the full
+    allowance.
+    """
+    now = now or datetime.utcnow()
+    if not _is_paid_plan(api_key):
+        return _free_window_end(api_key, now)
+    return datetime(now.year + (1 if now.month == 12 else 0),
+                    1 if now.month == 12 else now.month + 1, 1)
+
+
+def _usage_payload(api_key) -> dict:
+    """The usage report shared by GET /v1/usage and the MCP get_usage tool.
+
+    One function rather than two mirrored copies: the copies drifted once
+    already (both reported a free key's remaining calls on the wrong clock).
+    """
+    if api_key.unlimited:
+        plan = "unlimited"
+    elif _is_paid_plan(api_key):
+        plan = "metered"          # overage bills via Stripe after the allowance
+    else:
+        # Not stripe_customer_id: free signup creates a customer record too,
+        # which used to make every free key report itself as metered.
+        plan = "free"
+    _, _, remaining = _quota_snapshot(api_key)
+    resets_at = _quota_resets_at(api_key)
+    return {
+        "key_prefix": api_key.key_prefix,
+        "plan": plan,
+        "calls_this_month": api_key.calls_this_month or 0,
+        "calls_total": api_key.calls_used or 0,
+        "included_allowance": (api_key.free_calls or 0) + (api_key.monthly_allowance or 0),
+        "included_remaining": remaining,
+        # track_usage only meters a paid key that has a Stripe customer.
+        "overage_billing": plan == "metered" and bool(api_key.stripe_customer_id),
+        "resets_at": resets_at.isoformat() + "Z" if resets_at else None,
+    }
+
+
 _QUOTA_MESSAGE = (
-    "Free allowance used up. Your key has spent its {included} included calls. "
-    "Upgrade at https://developers.sentimentfx.org to continue — "
-    "check remaining calls any time at GET /v1/usage (always free)."
+    "Free allowance used up. Your key has made its {included} calls for this "
+    "30-day window, which ends {ends}. Upgrade at https://developers.sentimentfx.org "
+    "to continue now — check remaining calls any time at GET /v1/usage (always free)."
 )
 
 
 def _quota_message(api_key) -> str:
     included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
-    return _QUOTA_MESSAGE.format(included=included)
+    end = _free_window_end(api_key)
+    ends = end.strftime("%Y-%m-%d %H:%M UTC") if end else "soon"
+    return _QUOTA_MESSAGE.format(included=included, ends=ends)
 
 
 def _email_new_api_key(email: str, key: str, tier: str, allowance: int) -> None:
@@ -3234,7 +3316,7 @@ async def _valid_signup_email(request: Request) -> str:
 async def generate_api_key(request: Request, response: Response,
                            email: str = Depends(_valid_signup_email),
                            db: Session = Depends(get_db)):
-    """Self-serve free-tier key: email in, key out, 100 free calls.
+    """Self-serve free-tier key: email in, key out, 1000 calls per 30-day window.
 
     This is where the landing page's "Get an API key" CTA now leads.  It is
     intentionally unauthenticated -- requiring a paid Pro subscription before a
@@ -3313,7 +3395,7 @@ async def get_key_info(request: Request, db: Session = Depends(get_db)):
     return {
         "prefix": existing.key_prefix,
         "calls_used": existing.calls_used,
-        "free_remaining": max(0, existing.free_calls - existing.calls_used),
+        "free_remaining": _quota_snapshot(existing)[2],
         "active": existing.active,
         "unlimited": bool(getattr(existing, "unlimited", False)),
     }
@@ -3437,6 +3519,15 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
                 response: Response = None):
     api_key.calls_used += count
     api_key.calls_this_month += count
+    if not _is_paid_plan(api_key):
+        # The first billable call with no window running opens one -- this is
+        # the only place a free window starts, so "30 days from key use"
+        # means use that was actually billed (GET /v1/usage doesn't count).
+        now = datetime.utcnow()
+        if _free_window_end(api_key, now) is None:
+            api_key.free_window_started_at = now
+            api_key.free_window_calls = 0
+        api_key.free_window_calls = (api_key.free_window_calls or 0) + count
     API_CALLS.labels(endpoint=endpoint).inc(count)
 
     # Quota headers, alongside the X-RateLimit-* ones slowapi already stamps.
@@ -3510,33 +3601,11 @@ _V1_RATE_LIMITS = {
 }
 
 
-@app.get("/v1/usage", summary="Get API key usage", description="Introspect the calling API key: consumption this month, included allowance, overage billing status, and rate limits. Free — does not consume API credits.")
+@app.get("/v1/usage", summary="Get API key usage", description="Introspect the calling API key: included allowance, calls remaining, when it refills, overage billing status, and rate limits. Free keys get 1,000 calls per 30-day window that starts at the key's first billable call; `resets_at` is null when no window is running. Paid plans refill on the 1st of each month. Free — does not consume API credits.")
 @limiter.limit("60/minute")
 def api_usage(request: Request, response: Response, api_key=Depends(get_api_key)):
-    now = datetime.utcnow()
-    # Counters reset by the monthly cron at 00:00 UTC on the 1st.
-    resets_at = datetime(now.year + (1 if now.month == 12 else 0),
-                         1 if now.month == 12 else now.month + 1, 1)
-
-    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
-    used = api_key.calls_this_month or 0
-
-    if api_key.unlimited:
-        plan = "unlimited"
-    elif api_key.stripe_customer_id:
-        plan = "metered"          # overage bills via Stripe after the allowance
-    else:
-        plan = "free"
-
     return {
-        "key_prefix": api_key.key_prefix,
-        "plan": plan,
-        "calls_this_month": used,
-        "calls_total": api_key.calls_used or 0,
-        "included_allowance": included,
-        "included_remaining": None if api_key.unlimited else max(included - used, 0),
-        "overage_billing": bool(api_key.stripe_customer_id) and not api_key.unlimited,
-        "resets_at": resets_at.isoformat() + "Z",
+        **_usage_payload(api_key),
         "rate_limits": _V1_RATE_LIMITS,
         "key_created_at": api_key.created_at.isoformat() + "Z" if api_key.created_at else None,
     }
