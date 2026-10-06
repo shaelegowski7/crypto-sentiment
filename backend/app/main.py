@@ -386,6 +386,23 @@ BRIEF_PRICE_IDS = {
 }
 PRO_MONTHLY_ALLOWANCE = 15000
 DATA_MONTHLY_ALLOWANCE = 200000
+FREE_WINDOW_ALLOWANCE = 1000   # per 30-day window; mirrors models.APIKey.free_calls' default
+
+
+def _tier_for_price(price_id: str | None) -> str:
+    """Map a plan price to its tier.  Brief is the cheapest, with no API
+    allowance; Data is the most expensive, with the largest; anything else is
+    Pro.  Shared by checkout and subscription-end so the two can't disagree."""
+    if price_id in BRIEF_PRICE_IDS:
+        return "brief"
+    if price_id in DATA_PRICE_IDS:
+        return "data"
+    return "pro"
+
+
+def _allowance_for_tier(tier: str | None) -> int:
+    """Monthly API allowance a tier carries.  Brief and free carry none."""
+    return {"data": DATA_MONTHLY_ALLOWANCE, "pro": PRO_MONTHLY_ALLOWANCE}.get(tier, 0)
 
 # Tiers that get full access to the morning brief archive content.  Free
 # users see the AI-summary paragraph + ticker list only; anyone in this set
@@ -447,6 +464,59 @@ def _create_stripe_customer_only(email: str):
     except Exception as e:
         print(f"Stripe error: {e}")
         return None, None
+
+
+# Statuses under which a subscription still entitles its holder to the plan.
+# past_due = Stripe is still retrying the payment; the plan hasn't ended yet.
+_LIVE_SUB_STATUSES = {"active", "trialing", "past_due"}
+_TIER_RANK = {"brief": 1, "pro": 2, "data": 3}
+
+
+def _live_plan_tier(customer_ids) -> str | None:
+    """The best plan tier still live across these Stripe customers, or None.
+
+    One person can hold several Stripe customers (free signup creates one,
+    Checkout may create another), so all of theirs are checked.  Metered items
+    are skipped: some customers still carry the old £0.01/call price as a line
+    item or as a whole separate subscription (annual buyers), and that ending
+    says nothing about whether their plan has.
+    """
+    best = None
+    for customer_id in customer_ids:
+        subs = stripe.Subscription.list(customer=customer_id, status="all", limit=100)
+        for sub in subs.auto_paging_iter():
+            if _sget(sub, "status") not in _LIVE_SUB_STATUSES:
+                continue
+            for item in _sget(_sget(sub, "items"), "data", []) or []:
+                price = _sget(item, "price")
+                if _sget(_sget(price, "recurring"), "usage_type") == "metered":
+                    continue
+                tier = _tier_for_price(_sget(price, "id"))
+                if best is None or _TIER_RANK[tier] > _TIER_RANK[best]:
+                    best = tier
+    return best
+
+
+def _apply_tier_to_keys(keys, tier: str | None) -> list[str]:
+    """Set each key's allowance to what `tier` carries; returns what changed.
+
+    No plan (or Brief, which has no API allowance) drops a key to the free
+    30-day window.  Unlimited keys are internal and never touched.
+    `extra_calls` (a request-more grant) is left alone: an admin made it, an
+    admin can withdraw it.
+    """
+    allowance = _allowance_for_tier(tier)
+    changed = []
+    for key in keys:
+        if key.unlimited or (key.monthly_allowance or 0) == allowance:
+            continue
+        before = key.monthly_allowance or 0
+        key.monthly_allowance = allowance
+        if allowance == 0:
+            key.free_calls = FREE_WINDOW_ALLOWANCE
+        changed.append(f"{key.key_prefix}: {before:,} -> {allowance:,}/mo"
+                       + (" (free window)" if allowance == 0 else ""))
+    return changed
 
 
 def _is_paid_plan(api_key) -> bool:
@@ -3042,14 +3112,7 @@ def create_checkout_session(price_id: str, email: str = None, db: Session = Depe
     themselves yet) omit it; the webhook then falls back to the Checkout email
     and mints a key for it.
     """
-    # Map price → tier.  Brief tier is the cheapest, no API allowance; Data
-    # tier is the most expensive, gets the largest allowance; default is Pro.
-    if price_id in BRIEF_PRICE_IDS:
-        tier = "brief"
-    elif price_id in DATA_PRICE_IDS:
-        tier = "data"
-    else:
-        tier = "pro"
+    tier = _tier_for_price(price_id)
 
     email = (email or "").strip().lower() or None
     if email and not _EMAIL_RE.match(email):
@@ -3140,12 +3203,7 @@ async def stripe_webhook(request: Request):
             supabase_client.table("profiles").update({"tier": tier}).eq("email", customer_email).execute()
             # Brief tier intentionally gets zero API allowance — it's a
             # content product, not a data product.  Pro/Data get allowances.
-            if tier == "data":
-                allowance = DATA_MONTHLY_ALLOWANCE
-            elif tier == "pro":
-                allowance = PRO_MONTHLY_ALLOWANCE
-            else:
-                allowance = 0
+            allowance = _allowance_for_tier(tier)
             webhook_db = SessionLocal()
             try:
                 api_key = webhook_db.query(models.APIKey).filter(
@@ -3183,12 +3241,42 @@ async def stripe_webhook(request: Request):
         refresh_subscription_gauge()
 
     elif event["type"] == "customer.subscription.deleted":
+        # Fires when a subscription actually ends (cancel-at-period-end fires
+        # at period end), but ALSO when a secondary one ends -- e.g. the
+        # separate metered subscription annual buyers were given.  So the new
+        # tier is derived from what is still live, not assumed to be free:
+        # this used to set every such customer to free, and never touched
+        # their API key at all, so a cancelled Pro/Data key kept its paid
+        # allowance indefinitely.  Derived state is idempotent, so a Stripe
+        # retry (any non-2xx, including a Stripe API error raised here) is safe.
         subscription = event["data"]["object"]
-        customer_id = subscription["customer"]
+        customer_id = _sget(subscription, "customer")
         customer = stripe.Customer.retrieve(customer_id)
-        customer_email = _sget(customer, "email")
-        if customer_email:
-            supabase_client.table("profiles").update({"tier": "free"}).eq("email", customer_email).execute()
+        customer_email = (_sget(customer, "email") or "").strip().lower()
+
+        webhook_db = SessionLocal()
+        try:
+            match = models.APIKey.stripe_customer_id == customer_id
+            if customer_email:
+                match = sa_or(match, sa_func.lower(models.APIKey.email) == customer_email)
+            keys = webhook_db.query(models.APIKey).filter(match).all()
+
+            customer_ids = {customer_id} | {k.stripe_customer_id for k in keys if k.stripe_customer_id}
+            if customer_email:
+                customer_ids |= {_sget(c, "id") for c in
+                                 stripe.Customer.list(email=customer_email, limit=100).auto_paging_iter()}
+            tier = _live_plan_tier(customer_ids)
+
+            if customer_email:
+                # .eq, not ilike -- see the checkout branch above.
+                supabase_client.table("profiles").update({"tier": tier or "free"}).eq("email", customer_email).execute()
+            changed = _apply_tier_to_keys(keys, tier)
+            webhook_db.commit()
+            print(f"[WEBHOOK] subscription {_sget(subscription, 'id')} ended for "
+                  f"{customer_email or customer_id}: now {tier or 'free'}; "
+                  f"keys {'; '.join(changed) or 'unchanged'}")
+        finally:
+            webhook_db.close()
         refresh_subscription_gauge()
 
     elif event["type"] == "invoice.payment_failed":
@@ -3444,7 +3532,7 @@ async def get_my_key_info(db: Session = Depends(get_db), user=Depends(require_pr
         _sc = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
         _profile = _sc.table("profiles").select("tier").eq("id", user.id).single().execute()
         _tier = _profile.data.get("tier", "free")
-        _expected = {"pro": PRO_MONTHLY_ALLOWANCE, "data": DATA_MONTHLY_ALLOWANCE}.get(_tier, 0)
+        _expected = _allowance_for_tier(_tier)
         if existing.monthly_allowance != _expected or existing.free_calls != 0:
             existing.monthly_allowance = _expected
             existing.free_calls = 0
