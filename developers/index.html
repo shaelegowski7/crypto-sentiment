@@ -29,7 +29,7 @@
           "@context": "https://schema.org",
           "@type": "TechArticle",
           "headline": "SentimentFX REST API Reference",
-          "description": "Reference documentation for the SentimentFX REST API: sentiment, price, summary, and correlation endpoints with X-API-Key auth and metered billing.",
+          "description": "Reference documentation for the SentimentFX REST API: sentiment, price, summary, and correlation endpoints with X-API-Key auth and a monthly call allowance.",
           "author": { "@type": "Organization", "name": "SentimentFX" },
           "publisher": {
             "@type": "Organization",
@@ -183,6 +183,7 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('correlation');return false;" data-section="correlation">Correlation</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('mcp');return false;" data-section="mcp">MCP (Claude / Cursor)</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('errors');return false;" data-section="errors">Error Codes</a>
+                    <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('request-more');return false;" data-section="request-more">Request More Calls</a>
                     <a class="sidebar-link" href="#" onclick="nav('docs');scrollToId('dataset');return false;" data-section="dataset">Bulk Dataset</a>
                 </div>
                 <div class="sidebar-section">
@@ -244,15 +245,15 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                         </div>
 
                         <table class="param-table" style="margin-bottom:20px;">
-                            <thead><tr><th>Plan</th><th>Included Calls/mo</th><th>Overage</th></tr></thead>
+                            <thead><tr><th>Plan</th><th>Included Calls</th><th>Past the allowance</th></tr></thead>
                             <tbody>
-                                <tr><td style="color:var(--positive,#3fb950);">Free</td><td>100 (one-off, not monthly)</td><td>None — requests stop at 100</td></tr>
-                                <tr><td style="color:var(--accent);">Pro</td><td>1,000</td><td>£0.01 / call via Stripe</td></tr>
-                                <tr><td style="color:var(--accent2);">Data</td><td>5,000</td><td>£0.01 / call via Stripe</td></tr>
+                                <tr><td style="color:var(--positive,#3fb950);">Free</td><td>1,000 per 30-day window</td><td>Requests stop until the window ends</td></tr>
+                                <tr><td style="color:var(--accent);">Pro</td><td>15,000 / month</td><td>Requests stop until the 1st</td></tr>
+                                <tr><td style="color:var(--accent2);">Data</td><td>200,000 / month</td><td>Requests stop until the 1st</td></tr>
                             </tbody>
                         </table>
                         <div class="signup" id="upgrade-box">
-                            <div class="signup-title" style="color:var(--accent2);">Upgrade to Data — 5,000 calls / month</div>
+                            <div class="signup-title" style="color:var(--accent2);">Upgrade to Data — 200,000 calls / month</div>
                             <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6;">
                                 Full history on all 42 tickers, every endpoint, REST and MCP.
                                 If you've already made a free key above, enter the same email and
@@ -270,11 +271,13 @@ pre{background:var(--surface2);border:1px solid var(--border);border-radius:2px;
                             are linked to your account and pick up your plan's monthly allowance automatically.
                         </p>
                         <div class="notice">
-                            A free key gets 1,000 calls per 30-day window, which starts at its first call. Once they are gone it stops serving until the window ends — requests return
-                            <code>402</code> with <code>"type": "insufficient_quota"</code> rather than
-                            silently billing you. There is no card on a free key and no overage can accrue.
+                            Nothing is ever billed per call. When a key's allowance is used up it stops
+                            serving until it refills — a free key's 30-day window starts at its first
+                            call, and paid plans refill on the 1st. Requests past the allowance return
+                            <code>402</code> with <code>"type": "insufficient_quota"</code>.
                             <code>GET /v1/usage</code> keeps working when you're out, so you can always
-                            check where you stand.
+                            check where you stand. Need more than your plan includes?
+                            <a href="#" onclick="nav('docs');scrollToId('request-more');return false;" style="color:var(--accent2);text-decoration:none;">Request a higher allowance</a>.
                         </div>
                         <div class="code-label">Example Request</div>
                         <pre><span class="c-comment"># Curl</span>
@@ -569,7 +572,7 @@ resp = client.beta.messages.create(
 )
 print("".join(b.text for b in resp.content if b.type == "text"))</pre>
 
-                        <p style="margin-top:16px;color:var(--muted);font-size:13px;">Every MCP tool call bills the same meter as the equivalent <code>/v1/*</code> HTTP call — check usage on the dashboard's API Access panel.</p>
+                        <p style="margin-top:16px;color:var(--muted);font-size:13px;">Every MCP tool call counts against the same allowance as the equivalent <code>/v1/*</code> HTTP call — check usage on the dashboard's API Access panel.</p>
                     </div>
 
                     <div id="errors" class="scroll-section">
@@ -578,6 +581,7 @@ print("".join(b.text for b in resp.content if b.type == "text"))</pre>
                             <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
                             <tbody>
                                 <tr><td>401</td><td>Missing or invalid API key</td></tr>
+                                <tr><td>402</td><td>Allowance used up — <code>insufficient_quota</code>. Wait for the refill or <a href="#" onclick="nav('docs');scrollToId('request-more');return false;" style="color:var(--accent2);text-decoration:none;">request more</a></td></tr>
                                 <tr><td>403</td><td>Plan does not include API access</td></tr>
                                 <tr><td>404</td><td>No data found for ticker</td></tr>
                                 <tr><td>429</td><td>Rate limit exceeded</td></tr>
@@ -586,9 +590,32 @@ print("".join(b.text for b in resp.content if b.type == "text"))</pre>
                         </table>
                     </div>
 
+                    <div id="request-more" class="scroll-section">
+                        <h2>Request more calls</h2>
+                        <p>Every plan stops at its allowance rather than billing per call. If your
+                        application needs more than your plan includes, tell us roughly how many calls
+                        and what for, and we'll raise your key's allowance. The extra calls apply every
+                        period: each 30-day window on a free key, each month on Pro or Data.</p>
+                        <div class="signup" id="request-more-box">
+                            <div class="signup-title" style="color:var(--accent2);">Request a higher allowance</div>
+                            <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6;">
+                                Use the email your API key was issued to, so we can find the key.
+                            </p>
+                            <div class="signup-row" style="flex-wrap:wrap;gap:8px;">
+                                <input class="signup-input" id="rm-email" type="email" placeholder="you@company.com" style="flex:1;min-width:200px;" />
+                                <input class="signup-input" id="rm-calls" type="number" min="1" step="1000" placeholder="Calls needed per month" style="flex:1;min-width:180px;" />
+                            </div>
+                            <div class="signup-row" style="margin-top:8px;">
+                                <input class="signup-input" id="rm-use" type="text" placeholder="What are you building?" style="flex:1;" />
+                                <button class="tester-btn" onclick="submitRequestMore(this)">Send request</button>
+                            </div>
+                            <div class="signup-msg" id="rm-msg"></div>
+                        </div>
+                    </div>
+
                     <div id="dataset" class="scroll-section">
                         <h2>Bulk dataset licence</h2>
-                        <p>The API is metered per call, which suits an application reading current
+                        <p>The API is sold as a monthly call allowance, which suits an application reading current
                         sentiment. If you need the <strong>whole corpus at once</strong> — to backtest
                         against, to train on, or to join to your own data — that's a licence rather
                         than a subscription, delivered as CSV or JSONL.</p>
@@ -734,7 +761,51 @@ window.addEventListener('DOMContentLoaded', () => {
     initScrollSpy()
     handleResetLink()
     handlePurchaseReturn()
+    handleHashLink()
 })
+
+// Deep links like /#request-more (the 402 message points there) — sections are
+// shown one at a time, so open the one holding the target before scrolling.
+function handleHashLink() {
+    const id = window.location.hash.slice(1)
+    const el = id && document.getElementById(id)
+    const section = el && el.closest('.section')
+    if (!section) return
+    nav(section.id.replace(/^section-/, ''))
+    scrollToId(id)
+}
+
+// Replaces per-call overage: a lead an admin grants as extra calls per period.
+async function submitRequestMore(btn) {
+    const msg = document.getElementById('rm-msg')
+    const email = document.getElementById('rm-email').value.trim()
+    const calls = document.getElementById('rm-calls').value.trim()
+    const setMsg = (t, kind) => { msg.textContent = t; msg.className = 'signup-msg' + (kind ? ' ' + kind : '') }
+    if (!email) { setMsg('Enter the email your API key was issued to.', 'err'); return }
+    const original = btn.textContent
+    btn.textContent = 'Sending...'
+    btn.disabled = true
+    try {
+        const res = await fetch(`${API_BASE}/api/keys/request-more`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                calls_wanted: calls ? Number(calls) : null,
+                use_case: document.getElementById('rm-use').value.trim(),
+            }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.detail || 'request failed')
+        setMsg(data.message || "Thanks — we'll be in touch.", 'ok')
+        document.getElementById('rm-use').value = ''
+    } catch (e) {
+        setMsg(String(e.message || e) + ' — or email hello@sentimentfx.org directly.', 'err')
+    } finally {
+        btn.textContent = original
+        btn.disabled = false
+    }
+}
 
 // --- Upgrade ---------------------------------------------------------------
 // The Data tier is bought for the API, so it's sold here rather than only
@@ -821,7 +892,7 @@ loadDatasetStats()
 function handlePurchaseReturn() {
     const params = new URLSearchParams(window.location.search)
     if (params.get('purchased') === 'data') {
-        upgradeMsg('Payment received. If you already had a key it now has 5,000 calls/month — '
+        upgradeMsg('Payment received. If you already had a key it now has 200,000 calls/month — '
                  + 'otherwise check your email, we just sent you one.', 'ok')
         document.getElementById('upgrade-box').scrollIntoView({ behavior: 'smooth', block: 'center' })
     } else if (params.get('cancelled')) {

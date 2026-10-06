@@ -149,7 +149,7 @@ def _open_authed_session(ctx: Context, enforce_quota: bool = True):
 
 
 def _bill(api_key, db, calls: int, endpoint: str) -> None:
-    """Bill an MCP tool call against the same meter as /v1/* HTTP calls.
+    """Count an MCP tool call against the same allowance as /v1/* HTTP calls.
 
     Late-imported for the same circular-import reason as _open_authed_session.
     """

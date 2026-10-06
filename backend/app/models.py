@@ -187,6 +187,10 @@ class APIKey(Base):
     free_window_started_at = Column(DateTime, nullable=True)
     free_window_calls = Column(Integer, default=0, nullable=False)
     monthly_allowance = Column(Integer, default=0)
+    # Calls granted on top of the plan after a request-more ask, per period
+    # (30-day window on free keys, calendar month on paid).  Its own column
+    # because /api/keys/me rewrites monthly_allowance to the tier's figure.
+    extra_calls = Column(Integer, default=0, nullable=False)
     # Internal / dogfood / partner keys.  When True, track_usage still increments
     # the counters (useful for observability) but skips the Stripe meter event
     # entirely — the key never bills regardless of volume.  Rate limits still
@@ -235,6 +239,25 @@ class DatasetEnquiry(Base):
     use_case = Column(Text, nullable=True)          # what they want it for
     volume = Column(String, nullable=True)          # coarse "how much" from the form
     contacted = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AllowanceRequest(Base):
+    """A request for more API calls than the key's plan includes.
+
+    Replaces per-call overage: every plan hard-stops at its allowance, and a
+    caller who needs more asks here.  An admin grants it by setting
+    APIKey.extra_calls (POST /admin/keys/grant), which records the grant back
+    onto this row.
+    """
+    __tablename__ = "allowance_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, index=True)
+    key_prefix = Column(String, nullable=True)      # null when no key under that email yet
+    calls_wanted = Column(Integer, nullable=True)   # per period, as the requester put it
+    use_case = Column(Text, nullable=True)
+    granted_calls = Column(Integer, nullable=True)  # set when an admin grants it
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 

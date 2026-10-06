@@ -2169,7 +2169,7 @@ function Dashboard() {
           {isLoggedIn && !isPro && (
             <div className="upgrade-banner">
               <span className="upgrade-text">
-                <strong>Free tier:</strong> {FREE_TICKERS.length} top tickers · 30 day history · Upgrade to Pro for all 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, 1,000 API calls/mo, alerts and morning brief.
+                <strong>Free tier:</strong> {FREE_TICKERS.length} top tickers · 30 day history · Upgrade to Pro for all 42 tickers across crypto, FX, stocks, ETFs and commodities, full history, 15,000 API calls/mo, alerts and morning brief.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TNx0H2NzVdYK0wrPwt0Rhcw", user?.email)}>
@@ -2185,7 +2185,7 @@ function Dashboard() {
           {isPro && !isData && (
             <div className="upgrade-banner" style={{ borderColor: "rgba(88,166,255,0.3)", background: "rgba(88,166,255,0.04)" }}>
               <span className="upgrade-text">
-                <strong style={{ color: "var(--accent2)" }}>Pro plan active.</strong> Upgrade to Data for 5,000 API calls/mo included.
+                <strong style={{ color: "var(--accent2)" }}>Pro plan active.</strong> Upgrade to Data for 200,000 API calls/mo included.
               </span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button className="upgrade-btn" onClick={() => redirectToCheckout("price_1TUqVG2NzVdYK0wrKrPTE28e", user?.email)}>
@@ -2835,7 +2835,11 @@ function Dashboard() {
                           />
                         </div>
                         <div style={{ fontFamily: "var(--mono)", fontSize: "9px", color: "var(--muted)" }}>
-                          {apiKeyInfo.monthly_allowance > 0 ? `${apiKeyInfo.free_calls} free + ${apiKeyInfo.monthly_allowance} plan` : `${apiKeyInfo.free_calls} free calls`} · resets monthly
+                          {apiKeyInfo.monthly_allowance > 0 ? `${apiKeyInfo.free_calls} free + ${apiKeyInfo.monthly_allowance} plan` : `${apiKeyInfo.free_calls} free calls`}
+                          {apiKeyInfo.extra_calls > 0 ? ` + ${apiKeyInfo.extra_calls} granted` : ""} · resets monthly ·{" "}
+                          <a href="https://developers.sentimentfx.org/#request-more" target="_blank" rel="noreferrer" style={{ color: "var(--accent2)", textDecoration: "none" }}>
+                            need more?
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -2858,7 +2862,7 @@ function Dashboard() {
                   <div>
                     <p style={{ fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muted)", marginBottom: "14px", letterSpacing: "0.04em", lineHeight: "1.6" }}>
                       Generate an API key to access sentiment, price, and correlation data programmatically.
-                      Your {isData ? "5,000" : "1,000"} monthly calls are included with your plan.
+                      Your {isData ? "200,000" : "15,000"} monthly calls are included with your plan.
                     </p>
                     <button
                       onClick={generateApiKey}

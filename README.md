@@ -46,8 +46,8 @@ Alerts only fire for tickers whose backtest passes a quality gate: positive out-
 | Plan | Price | Includes |
 |------|-------|----------|
 | Free | £0 | 15 top tickers (3 per category), 30-day history, candlesticks, backtests, correlation |
-| Pro | £11.99/mo or £99.99/yr | All 42 tickers, full history, CSV export, alerts, morning brief, 1,000 API calls/mo |
-| Data | £49.99/mo or £499.99/yr | Everything in Pro, 5,000 API calls/mo, £0.01/call after that |
+| Pro | £11.99/mo or £99.99/yr | All 42 tickers, full history, CSV export, alerts, morning brief, 15,000 API calls/mo |
+| Data | £49.99/mo or £499.99/yr | Everything in Pro, 200,000 API calls/mo |
 | Free API key | £0 | 1,000 calls per 30 days, no card, hard stop at the limit |
 
 The bulk archive (every scored headline and price row, as CSV or JSONL) is sold separately. Ask through the dataset form on the [developer portal](https://developers.sentimentfx.org).
@@ -64,7 +64,7 @@ Authenticate with an `X-API-Key` header. Full docs are at [developers.sentimentf
 | `GET /v1/correlation/{ticker}` | 180-day Pearson r, p-value, 95% CI, strength | 1 credit |
 | `GET /v1/usage` | Plan, usage, allowance, reset date, rate limits | Free |
 
-Billing happens after the query, on rows actually returned. A 404 costs nothing, and out-of-range parameters are rejected with a 422 before any work is done. Every response carries `X-Quota-*` and `X-RateLimit-*` headers. Errors use one envelope: `{"error": {"type": "...", "message": "..."}}`.
+Calls are counted after the query, on rows actually returned. Nothing is billed per call: a key that uses up its allowance gets a `402 insufficient_quota` until it refills, and a higher allowance can be [requested](https://developers.sentimentfx.org/#request-more). A 404 costs nothing, and out-of-range parameters are rejected with a 422 before any work is done. Every response carries `X-Quota-*` and `X-RateLimit-*` headers. Errors use one envelope: `{"error": {"type": "...", "message": "..."}}`.
 
 ```bash
 # Get a free key (1,000 calls every 30 days, no card)

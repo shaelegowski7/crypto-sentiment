@@ -35,6 +35,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Gauge, Histogram
 import numpy as np
 import resend
+import html
 import os
 import re
 import uuid
@@ -78,6 +79,15 @@ def _apply_startup_ddl_patches():
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS free_window_calls INTEGER DEFAULT 0 NOT NULL",
         "UPDATE api_keys SET free_calls = 1000 WHERE free_calls = 100 "
         "AND COALESCE(monthly_allowance, 0) = 0 AND NOT unlimited",
+        # Pro 1000 -> 15000 and Data 5000 -> 200000 calls/month.  The webhook
+        # and /api/keys/me only write an allowance on purchase or a dashboard
+        # visit, so without this, existing subscribers would keep the old one
+        # (and be cut off past it) indefinitely.  The old values map 1:1 onto
+        # tiers, nothing else writes them, and once lifted nothing matches.
+        "UPDATE api_keys SET monthly_allowance = 15000 WHERE monthly_allowance = 1000",
+        "UPDATE api_keys SET monthly_allowance = 200000 WHERE monthly_allowance = 5000",
+        # Calls granted on a request-more ask (see AllowanceRequest).
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS extra_calls INTEGER DEFAULT 0 NOT NULL",
         # Widened deal sources (ScraperAI / StockTwits / X): body holds full
         # article text where available, source_type tags the origin.  Both
         # nullable so existing rows are unaffected.
@@ -374,8 +384,8 @@ BRIEF_PRICE_IDS = {
         os.getenv("BRIEF_PRICE_ID_YEARLY"),
     ) if p
 }
-PRO_MONTHLY_ALLOWANCE = 1000
-DATA_MONTHLY_ALLOWANCE = 5000
+PRO_MONTHLY_ALLOWANCE = 15000
+DATA_MONTHLY_ALLOWANCE = 200000
 
 # Tiers that get full access to the morning brief archive content.  Free
 # users see the AI-summary paragraph + ticker list only; anyone in this set
@@ -416,116 +426,20 @@ def _sget(obj, key, default=None):
         return default
 
 
-# The £0.01/call metered price that overage bills against.  Env-overridable so
-# a test-mode price can be swapped in without a code change; the default is the
-# live one.  Referenced by both the generate-linked path (_create_stripe_customer)
-# and the Checkout path (_ensure_metered_overage) — they must agree, or
-# track_usage's meter events land on a price nothing is subscribed to.
-METERED_PRICE_ID = os.getenv("STRIPE_METERED_PRICE_ID", "price_1TO3DG2NzVdYK0wrxIRggage")
-
-
-def _create_stripe_customer(email: str):
-    """Customer + metered subscription. For PAID plans only.
-
-    Do not call this for free-tier signups: attaching the metered subscription
-    is what makes overage billable, and someone who signed up under "no card
-    required" has consented to no such thing.  Use _create_stripe_customer_only.
-    """
-    try:
-        customer = stripe.Customer.create(email=email)
-        subscription = stripe.Subscription.create(
-            customer=customer.id,
-            items=[{"price": METERED_PRICE_ID}],
-        )
-        return customer.id, subscription.id
-    except Exception as e:
-        print(f"Stripe error: {e}")
-        return None, None
-
-
-def _sub_items(sub) -> list:
-    """The line items on a subscription, across stripe-python shapes."""
-    return _sget(_sget(sub, "items"), "data", []) or []
-
-
-def _has_metered_item(customer_id: str) -> bool:
-    """True when any live subscription on this customer already carries the
-    metered price.  The idempotency guard for _ensure_metered_overage:
-    `checkout.session.completed` is retried by Stripe on any non-2xx, and a
-    second attach would bill the customer twice for the same usage.
-    """
-    subs = stripe.Subscription.list(customer=customer_id, status="all", limit=100)
-    for sub in subs.auto_paging_iter():
-        if _sget(sub, "status") in ("canceled", "incomplete_expired"):
-            continue
-        for item in _sub_items(sub):
-            if _sget(_sget(item, "price"), "id") == METERED_PRICE_ID:
-                return True
-    return False
-
-
-def _ensure_metered_overage(customer_id: str, subscription_id: str | None) -> str | None:
-    """Attach the metered price so calls past the allowance actually invoice.
-
-    Checkout only ever puts the LICENSED price on the subscription it creates,
-    so before this existed track_usage emitted meter events against a customer
-    with nothing subscribed to meter them — overage was recorded and then served
-    free.  Two shapes, because Stripe refuses to mix billing intervals inside one
-    subscription:
-
-      * monthly plan  -> add the metered price as an item on the SAME
-        subscription, so the customer gets one subscription and one invoice.
-      * annual plan    -> intervals don't match, so the meter goes on its own
-        monthly subscription against the same customer.
-
-    The interval is read from the subscription rather than inferred from the
-    price id, so a new annual/monthly price needs no change here.
-
-    Returns the subscription id carrying the meter, or None if nothing was done.
-    NEVER raises: the caller is the webhook, and the buyer has already paid — a
-    billing-attach failure must not stop their tier from being applied.  A miss
-    here reverts to the old behaviour (overage served free), which is the safe
-    direction to fail in.
-    """
-    if not customer_id:
-        return None
-    try:
-        if _has_metered_item(customer_id):
-            print(f"[BILLING] {customer_id} already has the metered price — no change")
-            return None
-
-        interval = None
-        if subscription_id:
-            sub = stripe.Subscription.retrieve(subscription_id)
-            for item in _sub_items(sub):
-                recurring = _sget(_sget(item, "price"), "recurring") or {}
-                if _sget(recurring, "interval"):
-                    interval = _sget(recurring, "interval")
-                    break
-
-        if interval == "month":
-            stripe.SubscriptionItem.create(subscription=subscription_id, price=METERED_PRICE_ID)
-            print(f"[BILLING] metered price added to monthly subscription {subscription_id}")
-            return subscription_id
-
-        metered_sub = stripe.Subscription.create(
-            customer=customer_id,
-            items=[{"price": METERED_PRICE_ID}],
-        )
-        print(f"[BILLING] separate metered subscription {metered_sub.id} created "
-              f"for {customer_id} (plan interval={interval})")
-        return metered_sub.id
-    except Exception as e:
-        print(f"[BILLING] could not attach metered price for {customer_id}: {e}")
-        return None
+# No per-call overage.  Every plan hard-stops at its allowance; callers who
+# need more ask through POST /api/keys/request-more and an admin grants
+# `extra_calls` (POST /admin/keys/grant).  The old £0.01/call metered price
+# (STRIPE_METERED_PRICE_ID) is no longer attached to anything, and
+# track_usage no longer emits meter events.  Subscriptions that already carry
+# the metered item keep it, but with no usage reported it invoices £0.
 
 
 def _create_stripe_customer_only(email: str):
-    """Customer record with NO subscription — the free-tier signup path.
+    """Customer record with NO subscription — used for every new API key.
 
     We still want the customer row so an upgrade later has something to attach
-    to, but no metered subscription exists, so no usage can ever bill.  Free
-    keys hard-stop at their allowance instead (see _allowance_exhausted).
+    to.  Nothing here can bill: keys hard-stop at their allowance (see
+    _allowance_exhausted), and plans are paid for through Checkout.
     """
     try:
         customer = stripe.Customer.create(email=email)
@@ -536,10 +450,11 @@ def _create_stripe_customer_only(email: str):
 
 
 def _is_paid_plan(api_key) -> bool:
-    """True when this key is entitled to keep serving past its included calls.
+    """True when this key is NOT on the free 30-day window.
 
-    Paid plans roll into metered overage; free keys do not.  `unlimited` is the
-    internal/dogfood flag, which bypasses metering entirely.
+    Paid plans (monthly_allowance > 0) refill on the calendar month; `unlimited`
+    is the internal/dogfood flag and is never gated at all.  Neither opens a
+    free window.
     """
     if getattr(api_key, "unlimited", False):
         return True
@@ -571,37 +486,45 @@ def _free_window_calls(api_key, now: datetime | None = None) -> int:
     return api_key.free_window_calls or 0
 
 
-def _allowance_exhausted(api_key) -> bool:
-    """True when a FREE key has spent its allowance and must be cut off.
+def _included_calls(api_key) -> int:
+    """Calls the key may make per period: its plan's allowance plus any granted.
 
-    Note the two different clocks, which is deliberate and not a bug:
-      * free tier  -> `free_calls` per rolling 30-day window that starts at
-                      the key's first billable call, measured against
-                      `free_window_calls` (see _free_window_end).
-      * paid plans -> allowance is per calendar month, measured against
-                      `calls_this_month` (which the monthly reset job zeroes),
-                      and overage meters rather than blocks — so they're never
-                      "exhausted" here.
+    `extra_calls` is what an admin grants on a request-more ask.  It lives in
+    its own column because /api/keys/me rewrites `monthly_allowance` to the
+    tier's figure on every dashboard visit, which would silently undo a raise.
     """
-    if _is_paid_plan(api_key):
-        return False
-    return _free_window_calls(api_key) >= (api_key.free_calls or 0)
+    return ((api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
+            + (getattr(api_key, "extra_calls", 0) or 0))
 
 
 def _quota_snapshot(api_key) -> tuple[int | None, int, int | None]:
     """(limit, used, remaining) on whichever clock actually gates this key.
 
-    Mirrors _allowance_exhausted's two-clock rule exactly -- free keys are
-    measured against their current 30-day window, paid keys against
-    `calls_this_month`.  Reporting the wrong clock would be worse than
-    reporting nothing, so this stays next to the function it mirrors.
-    Unlimited keys have no limit and no remaining.
+    Two clocks, deliberately:
+      * free tier  -> per rolling 30-day window that starts at the key's first
+                      billable call, counted in `free_window_calls`
+                      (see _free_window_end).
+      * paid plans -> per calendar month, counted in `calls_this_month`
+                      (which the monthly reset job zeroes).
+    Enforcement (_allowance_exhausted) reads this, so the X-Quota-* headers and
+    /v1/usage can't report a quota the gate doesn't use.  Unlimited keys have
+    no limit and no remaining.
     """
     if getattr(api_key, "unlimited", False):
         return None, api_key.calls_used or 0, None
-    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
+    included = _included_calls(api_key)
     used = (api_key.calls_this_month or 0) if _is_paid_plan(api_key) else _free_window_calls(api_key)
     return included, used, max(included - used, 0)
+
+
+def _allowance_exhausted(api_key) -> bool:
+    """True when the key has spent its allowance and must be cut off.
+
+    Every plan hard-stops: there is no per-call overage.  Callers who need
+    more ask through POST /api/keys/request-more.  Unlimited keys never stop.
+    """
+    _, _, remaining = _quota_snapshot(api_key)
+    return remaining is not None and remaining <= 0
 
 
 def _quota_resets_at(api_key, now: datetime | None = None) -> datetime | None:
@@ -628,10 +551,10 @@ def _usage_payload(api_key) -> dict:
     if api_key.unlimited:
         plan = "unlimited"
     elif _is_paid_plan(api_key):
-        plan = "metered"          # overage bills via Stripe after the allowance
+        plan = "paid"
     else:
         # Not stripe_customer_id: free signup creates a customer record too,
-        # which used to make every free key report itself as metered.
+        # which used to make every free key report itself as paid.
         plan = "free"
     _, _, remaining = _quota_snapshot(api_key)
     resets_at = _quota_resets_at(api_key)
@@ -640,26 +563,33 @@ def _usage_payload(api_key) -> dict:
         "plan": plan,
         "calls_this_month": api_key.calls_this_month or 0,
         "calls_total": api_key.calls_used or 0,
-        "included_allowance": (api_key.free_calls or 0) + (api_key.monthly_allowance or 0),
+        "included_allowance": _included_calls(api_key),
         "included_remaining": remaining,
-        # track_usage only meters a paid key that has a Stripe customer.
-        "overage_billing": plan == "metered" and bool(api_key.stripe_customer_id),
+        # Kept for existing clients; always false since per-call overage was
+        # removed.  Past the allowance, requests are refused, never billed.
+        "overage_billing": False,
         "resets_at": resets_at.isoformat() + "Z" if resets_at else None,
+        "request_more": REQUEST_MORE_URL,
     }
 
 
+REQUEST_MORE_URL = "https://developers.sentimentfx.org/#request-more"
+
 _QUOTA_MESSAGE = (
-    "Free allowance used up. Your key has made its {included} calls for this "
-    "30-day window, which ends {ends}. Upgrade at https://developers.sentimentfx.org "
-    "to continue now — check remaining calls any time at GET /v1/usage (always free)."
+    "Allowance used up: this key has made its {included} calls for {period}, "
+    "which refills {ends}. Nothing is billed past the allowance. Need more? "
+    "Request a higher allowance at " + REQUEST_MORE_URL + " — check remaining "
+    "calls any time at GET /v1/usage (always free)."
 )
 
 
 def _quota_message(api_key) -> str:
-    included = (api_key.free_calls or 0) + (api_key.monthly_allowance or 0)
-    end = _free_window_end(api_key)
-    ends = end.strftime("%Y-%m-%d %H:%M UTC") if end else "soon"
-    return _QUOTA_MESSAGE.format(included=included, ends=ends)
+    resets = _quota_resets_at(api_key)
+    return _QUOTA_MESSAGE.format(
+        included=f"{_included_calls(api_key):,}",
+        period="this month" if _is_paid_plan(api_key) else "this 30-day window",
+        ends=resets.strftime("%Y-%m-%d %H:%M UTC") if resets else "soon",
+    )
 
 
 def _email_new_api_key(email: str, key: str, tier: str, allowance: int) -> None:
@@ -2833,55 +2763,115 @@ def admin_dataset_export(
     )
 
 
-@app.post("/admin/billing/backfill-metered")
-def admin_backfill_metered(secret: str = None, apply: bool = False, db: Session = Depends(get_db)):
-    """Find paid keys whose Stripe customer has no metered price attached.
+# REMOVED: POST /admin/billing/backfill-metered
+#
+# It attached the £0.01/call metered price to paid customers who lacked it.
+# Per-call overage is gone -- every plan hard-stops at its allowance and more
+# capacity is granted on request -- so there is nothing left to attach.
 
-    Everyone who bought through Checkout before _ensure_metered_overage shipped
-    is in this state: allowance enforced, overage silently free.  Nothing
-    back-fills them automatically, because attaching a meter to an existing
-    customer changes what they are charged — that is a decision, not a
-    migration.
 
-    DRY RUN BY DEFAULT.  `apply=true` performs the attach.  Read the report
-    first: anyone listed starts paying £0.01/call past their allowance from the
-    moment it runs, so they should be told before, not after.
+@app.post("/api/keys/request-more")
+@limiter.limit("5/minute")
+def request_more_calls(request: Request, response: Response, payload: dict,
+                       db: Session = Depends(get_db)):
+    """Public: ask for a higher API allowance.
+
+    Replaces per-call overage.  A lead, not a purchase: an admin reviews it and
+    grants `extra_calls` with POST /admin/keys/grant.  Same shape as the dataset
+    enquiry -- the lead is committed before the notification is attempted, so a
+    Resend failure can't lose it.
+
+    The reply is identical whether or not a key exists for the address, so the
+    form can't be used to discover which emails hold keys.
+    """
+    email = (payload.get("email") or "").strip().lower()
+    if not email or not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+    try:
+        calls_wanted = int(payload.get("calls_wanted") or 0) or None
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="calls_wanted must be a whole number.")
+    if calls_wanted is not None and not (0 < calls_wanted <= 100_000_000):
+        raise HTTPException(status_code=400, detail="calls_wanted must be between 1 and 100,000,000.")
+
+    key = db.query(models.APIKey).filter(sa_func.lower(models.APIKey.email) == email).first()
+    req = models.AllowanceRequest(
+        email=email,
+        key_prefix=key.key_prefix if key else None,
+        calls_wanted=calls_wanted,
+        use_case=(payload.get("use_case") or "").strip()[:2000] or None,
+    )
+    db.add(req)
+    db.commit()
+
+    try:
+        if key:
+            limit, used, _ = _quota_snapshot(key)
+            standing = (f"Key {key.key_prefix} &middot; plan "
+                        f"{'paid' if _is_paid_plan(key) else 'free'} &middot; "
+                        f"{used:,} of {limit if limit is None else f'{limit:,}'} used")
+        else:
+            standing = "No key under this email yet."
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        resend.Emails.send({
+            "from": "SentimentFX <hello@sentimentfx.org>",
+            # Same inbox as dataset enquiries.
+            "to": os.getenv("DATASET_ENQUIRY_EMAIL", "hello@sentimentfx.org"),
+            "subject": f"API allowance request — {email}",
+            "html": (f"<p>&lt;{email}&gt; wants "
+                     f"{f'{calls_wanted:,}' if calls_wanted else '(unspecified)'} calls/period.<br>"
+                     f"{standing}</p>"
+                     f"<p>{html.escape(req.use_case or '(no use case given)')}</p>"
+                     f"<p>Request #{req.id}. Grant with POST /admin/keys/grant"
+                     f"?email=...&amp;extra_calls=N&amp;request_id={req.id}</p>"),
+        })
+    except Exception as e:
+        print(f"[REQUEST-MORE] notification failed (request still saved): {e}")
+
+    return {"message": f"Thanks — we'll reply to {email} about a higher allowance."}
+
+
+@app.get("/admin/keys/requests")
+def admin_allowance_requests(secret: str = None, db: Session = Depends(get_db)):
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    rows = (db.query(models.AllowanceRequest)
+            .order_by(models.AllowanceRequest.created_at.desc()).limit(200).all())
+    return {"requests": [
+        {"id": r.id, "email": r.email, "key_prefix": r.key_prefix,
+         "calls_wanted": r.calls_wanted, "use_case": r.use_case,
+         "granted_calls": r.granted_calls, "created_at": r.created_at.isoformat() + "Z"}
+        for r in rows
+    ]}
+
+
+@app.post("/admin/keys/grant")
+def admin_grant_calls(secret: str = None, email: str = None, extra_calls: int = None,
+                      request_id: int = None, db: Session = Depends(get_db)):
+    """Set a key's `extra_calls`: added to its allowance every period.
+
+    Absolute, not additive, so re-running it is harmless; `extra_calls=0`
+    withdraws a grant.  It counts per 30-day window on a free key and per month
+    on a paid one, and the tier sync in /api/keys/me never touches it.
+    `request_id` marks the matching request as granted.
     """
     if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-    keys = db.query(models.APIKey).filter(
-        models.APIKey.monthly_allowance > 0,
-        models.APIKey.stripe_customer_id.isnot(None),
-        models.APIKey.active == True,  # noqa: E712
-    ).all()
-
-    missing, already, failed = [], 0, []
-    for k in keys:
-        try:
-            if _has_metered_item(k.stripe_customer_id):
-                already += 1
-                continue
-        except Exception as e:
-            failed.append({"email": k.email, "error": str(e)[:200]})
-            continue
-        row = {"email": k.email, "customer": k.stripe_customer_id,
-               "allowance": k.monthly_allowance, "calls_this_month": k.calls_this_month}
-        if apply:
-            # No Checkout subscription id to reuse here, so this always creates
-            # the standalone monthly metered subscription — correct for both
-            # plan intervals, just less tidy than a second line item.
-            row["attached"] = _ensure_metered_overage(k.stripe_customer_id, None) or "FAILED"
-        missing.append(row)
-
-    return {
-        "mode": "APPLIED" if apply else "dry-run (pass apply=true to attach)",
-        "paid_keys_checked": len(keys),
-        "already_metered": already,
-        "missing_metered": len(missing),
-        "keys": missing,
-        "errors": failed,
-    }
+    if not email or extra_calls is None or extra_calls < 0:
+        raise HTTPException(status_code=400, detail="email and a non-negative extra_calls are required")
+    key = db.query(models.APIKey).filter(
+        sa_func.lower(models.APIKey.email) == email.strip().lower()).first()
+    if not key:
+        raise HTTPException(status_code=404, detail="No key for that email")
+    key.extra_calls = extra_calls
+    if request_id is not None:
+        req = db.query(models.AllowanceRequest).filter(models.AllowanceRequest.id == request_id).first()
+        if req:
+            req.granted_calls = extra_calls
+    db.commit()
+    limit, used, remaining = _quota_snapshot(key)
+    return {"email": key.email, "key_prefix": key.key_prefix, "extra_calls": key.extra_calls,
+            "included_allowance": limit, "used": used, "remaining": remaining}
 
 
 @app.get("/admin/funding-status")
@@ -3163,22 +3153,12 @@ async def stripe_webhook(request: Request):
                 ).first()
                 if api_key:
                     api_key.monthly_allowance = allowance
-                    # A key created through the free portal path has a customer
-                    # record but no subscription.  Point it at the customer that
-                    # actually holds the paid subscription, but never clobber an
-                    # existing id — a generate-linked key's customer owns the
-                    # metered subscription that overage bills against.
+                    # A key created through the free portal path may have no
+                    # customer id yet.  Point it at the customer that holds the
+                    # paid subscription, but never clobber an existing id.
                     if not api_key.stripe_customer_id and _sget(session, "customer"):
                         api_key.stripe_customer_id = session["customer"]
                     webhook_db.commit()
-                    # Overage bills against the metered price, which Checkout
-                    # never attaches on its own.  Idempotent, so the webhook
-                    # retry Stripe fires on any non-2xx can't double-bill.
-                    if allowance > 0:
-                        _ensure_metered_overage(
-                            api_key.stripe_customer_id or _sget(session, "customer"),
-                            _sget(session, "subscription"),
-                        )
                 elif allowance > 0:
                     # Nobody had a key under this address.  Before this branch
                     # existed the purchase completed and the buyer got nothing:
@@ -3197,7 +3177,6 @@ async def stripe_webhook(request: Request):
                     )
                     webhook_db.add(api_key)
                     webhook_db.commit()
-                    _ensure_metered_overage(_sget(session, "customer"), _sget(session, "subscription"))
                     _email_new_api_key(customer_email, new_key, tier, allowance)
             finally:
                 webhook_db.close()
@@ -3423,10 +3402,10 @@ async def generate_linked_api_key(db: Session = Depends(get_db), user=Depends(re
     except Exception:
         tier = "pro"
 
-    allowance_map = {"pro": 1000, "data": 5000}
-    monthly_allowance = allowance_map.get(tier, 1000)
+    allowance_map = {"pro": PRO_MONTHLY_ALLOWANCE, "data": DATA_MONTHLY_ALLOWANCE}
+    monthly_allowance = allowance_map.get(tier, PRO_MONTHLY_ALLOWANCE)
 
-    stripe_customer_id, stripe_subscription_id = _create_stripe_customer(email)
+    stripe_customer_id, stripe_subscription_id = _create_stripe_customer_only(email)
 
     key = _make_key()
     api_key = models.APIKey(
@@ -3465,7 +3444,7 @@ async def get_my_key_info(db: Session = Depends(get_db), user=Depends(require_pr
         _sc = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
         _profile = _sc.table("profiles").select("tier").eq("id", user.id).single().execute()
         _tier = _profile.data.get("tier", "free")
-        _expected = {"pro": 1000, "data": 5000}.get(_tier, 0)
+        _expected = {"pro": PRO_MONTHLY_ALLOWANCE, "data": DATA_MONTHLY_ALLOWANCE}.get(_tier, 0)
         if existing.monthly_allowance != _expected or existing.free_calls != 0:
             existing.monthly_allowance = _expected
             existing.free_calls = 0
@@ -3473,7 +3452,6 @@ async def get_my_key_info(db: Session = Depends(get_db), user=Depends(require_pr
     except Exception:
         pass
 
-    total_allowance = existing.free_calls + existing.monthly_allowance
     return {
         "has_key": True,
         "prefix": existing.key_prefix,
@@ -3481,7 +3459,8 @@ async def get_my_key_info(db: Session = Depends(get_db), user=Depends(require_pr
         "calls_this_month": existing.calls_this_month,
         "free_calls": existing.free_calls,
         "monthly_allowance": existing.monthly_allowance,
-        "total_monthly": total_allowance,
+        "extra_calls": existing.extra_calls or 0,
+        "total_monthly": _included_calls(existing),
         "active": existing.active,
         "unlimited": bool(getattr(existing, "unlimited", False)),
     }
@@ -3543,46 +3522,9 @@ def track_usage(api_key: models.APIKey, db: Session, count: int = 1, endpoint: s
         if remaining is not None:
             response.headers["X-Quota-Remaining"] = str(remaining)
 
-    # Internal / dogfood keys skip metering entirely — counters still tick for
-    # observability (calls_used, calls_this_month, Prometheus API_CALLS) so we
-    # can see internal traffic on the same dashboards.  What they DON'T do is
-    # emit the Stripe MeterEvent, so they never bill regardless of volume.
-    if getattr(api_key, "unlimited", False):
-        db.commit()
-        return
-
-    # Only PAID plans meter.  This used to key off stripe_customer_id alone,
-    # which meant a free-tier key -- whose signup also created a metered
-    # subscription -- would quietly start accruing 0.01/call the moment it
-    # passed 100, despite having been offered "no card required".  Free keys
-    # now hard-stop in get_api_key instead and never reach this branch.
-    # The meter event below only invoices if the customer is actually subscribed
-    # to METERED_PRICE_ID.  Checkout alone never attaches it (its subscription
-    # carries just the licensed Pro/Data price), which used to mean every
-    # Checkout-bought plan served overage free while faithfully recording meter
-    # events nothing could bill.  _ensure_metered_overage now attaches it in the
-    # webhook -- on the same subscription for monthly plans, on a separate
-    # monthly one for annual plans, since Stripe won't mix intervals.
-    #
-    # Plans bought BEFORE that fix shipped still have no metered item, and
-    # nothing back-fills them: /admin/billing/backfill-metered reports and
-    # repairs those on demand.  So a meter event landing nowhere is still
-    # possible for old customers and must stay non-fatal.
-    total_allowance = api_key.free_calls + api_key.monthly_allowance
-    if (_is_paid_plan(api_key)
-            and api_key.calls_this_month > total_allowance
-            and api_key.stripe_customer_id):
-        try:
-            stripe.billing.MeterEvent.create(
-                event_name="api_call",
-                payload={
-                    "stripe_customer_id": api_key.stripe_customer_id,
-                    "value": str(count),
-                }
-            )
-        except Exception as e:
-            print(f"Stripe meter error: {e}")
-
+    # Counting only — nothing here bills.  Per-call overage (a Stripe meter
+    # event past the allowance) was removed: every plan hard-stops in
+    # get_api_key instead, and more capacity comes from a request-more grant.
     db.commit()
 
 
@@ -3601,7 +3543,7 @@ _V1_RATE_LIMITS = {
 }
 
 
-@app.get("/v1/usage", summary="Get API key usage", description="Introspect the calling API key: included allowance, calls remaining, when it refills, overage billing status, and rate limits. Free keys get 1,000 calls per 30-day window that starts at the key's first billable call; `resets_at` is null when no window is running. Paid plans refill on the 1st of each month. Free — does not consume API credits.")
+@app.get("/v1/usage", summary="Get API key usage", description="Introspect the calling API key: included allowance, calls remaining, when it refills, and rate limits. Free keys get 1,000 calls per 30-day window that starts at the key's first billable call; `resets_at` is null when no window is running. Paid plans refill on the 1st of each month. Every plan stops at its allowance — nothing is billed per call; `request_more` links to the form for a higher allowance. Free — does not consume API credits.")
 @limiter.limit("60/minute")
 def api_usage(request: Request, response: Response, api_key=Depends(get_api_key)):
     return {

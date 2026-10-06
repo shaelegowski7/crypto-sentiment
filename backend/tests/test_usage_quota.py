@@ -1,9 +1,10 @@
-"""Free-key quota: 1000 calls per rolling 30-day window from first billable use.
+"""API quota: every plan hard-stops at its allowance; nothing bills per call.
 
-Free keys are gated on `free_window_calls` within a window that track_usage
-opens on the first billable call and re-opens on the first billable call after
-it lapses. Paid keys are gated on `calls_this_month` (calendar, reset by cron).
-The usage report must use the same clock as enforcement, on both surfaces —
+Free keys are gated on `free_window_calls` within a 30-day window that
+track_usage opens on the first billable call and re-opens on the first billable
+call after it lapses. Paid keys are gated on `calls_this_month` (calendar, reset
+by cron). `extra_calls` (granted on a request-more ask) adds to either. The
+usage report must use the same clock as enforcement, on both surfaces —
 /v1/usage and the MCP get_usage tool share _usage_payload for that reason.
 
 Imports app.main, so like test_smoke.py this needs a reachable DATABASE_URL.
@@ -25,7 +26,7 @@ def _key(**overrides):
         key_prefix="sfx_test", free_calls=1000, monthly_allowance=0,
         calls_used=0, calls_this_month=0, unlimited=False,
         stripe_customer_id="cus_free",  # free signup creates a customer too
-        free_window_started_at=None, free_window_calls=0, created_at=None,
+        free_window_started_at=None, free_window_calls=0, extra_calls=0, created_at=None,
     )
     fields.update(overrides)
     return SimpleNamespace(**fields)
@@ -49,6 +50,17 @@ CASES = [
     pytest.param(_key(monthly_allowance=1000, free_calls=0, calls_used=5000,
                       calls_this_month=10, stripe_customer_id="cus_paid"),
                  990, False, True, id="paid-monthly"),
+    # No overage any more: a paid key stops at its allowance like a free one.
+    pytest.param(_key(monthly_allowance=1000, free_calls=0, calls_this_month=1000,
+                      stripe_customer_id="cus_paid"),
+                 0, True, True, id="paid-spent-hard-stops"),
+    # Granted calls add to the plan, on either clock.
+    pytest.param(_key(free_window_started_at=_days_ago(3), free_window_calls=1000,
+                      extra_calls=500),
+                 500, False, True, id="free-spent-with-grant"),
+    pytest.param(_key(monthly_allowance=1000, free_calls=0, calls_this_month=1000,
+                      extra_calls=2000, stripe_customer_id="cus_paid"),
+                 2000, False, True, id="paid-spent-with-grant"),
     pytest.param(_key(unlimited=True, free_calls=0, calls_used=9999),
                  None, False, True, id="unlimited"),
 ]
@@ -85,6 +97,14 @@ def test_free_key_reports_free_plan_despite_stripe_customer():
     assert usage["overage_billing"] is False
 
 
+def test_paid_key_reports_no_overage():
+    usage = _usage_payload(_key(monthly_allowance=15000, free_calls=0,
+                                stripe_customer_id="cus_paid"))
+    assert usage["plan"] == "paid"
+    assert usage["overage_billing"] is False
+    assert usage["request_more"].endswith("#request-more")
+
+
 def test_free_window_resets_at_is_window_end():
     start = _days_ago(10)
     usage = _usage_payload(_key(free_window_started_at=start, free_window_calls=1))
@@ -117,6 +137,21 @@ def test_call_after_lapse_opens_fresh_window():
     assert key.free_window_calls == 1
     assert key.free_window_started_at > _days_ago(1)
     assert _allowance_exhausted(key) is False
+
+
+def test_track_usage_never_reports_to_stripe(monkeypatch):
+    # Per-call overage is gone: even a paid key far past its allowance must not
+    # emit a meter event.
+    import stripe
+
+    def _fail(*a, **k):
+        raise AssertionError("track_usage emitted a Stripe meter event")
+
+    monkeypatch.setattr(stripe.billing.MeterEvent, "create", _fail)
+    key = _key(monthly_allowance=1000, free_calls=0, calls_this_month=5000,
+               stripe_customer_id="cus_paid")
+    track_usage(key, _DB, count=10)
+    assert key.calls_this_month == 5010
 
 
 def test_paid_key_never_opens_free_window():
