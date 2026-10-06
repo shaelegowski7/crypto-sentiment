@@ -2840,6 +2840,88 @@ def admin_dataset_export(
 # capacity is granted on request -- so there is nothing left to attach.
 
 
+@app.post("/admin/billing/reconcile-plans")
+def admin_reconcile_plans(secret: str = None, apply: bool = False, db: Session = Depends(get_db)):
+    """Find keys whose paid allowance doesn't match a live Stripe plan, and
+    (with apply=true) set them to the plan that is live -- usually free.
+
+    One-off repair for cancellations before the subscription-end fix: the
+    webhook used to leave the key alone, so those keys still serve 15,000 /
+    200,000 calls a month.  Uses the webhook's own rules (_live_plan_tier across
+    every Stripe customer tied to the key, then _apply_tier_to_keys), so this
+    can't disagree with what future cancellations do.
+
+    DRY RUN BY DEFAULT.  Guards against downgrading someone who is entitled:
+      * a Stripe or Supabase lookup error skips the key (under `errors`);
+      * no live Stripe plan but a Supabase tier of pro/data means the account
+        was set by hand (comped), not cancelled -- reported under
+        `left_alone_supabase_paid`, never changed.
+    Where Stripe shows a live plan the dashboard tier disagrees with (the old
+    webhook set `free` whenever ANY subscription ended), apply also corrects
+    the Supabase tier.
+
+    Must run where the LIVE Stripe key is (Railway): the local .env key is
+    test-mode and sees none of production's subscriptions.
+    """
+    if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    from supabase import create_client
+    sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+
+    keys = db.query(models.APIKey).filter(
+        models.APIKey.monthly_allowance > 0,
+        models.APIKey.unlimited == False,  # noqa: E712
+        models.APIKey.active == True,  # noqa: E712
+    ).all()
+
+    changes, left_alone, errors, matching = [], [], [], 0
+    for key in keys:
+        email = (key.email or "").strip().lower()
+        try:
+            customer_ids = {key.stripe_customer_id} - {None}
+            if email:
+                customer_ids |= {_sget(c, "id") for c in
+                                 stripe.Customer.list(email=email, limit=100).auto_paging_iter()}
+            tier = _live_plan_tier(customer_ids)
+            target = _allowance_for_tier(tier)
+            if target == (key.monthly_allowance or 0):
+                matching += 1
+                continue
+            rows = sb.table("profiles").select("tier").eq("email", email).execute().data if email else []
+            dashboard_tier = (rows[0].get("tier") if rows else None) or "free"
+        except Exception as e:
+            errors.append({"key_prefix": key.key_prefix, "email": key.email, "error": str(e)[:200]})
+            continue
+
+        row = {"key_prefix": key.key_prefix, "email": key.email,
+               "allowance": key.monthly_allowance, "live_stripe_plan": tier or "none",
+               "dashboard_tier": dashboard_tier, "new_allowance": target}
+        if target == 0 and dashboard_tier in ("pro", "data"):
+            left_alone.append(row)
+            continue
+        if apply:
+            _apply_tier_to_keys([key], tier)
+            if tier and dashboard_tier != tier and email:
+                try:
+                    sb.table("profiles").update({"tier": tier}).eq("email", email).execute()
+                    row["dashboard_tier_set_to"] = tier
+                except Exception as e:
+                    row["dashboard_tier_error"] = str(e)[:200]
+        changes.append(row)
+
+    if apply:
+        db.commit()
+    return {
+        "mode": "APPLIED" if apply else "dry-run (pass apply=true to change these keys)",
+        "paid_keys_checked": len(keys),
+        "already_matching": matching,
+        "changes": changes,
+        "left_alone_supabase_paid": left_alone,
+        "errors": errors,
+    }
+
+
 @app.post("/api/keys/request-more")
 @limiter.limit("5/minute")
 def request_more_calls(request: Request, response: Response, payload: dict,
