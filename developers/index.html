@@ -537,7 +537,12 @@ const res = await fetch(
                         </table>
 
                         <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Claude Code</h3>
-                        <p>Add to <code>~/.claude/settings.json</code> (or your project's <code>.claude/settings.json</code>):</p>
+                        <p>Run once in a terminal. <code>--scope user</code> makes the tools available in every project; leave it out to add them to the current project only:</p>
+                        <pre>claude mcp add --transport http --scope user sentimentfx https://api.sentimentfx.org/mcp --header "X-API-Key: sfx_your_key_here"</pre>
+                        <p style="margin-top:8px;">Check it with <code>claude mcp list</code>, or <code>/mcp</code> inside a session. Start a new session and Claude will discover the six tools. Try <em>"What's Bitcoin sentiment looking like this week?"</em>.</p>
+
+                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Cursor / Cline / Windsurf</h3>
+                        <p>Add this JSON block under whatever MCP config panel the editor exposes — Cursor is <code>Settings → MCP → Add new server</code>, Cline lives in its side panel. The only field that ever changes is the URL/auth combo above.</p>
                         <pre>{
   "mcpServers": {
     "sentimentfx": {
@@ -547,10 +552,6 @@ const res = await fetch(
     }
   }
 }</pre>
-                        <p style="margin-top:8px;">Restart Claude Code and Claude will discover the six tools. Try <em>"What's Bitcoin sentiment looking like this week?"</em>.</p>
-
-                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Cursor / Cline / Windsurf</h3>
-                        <p>Same JSON block under whatever MCP config panel the editor exposes — Cursor is <code>Settings → MCP → Add new server</code>, Cline lives in its side panel. The only field that ever changes is the URL/auth combo above.</p>
 
                         <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Claude API (custom apps)</h3>
                         <p>Use the Messages API's MCP connector. It needs the server in <code>mcp_servers</code> <em>and</em> a matching <code>mcp_toolset</code> in <code>tools</code>. The connector can't send custom headers, so your key goes in <code>authorization_token</code>, which arrives as <code>Authorization: Bearer</code>:</p>
