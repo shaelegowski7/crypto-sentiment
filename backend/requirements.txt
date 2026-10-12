@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-sqlalchemy
+sqlalchemy>=2.0,<2.1   # PIN: 2.1 makes postgresql:// default to psycopg 3, which isn't installed (we use psycopg2-binary), so the app crashes at boot. Every Railway build failed from 2026-10-06 until this pin.
 psycopg2-binary
 python-dotenv
 anthropic
