@@ -7,6 +7,7 @@ from .database import engine, get_db
 from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES, fetch_stocktwits_headlines, fetch_x_headlines
 from .ai_sources import fetch_ai_headlines
 from .sentiment import analyse_sentiment
+from .sources import social_headline_filter, classify_source
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from .candles import fetch_intraday_prices, INTRADAY_BACKFILL_PERIOD, INTRADAY_REFRESH_PERIOD
 from datetime import datetime, timedelta, timezone
@@ -31,6 +32,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from collections import defaultdict
 from contextlib import asynccontextmanager
+from typing import Literal
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Gauge, Histogram
 import numpy as np
@@ -1860,54 +1862,6 @@ def get_prices(ticker: str, db: Session = Depends(get_db)):
     return prices
 
 
-# Social chatter vs editorial news.  Reddit arrives through the general RSS
-# path, so it carries no source_type and is identified by its feed title
-# ("newest submissions : Bitcoin"); StockTwits/X are tagged via source_type;
-# and the HN backfill stores the linked article's domain, which is sometimes
-# a social platform.  Matching is deliberately exact/prefix rather than a
-# loose "%reddit%" — real companies (redditinc.com, redditrecs.com) would be
-# caught by that and wrongly hidden.
-#
-# Used for DISPLAY filtering only (see the `sources` param on /dashboard).
-# Sentiment scoring, correlation, alerts and the SignalQuality gate all still
-# consume every headline — verified that excluding social doesn't measurably
-# change the correlation, so there's no reason to recalibrate that pipeline.
-_SOCIAL_SOURCE_TYPES = ("stocktwits", "x")
-_SOCIAL_DOMAINS = (
-    "reddit.com", "old.reddit.com", "sh.reddit.com",
-    "twitter.com", "x.com", "youtube.com",
-)
-
-
-def _social_headline_filter():
-    """SQLAlchemy predicate matching social-chatter headlines.
-
-    COALESCE guards the NULL trap: `NOT (NULL = 'stocktwits')` is NULL, not
-    TRUE, so without it every legacy news row (source_type IS NULL) would be
-    dropped by the negated filter.
-    """
-    return sa_or(
-        sa_func.coalesce(models.Headline.source_type, "").in_(_SOCIAL_SOURCE_TYPES),
-        sa_func.coalesce(models.Headline.source, "").ilike("newest submissions :%"),
-        sa_func.lower(sa_func.coalesce(models.Headline.source, "")).in_(_SOCIAL_DOMAINS),
-    )
-
-
-def _classify_source(source: str | None, source_type: str | None) -> str:
-    """Coarse label for the UI badge: 'stocktwits' | 'reddit' | 'x' | 'news'."""
-    st = (source_type or "").lower()
-    if st in _SOCIAL_SOURCE_TYPES:
-        return st
-    src = (source or "").lower()
-    if src.startswith("newest submissions :") or src in ("reddit.com", "old.reddit.com", "sh.reddit.com"):
-        return "reddit"
-    if src in ("twitter.com", "x.com"):
-        return "x"
-    if src == "youtube.com":
-        return "youtube"
-    return "news"
-
-
 @app.get("/dashboard/{ticker}")
 def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1, limit: int = 50, sources: str = "all", db: Session = Depends(get_db)):
     query_headlines = db.query(models.Headline).filter(
@@ -1928,7 +1882,7 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
     # dashboard opts in explicitly. Filtering is applied before the count so
     # pagination stays correct for the filtered set.
     if sources == "news":
-        query_headlines = query_headlines.filter(~_social_headline_filter())
+        query_headlines = query_headlines.filter(~social_headline_filter())
 
     # prices always returned in full for the chart
     prices = query_prices.order_by(models.Price.date.desc()).all()
@@ -1955,7 +1909,7 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
                 "label": h.sentiment_label,
                 "title": h.title,
                 "source": h.source,
-                "source_kind": _classify_source(h.source, h.source_type),
+                "source_kind": classify_source(h.source, h.source_type),
             } for h in headlines
         ],
         "prices": [
@@ -3723,15 +3677,27 @@ def api_usage(request: Request, response: Response, api_key=Depends(get_api_key)
     }
 
 
-@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored headlines for a given ticker. Use `limit` to control how many results are returned (1-100). Costs 1 API credit per 25 headlines actually returned; a 404 costs nothing.")
+# `sources` on /v1/sentiment and /v1/summary (and their MCP mirrors): "all" is
+# the default so existing callers see no change; "news" drops Reddit,
+# StockTwits and X posts (see sources.py).  A Literal rather than /dashboard's
+# free string, so a typo is a 422 instead of silently returning everything.
+_SOURCES_DESC = ("`all` (default) includes Reddit, StockTwits and X posts alongside news; "
+                 "`news` returns editorial news only.")
+
+
+@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored headlines for a given ticker. Use `limit` to control how many results are returned (1-100), and `sources=news` to leave out Reddit, StockTwits and X posts; each row's `source_kind` says which it is. Costs 1 API credit per 25 headlines actually returned; a 404 costs nothing.")
 @limiter.limit("30/minute")
 def api_sentiment(request: Request, response: Response, ticker: str,
                   limit: int = Query(25, ge=1, le=100),
+                  sources: Literal["all", "news"] = Query("all", description=_SOURCES_DESC),
                   db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
-    headlines = db.query(models.Headline).filter(
+    query = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
-    ).order_by(models.Headline.published_at.desc()).limit(limit).all()
+    )
+    if sources == "news":
+        query = query.filter(~social_headline_filter())
+    headlines = query.order_by(models.Headline.published_at.desc()).limit(limit).all()
 
     if not headlines:
         raise HTTPException(status_code=404, detail="No data found")
@@ -3745,6 +3711,7 @@ def api_sentiment(request: Request, response: Response, ticker: str,
     return {
         "ticker": ticker.upper(),
         "limit": limit,
+        "sources": sources,
         "returned": len(headlines),
         "calls_used": calls,
         "data": [
@@ -3752,6 +3719,7 @@ def api_sentiment(request: Request, response: Response, ticker: str,
                 "date": h.published_at,
                 "title": h.title,
                 "source": h.source,
+                "source_kind": classify_source(h.source, h.source_type),
                 "sentiment_score": h.sentiment_score,
                 "sentiment_label": h.sentiment_label,
             } for h in headlines
@@ -3759,16 +3727,20 @@ def api_sentiment(request: Request, response: Response, ticker: str,
     }
 
 
-@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily sentiment scores for a given ticker over the specified number of days (1-365). Costs 1 API credit per day actually returned; a 404 costs nothing.")
+@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily sentiment scores for a given ticker over the specified number of days (1-365). Use `sources=news` to average editorial news only, leaving out Reddit, StockTwits and X posts. Costs 1 API credit per day actually returned; a 404 costs nothing.")
 @limiter.limit("20/minute")
 def api_summary(request: Request, response: Response, ticker: str,
                 days: int = Query(30, ge=1, le=365),
+                sources: Literal["all", "news"] = Query("all", description=_SOURCES_DESC),
                 db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     since = datetime.utcnow() - timedelta(days=days)
-    headlines = db.query(models.Headline).filter(
+    query = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
-    ).order_by(models.Headline.published_at.desc()).all()
+    )
+    if sources == "news":
+        query = query.filter(~social_headline_filter())
+    headlines = query.order_by(models.Headline.published_at.desc()).all()
 
     if not headlines:
         raise HTTPException(status_code=404, detail="No data found")
@@ -3801,6 +3773,7 @@ def api_summary(request: Request, response: Response, ticker: str,
     return {
         "ticker": ticker.upper(),
         "days": days,
+        "sources": sources,
         "returned": len(summary),
         "calls_used": calls,
         "data": summary

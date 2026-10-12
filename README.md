@@ -58,13 +58,13 @@ Authenticate with an `X-API-Key` header. Full docs are at [developers.sentimentf
 
 | Endpoint | Returns | Cost |
 |----------|---------|------|
-| `GET /v1/sentiment/{ticker}?limit=1-100` | Latest scored headlines | 1 credit per 25 rows returned |
-| `GET /v1/summary/{ticker}?days=1-365` | Daily average sentiment | 1 credit per day returned |
+| `GET /v1/sentiment/{ticker}?limit=1-100&sources=all\|news` | Latest scored headlines, each with a `source_kind` | 1 credit per 25 rows returned |
+| `GET /v1/summary/{ticker}?days=1-365&sources=all\|news` | Daily average sentiment | 1 credit per day returned |
 | `GET /v1/prices/{ticker}?days=1-365` | Daily closes, with a `currency` field | 1 credit per day returned |
 | `GET /v1/correlation/{ticker}` | 180-day Pearson r, p-value, 95% CI, strength | 1 credit |
 | `GET /v1/usage` | Plan, usage, allowance, reset date, rate limits | Free |
 
-Calls are counted after the query, on rows actually returned. Nothing is billed per call: a key that uses up its allowance gets a `402 insufficient_quota` until it refills, and a higher allowance can be [requested](https://developers.sentimentfx.org/#request-more). A 404 costs nothing, and out-of-range parameters are rejected with a 422 before any work is done. Every response carries `X-Quota-*` and `X-RateLimit-*` headers. Errors use one envelope: `{"error": {"type": "...", "message": "..."}}`.
+`sources=all` (the default) includes Reddit, StockTwits and X posts alongside news; `sources=news` leaves them out. Calls are counted after the query, on rows actually returned. Nothing is billed per call: a key that uses up its allowance gets a `402 insufficient_quota` until it refills, and a higher allowance can be [requested](https://developers.sentimentfx.org/#request-more). A 404 costs nothing, and out-of-range parameters are rejected with a 422 before any work is done. Every response carries `X-Quota-*` and `X-RateLimit-*` headers. Errors use one envelope: `{"error": {"type": "...", "message": "..."}}`.
 
 ```bash
 # Get a free key (1,000 calls every 30 days, no card)
@@ -77,7 +77,7 @@ curl https://api.sentimentfx.org/v1/summary/BTC?days=7 \
   -H "X-API-Key: sfx_your_key_here"
 ```
 
-The Sentiment Index is public and needs no key: `GET https://api.sentimentfx.org/sentiment-index`.
+The Sentiment Index is public and needs no key: `GET https://api.sentimentfx.org/sentiment-index`. It's built from news only; social posts are always left out.
 
 ### MCP server (`api.sentimentfx.org/mcp`)
 

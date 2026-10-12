@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func as sa_func
 
 from . import models
+from .sources import social_headline_filter
 
 WINDOW_DAYS = 7  # trailing window per ticker -- long enough that low-volume
                  # tickers (e.g. NZDUSD) still have a handful of headlines,
@@ -51,6 +52,7 @@ CATEGORIES = {
 METHODOLOGY = (
     "Built from real financial news headlines scored by FinBERT (a financial-domain "
     "NLP model) -- not trader positioning, order flow, or social-media chatter. "
+    "Reddit, StockTwits and X posts are excluded. "
     "Score per ticker = mean sentiment over the trailing 7 days. Category score = "
     "equal-weighted mean across that category's tickers (headline volume doesn't "
     "skew it). Overall = equal-weighted mean across the 5 asset classes, so equities' "
@@ -83,6 +85,10 @@ def _to_100_scale(avg_sentiment: float) -> float:
 def compute_index(db_session, as_of: datetime = None) -> dict:
     """One snapshot: per-ticker 7d averages in a single grouped query, then
     rolled up into category and overall scores in Python (42 rows, trivial).
+
+    Social posts are always excluded, unlike everywhere else where it's opt-in:
+    METHODOLOGY promises news only, and Reddit is most of the crypto volume,
+    so including it made the published claim false.
     """
     as_of = as_of or datetime.now(timezone.utc)
     since = as_of - timedelta(days=WINDOW_DAYS)
@@ -94,6 +100,7 @@ def compute_index(db_session, as_of: datetime = None) -> dict:
     ).filter(
         models.Headline.published_at >= since,
         models.Headline.published_at <= as_of,
+        ~social_headline_filter(),
     ).group_by(models.Headline.ticker).all()
     per_ticker = {ticker: (float(avg), int(count)) for ticker, avg, count in rows if avg is not None}
 
