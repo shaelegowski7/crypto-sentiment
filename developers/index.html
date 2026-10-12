@@ -541,12 +541,23 @@ const res = await fetch(
                         <pre>claude mcp add --transport http --scope user sentimentfx https://api.sentimentfx.org/mcp --header "X-API-Key: sfx_your_key_here"</pre>
                         <p style="margin-top:8px;">Check it with <code>claude mcp list</code>, or <code>/mcp</code> inside a session. Start a new session and Claude will discover the six tools. Try <em>"What's Bitcoin sentiment looking like this week?"</em>.</p>
 
-                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Cursor / Cline / Windsurf</h3>
-                        <p>Add this JSON block under whatever MCP config panel the editor exposes — Cursor is <code>Settings → MCP → Add new server</code>, Cline lives in its side panel. The only field that ever changes is the URL/auth combo above.</p>
+                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Cursor / Windsurf</h3>
+                        <p>Add this to <code>~/.cursor/mcp.json</code> (or <code>.cursor/mcp.json</code> in a project) for Cursor, or to Windsurf's <code>mcp_config.json</code>:</p>
                         <pre>{
   "mcpServers": {
     "sentimentfx": {
-      "type": "http",
+      "url": "https://api.sentimentfx.org/mcp",
+      "headers": { "X-API-Key": "sfx_your_key_here" }
+    }
+  }
+}</pre>
+
+                        <h3 style="margin-top:24px;font-family:var(--mono);font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Cline</h3>
+                        <p>In the MCP Servers panel, open the <strong>Configure</strong> tab and click <strong>Configure MCP Servers</strong>. Cline needs <code>"type": "streamableHttp"</code>: without it, Cline falls back to the older SSE transport, which this server doesn't offer.</p>
+                        <pre>{
+  "mcpServers": {
+    "sentimentfx": {
+      "type": "streamableHttp",
       "url": "https://api.sentimentfx.org/mcp",
       "headers": { "X-API-Key": "sfx_your_key_here" }
     }
