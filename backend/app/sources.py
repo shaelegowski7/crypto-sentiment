@@ -7,19 +7,21 @@ domain, which is sometimes a social platform.  Matching is deliberately
 exact/prefix rather than a loose "%reddit%" — real companies (redditinc.com,
 redditrecs.com) would be caught by that and wrongly hidden.
 
-Who uses it:
-* /dashboard `sources=news` and the /v1 + MCP `sources=news` option -- opt-in,
-  the default still returns everything.
-* The Sentiment Index -- always.  Its whole positioning is "scored news, not
-  social chatter", stated on every response and on sentiment-index.html, and
-  Reddit is most of the crypto volume, so averaging it in made that untrue.
+Social posts are collected but kept separate: they are never averaged in with
+news.  Everything that turns headlines into a number -- the index, daily
+summaries, the dashboard chart, correlation, signals, divergence, backtests,
+the SignalQuality gate, alerts, trade cards, the morning brief, exports --
+reads `news_headlines(db)`.  Social posts are only reachable on purpose:
+`sources=social` on /v1 and MCP (and the bulk export), or `sources=all` on
+the headline *lists*, where each row carries its `source_kind`.
 
-Sentiment scoring, correlation, alerts and the SignalQuality gate still consume
-every headline -- verified that excluding social doesn't measurably change the
-correlation, so there's no reason to recalibrate that pipeline.
+When adding a query that averages or counts sentiment, start from
+`news_headlines(db)`, not `db.query(models.Headline)`.  The plain query is
+for housekeeping (dedup, row counts, cleanup) and labelled lists only.
 
-Lives in its own module (not main.py) so sentiment_index.py and mcp_server.py
-can import it without pulling in main.py and its import-time side effects.
+Lives in its own module (not main.py) so sentiment_index.py, mcp_server.py,
+brief.py and trade_card.py can import it without pulling in main.py and its
+import-time side effects.
 """
 from sqlalchemy import or_ as sa_or, func as sa_func
 
@@ -44,6 +46,21 @@ def social_headline_filter():
         sa_func.coalesce(models.Headline.source, "").ilike("newest submissions :%"),
         sa_func.lower(sa_func.coalesce(models.Headline.source, "")).in_(SOCIAL_DOMAINS),
     )
+
+
+def news_headlines(db):
+    """`db.query(Headline)` restricted to editorial news."""
+    return db.query(models.Headline).filter(~social_headline_filter())
+
+
+def filter_sources(query, sources: str):
+    """Apply a `sources` choice to a Headline query: 'news' keeps editorial
+    news, 'social' keeps only social posts, 'all' leaves it unchanged."""
+    if sources == "news":
+        return query.filter(~social_headline_filter())
+    if sources == "social":
+        return query.filter(social_headline_filter())
+    return query
 
 
 def classify_source(source: str | None, source_type: str | None) -> str:

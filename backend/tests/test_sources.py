@@ -1,8 +1,8 @@
 """Social posts vs editorial news (app/sources.py).
 
-The Sentiment Index must never average Reddit/StockTwits/X in -- its
-methodology promises news only -- while /v1 and the MCP mirrors keep them by
-default and drop them on sources=news.
+Social posts are collected but kept separate: no sentiment number averages
+them in with news, and they're reachable only on purpose (`sources=social`,
+or `sources=all` on a labelled headline list).
 
 Imports app.main, so like test_smoke.py this needs a reachable DATABASE_URL.
 Rows are seeded under a fake ticker (and, for the index, in 2001) so nothing
@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from app import main, mcp_server, models
+from app import brief, main, mcp_server, models
 from app.database import SessionLocal
 from app.sentiment_index import compute_index
 from app.sources import classify_source, social_headline_filter
@@ -33,6 +33,7 @@ ROWS = [
     ("x.com", None, -0.7),
 ]
 NEWS_COUNT = 2
+SOCIAL_COUNT = 3
 
 
 @pytest.mark.parametrize("source, source_type, expected", [
@@ -96,6 +97,14 @@ def test_index_excludes_social(db):
     assert "Reddit, StockTwits and X posts are excluded" in index["methodology"]
 
 
+def test_brief_uses_news_only(db, monkeypatch):
+    monkeypatch.setitem(brief.TICKER_NAMES, TICKER, "Test ticker")
+    data = brief.fetch_ticker_data(db, TICKER)
+    assert data["current_sentiment"] == 0.4
+    # The most extreme row is a -0.9 Reddit post; the brief must not pick it.
+    assert data["top_headline"]["title"] == "test headline 0"
+
+
 @pytest.fixture
 def client(monkeypatch):
     key = SimpleNamespace(key_prefix="sfx_test")
@@ -107,17 +116,28 @@ def client(monkeypatch):
         main.app.dependency_overrides.pop(main.get_api_key, None)
 
 
-def test_v1_sentiment_default_keeps_social_and_labels_it(db, client):
+def _kinds(body):
+    return {r["source_kind"] for r in body["data"]}
+
+
+def test_dashboard_chart_uses_news_only(db, client):
+    body = client.get(f"/sentiment-summary/{TICKER}?days=2").json()
+    assert sum(d["count"] for d in body["data"]) == NEWS_COUNT
+
+
+def test_v1_sentiment_defaults_to_news(db, client):
     body = client.get(f"/v1/sentiment/{TICKER}").json()
-    assert body["sources"] == "all"
-    assert body["returned"] == len(ROWS)
-    assert {r["source_kind"] for r in body["data"]} == {"news", "reddit", "stocktwits", "x"}
-
-
-def test_v1_sentiment_news_only(db, client):
-    body = client.get(f"/v1/sentiment/{TICKER}?sources=news").json()
+    assert body["sources"] == "news"
     assert body["returned"] == NEWS_COUNT
-    assert {r["source_kind"] for r in body["data"]} == {"news"}
+    assert _kinds(body) == {"news"}
+
+
+def test_v1_sentiment_social_and_all(db, client):
+    social = client.get(f"/v1/sentiment/{TICKER}?sources=social").json()
+    assert social["returned"] == SOCIAL_COUNT
+    assert _kinds(social) == {"reddit", "stocktwits", "x"}
+    everything = client.get(f"/v1/sentiment/{TICKER}?sources=all").json()
+    assert everything["returned"] == len(ROWS)
 
 
 def test_v1_sentiment_rejects_unknown_sources(db, client):
@@ -126,13 +146,15 @@ def test_v1_sentiment_rejects_unknown_sources(db, client):
     assert resp.json()["error"]["type"] == "invalid_request_error"
 
 
-def test_v1_summary_sources(db, client):
-    everything = client.get(f"/v1/summary/{TICKER}?days=2").json()
-    news = client.get(f"/v1/summary/{TICKER}?days=2&sources=news").json()
+def test_v1_summary_keeps_news_and_social_apart(db, client):
+    news = client.get(f"/v1/summary/{TICKER}?days=2").json()
+    social = client.get(f"/v1/summary/{TICKER}?days=2&sources=social").json()
     # Summed, not data[0], in case the run straddles midnight UTC.
-    assert sum(d["article_count"] for d in everything["data"]) == len(ROWS)
-    assert sum(d["article_count"] for d in news["data"]) == NEWS_COUNT
     assert news["sources"] == "news"
+    assert sum(d["article_count"] for d in news["data"]) == NEWS_COUNT
+    assert sum(d["article_count"] for d in social["data"]) == SOCIAL_COUNT
+    # No mixed daily average.
+    assert client.get(f"/v1/summary/{TICKER}?days=2&sources=all").status_code == 422
 
 
 @pytest.fixture
@@ -144,13 +166,15 @@ def mcp_session(monkeypatch):
 
 
 def test_mcp_get_sentiment_sources(db, mcp_session):
-    everything = mcp_server.get_sentiment(None, TICKER)
-    news = mcp_server.get_sentiment(None, TICKER, sources="news")
-    assert everything["returned"] == len(ROWS)
-    assert news["returned"] == NEWS_COUNT
-    assert {r["source_kind"] for r in news["data"]} == {"news"}
+    assert mcp_server.get_sentiment(None, TICKER)["returned"] == NEWS_COUNT
+    social = mcp_server.get_sentiment(None, TICKER, sources="social")
+    assert social["returned"] == SOCIAL_COUNT
+    assert _kinds(social) == {"reddit", "stocktwits", "x"}
+    assert mcp_server.get_sentiment(None, TICKER, sources="all")["returned"] == len(ROWS)
 
 
 def test_mcp_get_summary_sources(db, mcp_session):
-    news = mcp_server.get_summary(None, TICKER, days=2, sources="news")
+    news = mcp_server.get_summary(None, TICKER, days=2)
+    social = mcp_server.get_summary(None, TICKER, days=2, sources="social")
     assert sum(d["article_count"] for d in news["data"]) == NEWS_COUNT
+    assert sum(d["article_count"] for d in social["data"]) == SOCIAL_COUNT

@@ -86,9 +86,9 @@ def compute_index(db_session, as_of: datetime = None) -> dict:
     """One snapshot: per-ticker 7d averages in a single grouped query, then
     rolled up into category and overall scores in Python (42 rows, trivial).
 
-    Social posts are always excluded, unlike everywhere else where it's opt-in:
-    METHODOLOGY promises news only, and Reddit is most of the crypto volume,
-    so including it made the published claim false.
+    Social posts are excluded, as they are from every sentiment number (see
+    sources.py): METHODOLOGY promises news only, and Reddit was most of the
+    crypto volume, so averaging it in made the published claim false.
     """
     as_of = as_of or datetime.now(timezone.utc)
     since = as_of - timedelta(days=WINDOW_DAYS)

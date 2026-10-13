@@ -37,7 +37,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from . import models
 from .database import SessionLocal
 from .scraper import BACKGROUND_TICKERS
-from .sources import social_headline_filter, classify_source
+from .sources import classify_source, filter_sources, news_headlines
 
 
 # The tickers list lives here (rather than importing from main.py) because
@@ -76,10 +76,10 @@ mcp = FastMCP(
         "available.  `get_summary` for daily sentiment aggregates, "
         "`get_sentiment` for the raw scored headlines, `get_prices` for "
         "historical closes, `get_correlation` for a 180-day Pearson stat "
-        "between daily sentiment shifts and next-day price returns.  Headlines "
-        "include Reddit, StockTwits and X posts unless you pass "
-        "sources='news' to `get_sentiment` or `get_summary`; each headline's "
-        "`source_kind` says which it is.  All "
+        "between daily sentiment shifts and next-day price returns.  Every "
+        "sentiment number is built from editorial news only.  Reddit, "
+        "StockTwits and X posts are kept separate: pass sources='social' to "
+        "`get_sentiment` or `get_summary` to get them on their own.  All "
         "responses are in GBP; sentiment scores are pos_prob - neg_prob."
     ),
 )
@@ -208,8 +208,8 @@ def get_usage(ctx: Context) -> dict[str, Any]:
 
 @mcp.tool()
 def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
-                  sources: Literal["all", "news"] = "all") -> dict[str, Any]:
-    """Return the most recent FinBERT-scored headlines for `ticker`.
+                  sources: Literal["news", "social", "all"] = "news") -> dict[str, Any]:
+    """Return the most recent FinBERT-scored news headlines for `ticker`.
 
     Each headline has a `sentiment_score` in [-1, +1] (positive_prob -
     negative_prob), a categorical `sentiment_label`, and a `source_kind`
@@ -217,18 +217,18 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
     headlines actually returned — same billing as GET /v1/sentiment/{ticker}.
     An empty result costs nothing.
 
-    `limit` is capped at 100.  `sources="news"` leaves out Reddit, StockTwits
-    and X posts; the default "all" includes them.  Titles come back
-    reverse-chronological so the first item is the freshest.
+    `limit` is capped at 100.  Social posts are kept separate from news:
+    the default `sources="news"` returns editorial news, `"social"` returns
+    only Reddit, StockTwits and X posts, and `"all"` returns both, labelled
+    by `source_kind`.  Titles come back reverse-chronological so the first
+    item is the freshest.
     """
     limit = max(1, min(limit, 100))
     api_key, db = _open_authed_session(ctx)
     try:
-        query = db.query(models.Headline).filter(
+        query = filter_sources(db.query(models.Headline).filter(
             models.Headline.ticker == ticker.upper(),
-        )
-        if sources == "news":
-            query = query.filter(~social_headline_filter())
+        ), sources)
         rows = query.order_by(models.Headline.published_at.desc()).limit(limit).all()
 
         if not rows:
@@ -262,26 +262,24 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
 
 @mcp.tool()
 def get_summary(ctx: Context, ticker: str, days: int = 30,
-                sources: Literal["all", "news"] = "all") -> dict[str, Any]:
-    """Return daily aggregated sentiment for `ticker` over the last `days`.
+                sources: Literal["news", "social"] = "news") -> dict[str, Any]:
+    """Return daily aggregated news sentiment for `ticker` over the last `days`.
 
     Each entry has `avg_sentiment` (unweighted mean of that day's scores),
     `article_count`, and a directional `label` (positive / negative /
-    neutral, thresholded at ±0.1).  `sources="news"` averages editorial news
-    only; the default "all" includes Reddit, StockTwits and X posts.  Costs
-    1 API credit per day actually returned — same as
-    GET /v1/summary/{ticker}.  A window with no coverage costs nothing.
+    neutral, thresholded at ±0.1).  `sources="social"` returns a separate
+    daily average of Reddit, StockTwits and X posts; news and social are
+    never averaged together.  Costs 1 API credit per day actually returned —
+    same as GET /v1/summary/{ticker}.  A window with no coverage costs nothing.
     """
     days = max(1, min(days, 365))
     api_key, db = _open_authed_session(ctx)
     try:
         since = datetime.utcnow() - timedelta(days=days)
-        query = db.query(models.Headline).filter(
+        query = filter_sources(db.query(models.Headline).filter(
             models.Headline.ticker == ticker.upper(),
             models.Headline.published_at >= since,
-        )
-        if sources == "news":
-            query = query.filter(~social_headline_filter())
+        ), sources)
         rows = query.all()
 
         if not rows:
@@ -390,7 +388,7 @@ def get_correlation(ctx: Context, ticker: str) -> dict[str, Any]:
         _bill(api_key, db, 1, endpoint="correlation")
         since = datetime.utcnow() - timedelta(days=180)
 
-        headlines = db.query(models.Headline).filter(
+        headlines = news_headlines(db).filter(
             models.Headline.ticker == ticker.upper(),
             models.Headline.published_at >= since,
         ).order_by(models.Headline.published_at).all()

@@ -30,6 +30,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from . import models
+from .sources import news_headlines
 
 
 # Sentiment shift thresholds copied from main.get_backtest / get_signal so a
@@ -168,7 +169,7 @@ def build_trade_card(db: Session, ticker: str, hold_days: int = 7) -> dict:
     ticker = ticker.upper()
     since = datetime.utcnow() - timedelta(days=180)
 
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker,
         models.Headline.published_at >= since,
     ).order_by(models.Headline.published_at).all()

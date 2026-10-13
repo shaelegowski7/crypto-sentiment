@@ -4,10 +4,10 @@ from sqlalchemy import or_ as sa_or, func as sa_func
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES, fetch_stocktwits_headlines, fetch_x_headlines
+from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES, fetch_stocktwits_headlines, fetch_x_headlines, fetch_next_reddit_feed
 from .ai_sources import fetch_ai_headlines
 from .sentiment import analyse_sentiment
-from .sources import social_headline_filter, classify_source
+from .sources import classify_source, filter_sources, news_headlines, social_headline_filter
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from .candles import fetch_intraday_prices, INTRADAY_BACKFILL_PERIOD, INTRADAY_REFRESH_PERIOD
 from datetime import datetime, timedelta, timezone
@@ -871,7 +871,7 @@ def check_alerts(db):
     alerts = db.query(models.Alert).filter(models.Alert.active == True).all()
 
     for alert in alerts:
-        recent = db.query(models.Headline).filter(
+        recent = news_headlines(db).filter(
             models.Headline.ticker == alert.ticker,
             models.Headline.published_at >= datetime.utcnow() - timedelta(hours=24)
         ).all()
@@ -1075,6 +1075,24 @@ def _ingest_headlines(db, headlines: list, label: str) -> int:
         HEADLINES_INGESTED.labels(source=h["source"], ticker=h["ticker"]).inc()
         saved += 1
     return saved
+
+
+def scrape_reddit():
+    """One subreddit per tick, every 2 minutes: Reddit allows one
+    unauthenticated request a minute, so it can't ride along with the 15-min
+    RSS burst (see the Reddit note in scraper.py)."""
+    db = SessionLocal()
+    try:
+        headlines = fetch_next_reddit_feed()
+        if headlines:
+            saved = _ingest_headlines(db, headlines, "REDDIT")
+            db.commit()
+            print(f"[REDDIT] +{saved} new / {len(headlines)} fetched")
+    except Exception as e:
+        db.rollback()
+        print(f"[REDDIT] error: {e}")
+    finally:
+        db.close()
 
 
 def scrape_rss_only():
@@ -1328,6 +1346,15 @@ scheduler.add_job(
     scrape_rss_only,
     CronTrigger(minute="*/15"),
     id="rss_scrape",
+    max_instances=1,
+    coalesce=True,
+    replace_existing=True,
+)
+# Reddit on its own clock: one subreddit every 2 minutes (see scrape_reddit).
+scheduler.add_job(
+    scrape_reddit,
+    CronTrigger(minute="*/2"),
+    id="reddit_scrape",
     max_instances=1,
     coalesce=True,
     replace_existing=True,
@@ -1848,7 +1875,7 @@ def save_prices(ticker: str, db: Session = Depends(get_db), admin=Depends(requir
 
 @app.get("/sentiment/{ticker}", response_model=list[schemas.HeadlineResponse])
 def get_sentiment(ticker: str, db: Session = Depends(get_db)):
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper()
     ).all()
     return headlines
@@ -1876,13 +1903,13 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
         query_headlines = query_headlines.filter(models.Headline.published_at >= since)
         query_prices = query_prices.filter(models.Price.date >= since)
 
-    # `sources=news` hides Reddit/StockTwits chatter from the headline feed.
-    # Default stays "all" so existing consumers (the landing page's ticker
-    # chips, anything else hitting this endpoint) are unaffected — the
-    # dashboard opts in explicitly. Filtering is applied before the count so
+    # `sources=news` hides Reddit/StockTwits chatter from the headline feed,
+    # `sources=social` shows only that. Default stays "all" so existing
+    # consumers (the landing page's ticker chips, anything else hitting this
+    # endpoint) are unaffected — the dashboard opts in explicitly, and every
+    # row carries its source_kind. Filtering is applied before the count so
     # pagination stays correct for the filtered set.
-    if sources == "news":
-        query_headlines = query_headlines.filter(~social_headline_filter())
+    query_headlines = filter_sources(query_headlines, sources)
 
     # prices always returned in full for the chart
     prices = query_prices.order_by(models.Price.date.desc()).all()
@@ -2030,7 +2057,7 @@ def get_candles(ticker: str, interval: str = "1h", limit: int = 500, db: Session
             "1h": lambda dt: dt.replace(minute=0, second=0, microsecond=0),
             "4h": lambda dt: dt.replace(hour=(dt.hour // 4) * 4, minute=0, second=0, microsecond=0),
         }[interval]
-        headlines = db.query(models.Headline).filter(
+        headlines = news_headlines(db).filter(
             models.Headline.ticker == ticker,
             models.Headline.published_at >= candles[0]["ts"],
         ).all()
@@ -2104,7 +2131,7 @@ def cleanup_duplicate_prices(db: Session = Depends(get_db), admin=Depends(requir
 def get_correlation(ticker: str, db: Session = Depends(get_db)):
     since = datetime.utcnow() - timedelta(days=180)
 
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
     ).order_by(models.Headline.published_at).all()
@@ -2254,7 +2281,7 @@ def get_signal(ticker: str, db: Session = Depends(get_db)):
     since = datetime.utcnow() - timedelta(days=180)
     today = datetime.utcnow().date()
 
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
     ).order_by(models.Headline.published_at).all()
@@ -2395,7 +2422,7 @@ def get_signal(ticker: str, db: Session = Depends(get_db)):
 async def export_sentiment(ticker: str, days: int = 90, db: Session = Depends(get_db), user=Depends(require_pro)):
     days = min(days, 90)
     since = datetime.utcnow() - timedelta(days=days)
-    query = db.query(models.Headline).filter(
+    query = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
     )
@@ -2722,6 +2749,7 @@ def admin_dataset_export(
     start: str = None,
     end: str = None,
     include_body: bool = False,
+    sources: str = Query("news", pattern="^(news|social)$"),
     db: Session = Depends(get_db),
 ):
     """Bulk export — the actual deliverable handed to a licensee.
@@ -2730,6 +2758,11 @@ def admin_dataset_export(
     rows and materialising it would sit on Railway's memory ceiling. `body` is
     opt-in because full article text dwarfs everything else in the payload and
     most buyers want the scored headline, not the prose.
+
+    Headlines export news by default; `sources=social` exports the Reddit /
+    StockTwits / X posts as their own file.  There's no mixed option: the two
+    stay separate files, and social posts may carry their platform's
+    commercial-use terms, so they only go to a licensee on purpose.
     """
     if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -2739,7 +2772,7 @@ def admin_dataset_export(
                 "sentiment_label", "published_at", "created_at"]
         if include_body:
             cols.append("body")
-        q = db.query(models.Headline)
+        q = filter_sources(db.query(models.Headline), sources)
         if ticker:
             q = q.filter(models.Headline.ticker == ticker.upper())
         if start:
@@ -3677,26 +3710,28 @@ def api_usage(request: Request, response: Response, api_key=Depends(get_api_key)
     }
 
 
-# `sources` on /v1/sentiment and /v1/summary (and their MCP mirrors): "all" is
-# the default so existing callers see no change; "news" drops Reddit,
-# StockTwits and X posts (see sources.py).  A Literal rather than /dashboard's
-# free string, so a typo is a 422 instead of silently returning everything.
-_SOURCES_DESC = ("`all` (default) includes Reddit, StockTwits and X posts alongside news; "
-                 "`news` returns editorial news only.")
+# `sources` on /v1/sentiment and /v1/summary (and their MCP mirrors): news is
+# the default and social posts are their own option, never averaged in with
+# news (see sources.py).  Only the headline list offers "all", because each
+# row there is labelled with its source_kind; a mixed daily average is exactly
+# what keeping them separate rules out.  Literals rather than /dashboard's
+# free string, so a typo is a 422 instead of silently returning something.
+_SENTIMENT_SOURCES_DESC = ("`news` (default) returns editorial news; `social` returns Reddit, "
+                           "StockTwits and X posts only; `all` returns both, each labelled by `source_kind`.")
+_SUMMARY_SOURCES_DESC = ("`news` (default) averages editorial news; `social` averages Reddit, "
+                         "StockTwits and X posts on their own.")
 
 
-@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored headlines for a given ticker. Use `limit` to control how many results are returned (1-100), and `sources=news` to leave out Reddit, StockTwits and X posts; each row's `source_kind` says which it is. Costs 1 API credit per 25 headlines actually returned; a 404 costs nothing.")
+@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored news headlines for a given ticker. Use `limit` to control how many results are returned (1-100). Social posts (Reddit, StockTwits, X) are kept separate: `sources=social` returns only those, and `sources=all` returns both, with each row's `source_kind` saying which it is. Costs 1 API credit per 25 headlines actually returned; a 404 costs nothing.")
 @limiter.limit("30/minute")
 def api_sentiment(request: Request, response: Response, ticker: str,
                   limit: int = Query(25, ge=1, le=100),
-                  sources: Literal["all", "news"] = Query("all", description=_SOURCES_DESC),
+                  sources: Literal["news", "social", "all"] = Query("news", description=_SENTIMENT_SOURCES_DESC),
                   db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
-    query = db.query(models.Headline).filter(
+    query = filter_sources(db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
-    )
-    if sources == "news":
-        query = query.filter(~social_headline_filter())
+    ), sources)
     headlines = query.order_by(models.Headline.published_at.desc()).limit(limit).all()
 
     if not headlines:
@@ -3727,19 +3762,17 @@ def api_sentiment(request: Request, response: Response, ticker: str,
     }
 
 
-@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily sentiment scores for a given ticker over the specified number of days (1-365). Use `sources=news` to average editorial news only, leaving out Reddit, StockTwits and X posts. Costs 1 API credit per day actually returned; a 404 costs nothing.")
+@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily news sentiment for a given ticker over the specified number of days (1-365). `sources=social` returns a separate daily average of Reddit, StockTwits and X posts; the two are never mixed. Costs 1 API credit per day actually returned; a 404 costs nothing.")
 @limiter.limit("20/minute")
 def api_summary(request: Request, response: Response, ticker: str,
                 days: int = Query(30, ge=1, le=365),
-                sources: Literal["all", "news"] = Query("all", description=_SOURCES_DESC),
+                sources: Literal["news", "social"] = Query("news", description=_SUMMARY_SOURCES_DESC),
                 db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     since = datetime.utcnow() - timedelta(days=days)
-    query = db.query(models.Headline).filter(
+    query = filter_sources(db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
-    )
-    if sources == "news":
-        query = query.filter(~social_headline_filter())
+    ), sources)
     headlines = query.order_by(models.Headline.published_at.desc()).all()
 
     if not headlines:
@@ -3834,7 +3867,7 @@ def api_prices(request: Request, response: Response, ticker: str,
 def api_correlation(request: Request, response: Response, ticker: str, db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     since = datetime.utcnow() - timedelta(days=180)
 
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
     ).order_by(models.Headline.published_at).all()
@@ -4158,7 +4191,7 @@ async def confirm_key_regenerate(request: Request, db: Session = Depends(get_db)
 def get_divergence(ticker: str, db: Session = Depends(get_db)):
     since = datetime.utcnow() - timedelta(days=45)
 
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
     ).order_by(models.Headline.published_at).all()
@@ -4300,7 +4333,7 @@ def get_leaderboard(db: Session = Depends(get_db)):
         models.Headline.ticker,
         models.Headline.sentiment_score,
         models.Headline.published_at,
-    ).filter(models.Headline.published_at >= cutoff_prev).all()
+    ).filter(models.Headline.published_at >= cutoff_prev, ~social_headline_filter()).all()
 
     now_bucket = defaultdict(lambda: {"num": 0.0, "den": 0.0, "cnt": 0})
     prev_bucket = defaultdict(lambda: {"num": 0.0, "den": 0.0, "cnt": 0})
@@ -4446,7 +4479,7 @@ def get_backtest(
 
     since = datetime.utcnow() - timedelta(days=365)
 
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since
     ).order_by(models.Headline.published_at).all()
@@ -5131,7 +5164,7 @@ def _run_signal_quality_refresh() -> dict:
         for t in all_tickers:
             try:
                 costs_pct = _costs_pct_for(t, None)
-                headlines = db.query(models.Headline).filter(
+                headlines = news_headlines(db).filter(
                     models.Headline.ticker == t,
                     models.Headline.published_at >= since,
                 ).order_by(models.Headline.published_at).all()
@@ -5307,7 +5340,7 @@ def admin_backtest_board(
 
     for t in all_tickers:
         try:
-            headlines = db.query(models.Headline).filter(
+            headlines = news_headlines(db).filter(
                 models.Headline.ticker == t,
                 models.Headline.published_at >= since,
             ).order_by(models.Headline.published_at).all()
@@ -5736,7 +5769,7 @@ def get_headline_impact(ticker: str, days: int = 90, limit: int = 20, db: Sessio
     limit = max(5, min(limit, 100))
     since = datetime.utcnow() - timedelta(days=days + 2)  # +2 to ensure next-day price exists
 
-    headlines = db.query(models.Headline).filter(
+    headlines = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper(),
         models.Headline.published_at >= since,
         models.Headline.sentiment_score.isnot(None)
@@ -5818,7 +5851,7 @@ def get_headline_impact(ticker: str, days: int = 90, limit: int = 20, db: Sessio
 
 @app.get("/sentiment-summary/{ticker}")
 def get_sentiment_summary(ticker: str, days: int = 90, all: bool = False, db: Session = Depends(get_db)):
-    query = db.query(models.Headline).filter(
+    query = news_headlines(db).filter(
         models.Headline.ticker == ticker.upper()
     )
     if not all:
