@@ -29,7 +29,7 @@ import math
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.transport_security import TransportSecuritySettings
@@ -37,6 +37,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from . import models
 from .database import SessionLocal
 from .scraper import BACKGROUND_TICKERS
+from .sources import classify_source, filter_sources, news_headlines
 
 
 # The tickers list lives here (rather than importing from main.py) because
@@ -75,7 +76,10 @@ mcp = FastMCP(
         "available.  `get_summary` for daily sentiment aggregates, "
         "`get_sentiment` for the raw scored headlines, `get_prices` for "
         "historical closes, `get_correlation` for a 180-day Pearson stat "
-        "between daily sentiment shifts and next-day price returns.  All "
+        "between daily sentiment shifts and next-day price returns.  Every "
+        "sentiment number is built from editorial news only.  Reddit, "
+        "StockTwits and X posts are kept separate: pass sources='social' to "
+        "`get_sentiment` or `get_summary` to get them on their own.  All "
         "responses are in GBP; sentiment scores are pos_prob - neg_prob."
     ),
 )
@@ -203,23 +207,29 @@ def get_usage(ctx: Context) -> dict[str, Any]:
 
 
 @mcp.tool()
-def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
-    """Return the most recent FinBERT-scored headlines for `ticker`.
+def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
+                  sources: Literal["news", "social", "all"] = "news") -> dict[str, Any]:
+    """Return the most recent FinBERT-scored news headlines for `ticker`.
 
     Each headline has a `sentiment_score` in [-1, +1] (positive_prob -
-    negative_prob) and a categorical `sentiment_label`.  Costs 1 API credit
-    per 25 headlines actually returned — same billing as
-    GET /v1/sentiment/{ticker}.  An empty result costs nothing.
+    negative_prob), a categorical `sentiment_label`, and a `source_kind`
+    (news / reddit / stocktwits / x / youtube).  Costs 1 API credit per 25
+    headlines actually returned — same billing as GET /v1/sentiment/{ticker}.
+    An empty result costs nothing.
 
-    `limit` is capped at 100.  Titles come back reverse-chronological so the
-    first item is the freshest.
+    `limit` is capped at 100.  Social posts are kept separate from news:
+    the default `sources="news"` returns editorial news, `"social"` returns
+    only Reddit, StockTwits and X posts, and `"all"` returns both, labelled
+    by `source_kind`.  Titles come back reverse-chronological so the first
+    item is the freshest.
     """
     limit = max(1, min(limit, 100))
     api_key, db = _open_authed_session(ctx)
     try:
-        rows = db.query(models.Headline).filter(
+        query = filter_sources(db.query(models.Headline).filter(
             models.Headline.ticker == ticker.upper(),
-        ).order_by(models.Headline.published_at.desc()).limit(limit).all()
+        ), sources)
+        rows = query.order_by(models.Headline.published_at.desc()).limit(limit).all()
 
         if not rows:
             return {"ticker": ticker.upper(), "data": [], "note": "No data found."}
@@ -232,6 +242,7 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
         return {
             "ticker": ticker.upper(),
             "limit": limit,
+            "sources": sources,
             "returned": len(rows),
             "calls_used": calls,
             "data": [
@@ -239,6 +250,7 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
                     "date": h.published_at.isoformat() + "Z" if h.published_at else None,
                     "title": h.title,
                     "source": h.source,
+                    "source_kind": classify_source(h.source, h.source_type),
                     "sentiment_score": h.sentiment_score,
                     "sentiment_label": h.sentiment_label,
                 } for h in rows
@@ -249,23 +261,26 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25) -> dict[str, Any]:
 
 
 @mcp.tool()
-def get_summary(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
-    """Return daily aggregated sentiment for `ticker` over the last `days`.
+def get_summary(ctx: Context, ticker: str, days: int = 30,
+                sources: Literal["news", "social"] = "news") -> dict[str, Any]:
+    """Return daily aggregated news sentiment for `ticker` over the last `days`.
 
     Each entry has `avg_sentiment` (unweighted mean of that day's scores),
     `article_count`, and a directional `label` (positive / negative /
-    neutral, thresholded at ±0.1).  Costs 1 API credit per day actually
-    returned — same as GET /v1/summary/{ticker}.  A window with no coverage
-    costs nothing.
+    neutral, thresholded at ±0.1).  `sources="social"` returns a separate
+    daily average of Reddit, StockTwits and X posts; news and social are
+    never averaged together.  Costs 1 API credit per day actually returned —
+    same as GET /v1/summary/{ticker}.  A window with no coverage costs nothing.
     """
     days = max(1, min(days, 365))
     api_key, db = _open_authed_session(ctx)
     try:
         since = datetime.utcnow() - timedelta(days=days)
-        rows = db.query(models.Headline).filter(
+        query = filter_sources(db.query(models.Headline).filter(
             models.Headline.ticker == ticker.upper(),
             models.Headline.published_at >= since,
-        ).all()
+        ), sources)
+        rows = query.all()
 
         if not rows:
             return {"ticker": ticker.upper(), "data": [], "note": "No data in window."}
@@ -293,6 +308,7 @@ def get_summary(ctx: Context, ticker: str, days: int = 30) -> dict[str, Any]:
         return {
             "ticker": ticker.upper(),
             "days": days,
+            "sources": sources,
             "returned": len(out),
             "calls_used": calls,
             "data": out,
@@ -372,7 +388,7 @@ def get_correlation(ctx: Context, ticker: str) -> dict[str, Any]:
         _bill(api_key, db, 1, endpoint="correlation")
         since = datetime.utcnow() - timedelta(days=180)
 
-        headlines = db.query(models.Headline).filter(
+        headlines = news_headlines(db).filter(
             models.Headline.ticker == ticker.upper(),
             models.Headline.published_at >= since,
         ).order_by(models.Headline.published_at).all()
