@@ -1,5 +1,6 @@
 from transformers import pipeline
 import math
+import threading
 import torch
 
 # FinBERT is loaded lazily on first use rather than at import time.
@@ -8,17 +9,25 @@ import torch
 #  - CI: `import app.main` (the smoke test) no longer downloads the model.
 _sentiment_pipeline = None
 
+# The scheduler runs jobs on a thread pool, and the 2-minute Reddit job and
+# the 15-minute RSS job both fire at :00 and :30.  After a deploy both can
+# reach the first headline before the load finishes; without the lock each
+# would build its own pipeline, holding the model in memory twice.
+_pipeline_lock = threading.Lock()
+
 
 def _get_pipeline():
     global _sentiment_pipeline
     if _sentiment_pipeline is None:
-        device = 0 if torch.cuda.is_available() else -1
-        _sentiment_pipeline = pipeline(
-            "text-classification",
-            model="ProsusAI/finbert",
-            device=device,
-            top_k=None,  # return all three class probs
-        )
+        with _pipeline_lock:
+            if _sentiment_pipeline is None:
+                device = 0 if torch.cuda.is_available() else -1
+                _sentiment_pipeline = pipeline(
+                    "text-classification",
+                    model="ProsusAI/finbert",
+                    device=device,
+                    top_k=None,  # return all three class probs
+                )
     return _sentiment_pipeline
 
 

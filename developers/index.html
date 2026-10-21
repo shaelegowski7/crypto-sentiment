@@ -312,18 +312,22 @@ const res = await fetch(
                                     <tbody>
                                         <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
                                         <tr><td>limit</td><td>integer</td><td>25</td><td>Headlines to return, 1–100. Costs 1 credit per 25 returned.</td></tr>
+                                        <tr><td>sources</td><td>string</td><td>news</td><td><code>news</code> returns editorial news. <code>social</code> returns Reddit, StockTwits and X posts only. <code>all</code> returns both.</td></tr>
                                     </tbody>
                                 </table>
+                                <p class="endpoint-desc">Social posts are kept separate from news and never count towards a sentiment average. Each headline's <code>source_kind</code> is <code>news</code>, <code>reddit</code>, <code>stocktwits</code>, <code>x</code> or <code>youtube</code>.</p>
                                 <div class="code-label">Response</div>
                                 <pre>{
   <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
   <span class="c-key">"limit"</span>: <span class="c-num">25</span>,
+  <span class="c-key">"sources"</span>: <span class="c-str">"news"</span>,
   <span class="c-key">"calls_used"</span>: <span class="c-num">1</span>,
   <span class="c-key">"data"</span>: [
     {
       <span class="c-key">"date"</span>: <span class="c-str">"2026-04-27T12:00:00"</span>,
       <span class="c-key">"title"</span>: <span class="c-str">"Bitcoin hits new yearly high amid ETF inflows"</span>,
       <span class="c-key">"source"</span>: <span class="c-str">"CoinDesk"</span>,
+      <span class="c-key">"source_kind"</span>: <span class="c-str">"news"</span>,
       <span class="c-key">"sentiment_score"</span>: <span class="c-num">0.6821</span>,
       <span class="c-key">"sentiment_label"</span>: <span class="c-str">"positive"</span>
     }
@@ -367,12 +371,14 @@ const res = await fetch(
                                     <tbody>
                                         <tr><td>ticker</td><td>string</td><td>—</td><td>42 supported across crypto, FX, stocks, ETFs, commodities</td></tr>
                                         <tr><td>days</td><td>integer</td><td>30</td><td>Days of history, 1–365. Costs 1 credit per day returned.</td></tr>
+                                        <tr><td>sources</td><td>string</td><td>news</td><td><code>news</code> averages editorial news. <code>social</code> gives a separate daily average of Reddit, StockTwits and X posts.</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="code-label">Response</div>
                                 <pre>{
   <span class="c-key">"ticker"</span>: <span class="c-str">"BTC"</span>,
   <span class="c-key">"days"</span>: <span class="c-num">30</span>,
+  <span class="c-key">"sources"</span>: <span class="c-str">"news"</span>,
   <span class="c-key">"calls_used"</span>: <span class="c-num">30</span>,
   <span class="c-key">"data"</span>: [
     {

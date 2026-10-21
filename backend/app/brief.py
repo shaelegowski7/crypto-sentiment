@@ -67,21 +67,30 @@ def get_supabase():
 
 
 def fetch_ticker_data(db_session, ticker: str) -> dict:
-    """Fetch sentiment, price, and top headline for a ticker over last 24h."""
-    from sqlalchemy import text
+    """Fetch sentiment, price, and top headline for a ticker over last 24h.
 
+    Headline queries are news only -- social posts are kept separate (see
+    sources.py), which is why they use the ORM rather than raw SQL: the
+    social filter has one definition and raw SQL would need a second copy.
+    """
+    from sqlalchemy import case, func, text
+    from . import models
+    from .sources import social_headline_filter
+
+    H = models.Headline
     now = datetime.now(timezone.utc)
     since = now - timedelta(hours=24)
     since_48 = now - timedelta(hours=48)
 
     # Sentiment: avg score last 24h and prior 24h for delta
-    sentiment_result = db_session.execute(text("""
-        SELECT
-            AVG(CASE WHEN published_at >= :since THEN sentiment_score END) AS current_sentiment,
-            AVG(CASE WHEN published_at < :since AND published_at >= :since_48 THEN sentiment_score END) AS prev_sentiment
-        FROM headlines
-        WHERE ticker = :ticker AND published_at >= :since_48
-    """), {"ticker": ticker, "since": since, "since_48": since_48}).fetchone()
+    sentiment_result = db_session.query(
+        func.avg(case((H.published_at >= since, H.sentiment_score))).label("current_sentiment"),
+        func.avg(case(((H.published_at < since) & (H.published_at >= since_48), H.sentiment_score))).label("prev_sentiment"),
+    ).filter(
+        H.ticker == ticker,
+        H.published_at >= since_48,
+        ~social_headline_filter(),
+    ).one()
 
     current_sentiment = round(float(sentiment_result.current_sentiment or 0), 3)
     prev_sentiment = round(float(sentiment_result.prev_sentiment or 0), 3)
@@ -103,14 +112,14 @@ def fetch_ticker_data(db_session, ticker: str) -> dict:
 
     # Top headline: highest absolute sentiment score in last 24h, fall back to 7d
     since_7d = now - timedelta(days=7)
-    headline_result = db_session.execute(text("""
-        SELECT title, url, sentiment_score FROM headlines
-        WHERE ticker = :ticker AND published_at >= :since_7d
-        ORDER BY
-            CASE WHEN published_at >= :since THEN 0 ELSE 1 END,
-            ABS(sentiment_score) DESC
-        LIMIT 1
-    """), {"ticker": ticker, "since": since, "since_7d": since_7d}).fetchone()
+    headline_result = db_session.query(H.title, H.url, H.sentiment_score).filter(
+        H.ticker == ticker,
+        H.published_at >= since_7d,
+        ~social_headline_filter(),
+    ).order_by(
+        case((H.published_at >= since, 0), else_=1),
+        func.abs(H.sentiment_score).desc(),
+    ).first()
 
     top_headline = None
     if headline_result:

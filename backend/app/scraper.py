@@ -87,7 +87,6 @@ GENERAL_FEEDS = {
     "https://thedefiant.io/feed",
     "https://www.fxstreet.com/rss/news",
     "https://www.forexlive.com/feed/",
-    "https://www.dailyfx.com/feeds/market-news",
     "https://www.actionforex.com/feed/",
     "https://www.reddit.com/r/Forex/new/.rss",
     "https://www.reddit.com/r/CryptoCurrency/new/.rss",
@@ -145,49 +144,42 @@ RSS_FEEDS = {
     "EURUSD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
-        "https://www.dailyfx.com/feeds/market-news",
         "https://www.actionforex.com/feed/",
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "GBPUSD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
-        "https://www.dailyfx.com/feeds/market-news",
         "https://www.actionforex.com/feed/",
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "USDJPY": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
-        "https://www.dailyfx.com/feeds/market-news",
         "https://www.actionforex.com/feed/",
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "AUDUSD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
-        "https://www.dailyfx.com/feeds/market-news",
         "https://www.actionforex.com/feed/",
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "USDCAD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
-        "https://www.dailyfx.com/feeds/market-news",
         "https://www.actionforex.com/feed/",
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "USDCHF": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
-        "https://www.dailyfx.com/feeds/market-news",
         "https://www.actionforex.com/feed/",
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
     "NZDUSD": [
         "https://www.fxstreet.com/rss/news",
         "https://www.forexlive.com/feed/",
-        "https://www.dailyfx.com/feeds/market-news",
         "https://www.actionforex.com/feed/",
         "https://www.reddit.com/r/Forex/new/.rss",
     ],
@@ -286,43 +278,120 @@ def fetch_headlines(ticker: str) -> list:
     return headlines
 
 
-def fetch_rss_headlines(ticker: str) -> list:
-    feeds = RSS_FEEDS.get(ticker.upper(), [])
+def _feed_headlines(feed, url: str, ticker: str, entries) -> list:
+    """Turn parsed feed entries into headline dicts for `ticker`, keyword-
+    filtering general feeds so an article only lands under a ticker its
+    title actually mentions."""
     keywords = TICKER_KEYWORDS.get(ticker.upper(), [])
+    is_general = url in GENERAL_FEEDS
+    headlines = []
+    for entry in entries:
+        try:
+            title_lower = entry.title.lower()
+            if is_general and not any(kw in title_lower for kw in keywords):
+                continue
+
+            published = entry.get("published_parsed") or entry.get("updated_parsed")
+            pub_date = _safe_published_at(published)
+
+            headlines.append({
+                "ticker": ticker.upper(),
+                "title": entry.title,
+                "source": feed.feed.get("title", url),
+                "url": entry.link,
+                "published_at": pub_date
+            })
+        except Exception as e:
+            print(f"[RSS] {ticker}: entry parse error={e}")
+            continue
+    return headlines
+
+
+def _is_reddit(url: str) -> bool:
+    return "reddit.com/" in url
+
+
+def fetch_rss_headlines(ticker: str) -> list:
+    """News RSS for one ticker.  Reddit feeds listed in RSS_FEEDS are skipped
+    here and fetched by fetch_next_reddit_feed instead (see the note there)."""
+    feeds = RSS_FEEDS.get(ticker.upper(), [])
     headlines = []
 
     for url in feeds:
+        if _is_reddit(url):
+            continue
         try:
             browser_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            ua = browser_ua if "fxstreet.com" in url or "dailyfx.com" in url else "SentimentFX/1.0"
+            ua = browser_ua if "fxstreet.com" in url else "SentimentFX/1.0"
             feed = feedparser.parse(url, request_headers={"User-Agent": ua})
-            is_general = url in GENERAL_FEEDS
-            print(f"[RSS] {ticker}: {url} entries={len(feed.entries)} general={is_general}")
-
-            for entry in feed.entries[:10]:
-                try:
-                    title_lower = entry.title.lower()
-                    if is_general and not any(kw in title_lower for kw in keywords):
-                        continue
-
-                    published = entry.get("published_parsed") or entry.get("updated_parsed")
-                    pub_date = _safe_published_at(published)
-
-                    headlines.append({
-                        "ticker": ticker.upper(),
-                        "title": entry.title,
-                        "source": feed.feed.get("title", url),
-                        "url": entry.link,
-                        "published_at": pub_date
-                    })
-                except Exception as e:
-                    print(f"[RSS] {ticker}: entry parse error={e}")
-                    continue
-
+            print(f"[RSS] {ticker}: {url} entries={len(feed.entries)} general={url in GENERAL_FEEDS}")
+            headlines.extend(_feed_headlines(feed, url, ticker, feed.entries[:10]))
         except Exception as e:
             print(f"[RSS] {ticker}: feed error ({url})={e}")
             continue
 
+    return headlines
+
+
+# ---------------------------------------------------------------------------
+# Reddit.  Unauthenticated RSS gets ONE request per 60-second window per IP:
+# every response says `x-ratelimit-used: 1`, `x-ratelimit-remaining: 0`, and
+# the next request inside the window is a 429 (measured 2026-10-13).  The
+# 15-min RSS job used to fetch all of them back to back (~15 requests in a few
+# seconds, r/CryptoCurrency and r/Forex once per ticker), so only the first,
+# r/Bitcoin, ever got through: r/dogecoin went silent on 25 Aug, r/XRP on
+# 11 Sep, r/solana on 4 Oct.
+#
+# Now a dedicated job (main.scrape_reddit) calls fetch_next_reddit_feed every
+# 2 minutes: ONE subreddit per tick, round-robin, so each is fetched about
+# every 14 minutes and every request lands in a fresh window with room to
+# spare on a shared Railway IP.  Each feed is fetched once and fanned out to
+# every ticker that lists it.  Reddit rows are social posts and stay separate
+# from news everywhere downstream (see sources.py).
+# ---------------------------------------------------------------------------
+
+REDDIT_FEEDS: dict[str, list[str]] = {}
+for _ticker, _urls in RSS_FEEDS.items():
+    for _url in _urls:
+        if _is_reddit(_url):
+            REDDIT_FEEDS.setdefault(_url, []).append(_ticker)
+
+_reddit_next = 0
+
+
+def fetch_next_reddit_feed() -> list:
+    """Fetch the next subreddit in the rotation and return its posts as
+    headline dicts for every ticker that lists it.
+
+    A 429 returns [] without advancing, so the throttled feed is simply
+    retried next tick; any other failure moves on, so one dead subreddit
+    can't stall the rotation.  All entries are kept (not RSS's 10), since a
+    feed is only visited every ~14 minutes.
+    """
+    global _reddit_next
+    urls = list(REDDIT_FEEDS)
+    if not urls:
+        return []
+    url = urls[_reddit_next % len(urls)]
+    try:
+        resp = requests.get(url, headers={"User-Agent": "SentimentFX/1.0"}, timeout=20)
+    except requests.RequestException as e:
+        _reddit_next += 1
+        print(f"[REDDIT] {url} error={e}")
+        return []
+    if resp.status_code == 429:
+        print(f"[REDDIT] {url} 429, window resets in {resp.headers.get('x-ratelimit-reset')}s")
+        return []
+    _reddit_next += 1
+    if resp.status_code != 200:
+        print(f"[REDDIT] {url} status={resp.status_code}")
+        return []
+
+    feed = feedparser.parse(resp.content)
+    print(f"[REDDIT] {url} entries={len(feed.entries)} tickers={REDDIT_FEEDS[url]}")
+    headlines = []
+    for ticker in REDDIT_FEEDS[url]:
+        headlines.extend(_feed_headlines(feed, url, ticker, feed.entries))
     return headlines
 
 
