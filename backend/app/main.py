@@ -1050,9 +1050,19 @@ def _ingest_headlines(db, headlines: list, label: str) -> int:
     """Dedup + FinBERT-score + save a batch of headline dicts.  Returns the
     number of NEW rows actually inserted (existing URLs are silently skipped).
     Used by both the 15-min RSS job and the hourly omnibus job so the ingest
-    semantics stay identical regardless of which scheduler fires."""
+    semantics stay identical regardless of which scheduler fires.
+
+    `seen` covers repeats inside the batch: the session doesn't autoflush, so
+    the lookup below can't see rows added earlier in this same call.  A Reddit
+    feed is fetched once and fanned out to every ticker that lists it, so a
+    post naming two coins arrives twice in one batch; like the per-ticker RSS
+    path, the first ticker keeps it and FinBERT scores it once."""
     saved = 0
+    seen = set()
     for h in headlines:
+        if h["url"] in seen:
+            continue
+        seen.add(h["url"])
         exists = db.query(models.Headline).filter(
             models.Headline.url == h["url"]
         ).first()
@@ -1890,7 +1900,7 @@ def get_prices(ticker: str, db: Session = Depends(get_db)):
 
 
 @app.get("/dashboard/{ticker}")
-def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1, limit: int = 50, sources: str = "all", db: Session = Depends(get_db)):
+def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1, limit: int = 50, sources: str = "news", db: Session = Depends(get_db)):
     query_headlines = db.query(models.Headline).filter(
         models.Headline.ticker == ticker.upper()
     )
@@ -1903,11 +1913,13 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
         query_headlines = query_headlines.filter(models.Headline.published_at >= since)
         query_prices = query_prices.filter(models.Price.date >= since)
 
-    # `sources=news` hides Reddit/StockTwits chatter from the headline feed,
-    # `sources=social` shows only that. Default stays "all" so existing
-    # consumers (the landing page's ticker chips, anything else hitting this
-    # endpoint) are unaffected — the dashboard opts in explicitly, and every
-    # row carries its source_kind. Filtering is applied before the count so
+    # `sources=news` (the default) hides Reddit/StockTwits chatter from the
+    # headline feed, `sources=social` shows only that, and `sources=all` shows
+    # both, each row labelled by source_kind. The default is news because the
+    # landing page's hero tiles and the per-ticker pages (landing/sentiment/)
+    # average these rows into a sentiment number, and no sentiment number
+    # mixes social posts in (see sources.py). The dashboard always passes
+    # `sources` explicitly. Filtering is applied before the count so
     # pagination stays correct for the filtered set.
     query_headlines = filter_sources(query_headlines, sources)
 

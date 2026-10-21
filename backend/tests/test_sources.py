@@ -125,6 +125,34 @@ def test_dashboard_chart_uses_news_only(db, client):
     assert sum(d["count"] for d in body["data"]) == NEWS_COUNT
 
 
+def test_dashboard_feed_defaults_to_news(db, client):
+    # The landing hero tiles and the per-ticker pages call /dashboard without
+    # `sources` and average the rows, so the default must be news only.
+    body = client.get(f"/dashboard/{TICKER}?days=2").json()
+    assert body["pagination"]["total"] == NEWS_COUNT
+    assert {r["source_kind"] for r in body["sentiment"]} == {"news"}
+    everything = client.get(f"/dashboard/{TICKER}?days=2&sources=all").json()
+    assert everything["pagination"]["total"] == len(ROWS)
+
+
+def test_ingest_skips_repeat_urls_in_one_batch(db, monkeypatch):
+    # A Reddit feed is fanned out to every ticker that lists it, so one post
+    # can appear twice in a batch.  It's stored once, for the first ticker,
+    # and scored once.
+    scored = []
+    monkeypatch.setattr(main, "analyse_sentiment",
+                        lambda title: scored.append(title) or {"score": 0.1, "label": "positive"})
+    url = f"{URL_PREFIX}fanout/1"
+    post = {"title": "Bitcoin and Ethereum both up", "source": "newest submissions : CryptoCurrency",
+            "url": url, "published_at": datetime.utcnow()}
+    saved = main._ingest_headlines(db, [{**post, "ticker": TICKER}, {**post, "ticker": "ETH"}], "TEST")
+    db.commit()
+    assert saved == 1
+    assert len(scored) == 1
+    rows = db.query(models.Headline).filter(models.Headline.url == url).all()
+    assert [r.ticker for r in rows] == [TICKER]
+
+
 def test_v1_sentiment_defaults_to_news(db, client):
     body = client.get(f"/v1/sentiment/{TICKER}").json()
     assert body["sources"] == "news"
