@@ -4,10 +4,10 @@ from sqlalchemy import or_ as sa_or, func as sa_func
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES, fetch_stocktwits_headlines, fetch_x_headlines
+from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES
 from .ai_sources import fetch_ai_headlines
 from .sentiment import analyse_sentiment
-from .sources import classify_source, filter_sources, news_headlines, reddit_headline_filter, social_headline_filter
+from .sources import classify_source, filter_sources, news_headlines, social_headline_filter
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from .candles import fetch_intraday_prices, INTRADAY_BACKFILL_PERIOD, INTRADAY_REFRESH_PERIOD
 from datetime import datetime, timedelta, timezone
@@ -1124,13 +1124,10 @@ def scrape_rss_only():
         # failure logs, flags the run, and rolls back its own ticker, but never
         # aborts the RSS job above.  All emit the same headline dict shape, so
         # _ingest_headlines dedups + FinBERT-scores them identically.
-        #   - AI:         ScraperAI replay configs (server-rendered, RSS-less news)
-        #   - STOCKTWITS: finance-native social via the public JSON API
-        #   - X:          experimental; returns [] unless X_ENABLED (see scraper.py)
+        #   - AI: ScraperAI replay configs (server-rendered, RSS-less news)
+        # (StockTwits and X were removed on 2026-11-14; see scraper.py.)
         for ticker in list(TICKERS) + BACKGROUND_TICKERS:
-            for fetch, label in ((fetch_ai_headlines, "AI"),
-                                 (fetch_stocktwits_headlines, "STOCKTWITS"),
-                                 (fetch_x_headlines, "X")):
+            for fetch, label in ((fetch_ai_headlines, "AI"),):
                 try:
                     headlines = fetch(ticker)
                     if not headlines:
@@ -1886,18 +1883,13 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
         query_headlines = query_headlines.filter(models.Headline.published_at >= since)
         query_prices = query_prices.filter(models.Price.date >= since)
 
-    # `sources=news` (the default) hides Reddit/StockTwits chatter from the
-    # headline feed, `sources=social` shows only that, and `sources=all` shows
-    # both, each row labelled by source_kind. The default is news because the
-    # landing page's hero tiles and the per-ticker pages (landing/sentiment/)
-    # average these rows into a sentiment number, and no sentiment number
-    # mixes social posts in (see sources.py). The dashboard always passes
-    # `sources` explicitly. Filtering is applied before the count so
-    # pagination stays correct for the filtered set.
-    query_headlines = filter_sources(query_headlines, sources)
-    # Reddit posts stored before 2026-11-14 are never shown: Reddit's terms
-    # don't allow commercial use of its content without a licence.
-    query_headlines = query_headlines.filter(~reddit_headline_filter())
+    # News only, whatever `sources` says.  Social posts stored before
+    # 2026-11-14 (Reddit, StockTwits, and HN rows linking to X or YouTube) are
+    # never shown: those platforms' terms don't allow commercial use of their
+    # content.  `sources` is still accepted so older frontends and links keep
+    # working.  Filtering is applied before the count so pagination stays
+    # correct for the filtered set.
+    query_headlines = query_headlines.filter(~social_headline_filter())
 
     # prices always returned in full for the chart
     prices = query_prices.order_by(models.Price.date.desc()).all()

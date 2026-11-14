@@ -11,11 +11,10 @@ Social posts are collected but kept separate: they are never averaged in with
 news.  Everything that turns headlines into a number -- the index, daily
 summaries, the dashboard chart, correlation, signals, divergence, backtests,
 the SignalQuality gate, alerts, trade cards, the morning brief, exports --
-reads `news_headlines(db)`.  Social posts are only reachable on purpose,
-through `sources=social|all` on the dashboard's headline list (/dashboard),
-where each row carries its `source_kind`.  /v1, MCP and the bulk export
-serve news only: social was withdrawn there on 2026-11-14 because the
-platforms' terms don't allow commercial use without a licence (see main.py).
+reads `news_headlines(db)`.  Since 2026-11-14 nothing collects social posts
+and nothing serves them (dashboard, /v1, MCP, export): the platforms' terms
+don't allow commercial use of their content.  Rows stored before then stay in
+the table, so this filter is what keeps them out.
 
 When adding a query that averages or counts sentiment, start from
 `news_headlines(db)`, not `db.query(models.Headline)`.  The plain query is
@@ -45,17 +44,6 @@ def social_headline_filter():
         sa_func.coalesce(models.Headline.source_type, "").in_(SOCIAL_SOURCE_TYPES),
         sa_func.coalesce(models.Headline.source, "").ilike("newest submissions :%"),
         sa_func.lower(sa_func.coalesce(models.Headline.source, "")).in_(SOCIAL_DOMAINS),
-    )
-
-
-def reddit_headline_filter():
-    """SQLAlchemy predicate matching Reddit posts (the RSS feed titles and the
-    HN backfill rows whose linked domain is Reddit).  Reddit hasn't been
-    collected since 2026-11-14, and rows stored before then must not be shown
-    or served: its terms don't allow commercial use without a licence."""
-    return sa_or(
-        sa_func.coalesce(models.Headline.source, "").ilike("newest submissions :%"),
-        sa_func.lower(sa_func.coalesce(models.Headline.source, "")).in_(REDDIT_DOMAINS),
     )
 
 
