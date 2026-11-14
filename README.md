@@ -58,13 +58,13 @@ Authenticate with an `X-API-Key` header. Full docs are at [developers.sentimentf
 
 | Endpoint | Returns | Cost |
 |----------|---------|------|
-| `GET /v1/sentiment/{ticker}?limit=1-100&sources=news\|social\|all` | Latest scored headlines, each with a `source_kind` | 1 credit per 25 rows returned |
-| `GET /v1/summary/{ticker}?days=1-365&sources=news\|social` | Daily average sentiment | 1 credit per day returned |
+| `GET /v1/sentiment/{ticker}?limit=1-100` | Latest scored news headlines | 1 credit per 25 rows returned |
+| `GET /v1/summary/{ticker}?days=1-365` | Daily average news sentiment | 1 credit per day returned |
 | `GET /v1/prices/{ticker}?days=1-365` | Daily closes, with a `currency` field | 1 credit per day returned |
 | `GET /v1/correlation/{ticker}` | 180-day Pearson r, p-value, 95% CI, strength | 1 credit |
 | `GET /v1/usage` | Plan, usage, allowance, reset date, rate limits | Free |
 
-Social posts (Reddit, StockTwits, X) are collected but kept separate. Every sentiment number is news only by default, and `sources=social` returns the social posts on their own. Calls are counted after the query, on rows actually returned. Nothing is billed per call: a key that uses up its allowance gets a `402 insufficient_quota` until it refills, and a higher allowance can be [requested](https://developers.sentimentfx.org/#request-more). A 404 costs nothing, and out-of-range parameters are rejected with a 422 before any work is done. Every response carries `X-Quota-*` and `X-RateLimit-*` headers. Errors use one envelope: `{"error": {"type": "...", "message": "..."}}`.
+The API serves editorial news only. Social posts (Reddit, StockTwits, X) aren't served, because those platforms don't allow commercial use of their content without a licence. Calls are counted after the query, on rows actually returned. Nothing is billed per call: a key that uses up its allowance gets a `402 insufficient_quota` until it refills, and a higher allowance can be [requested](https://developers.sentimentfx.org/#request-more). A 404 costs nothing, and out-of-range parameters are rejected with a 422 before any work is done. Every response carries `X-Quota-*` and `X-RateLimit-*` headers. Errors use one envelope: `{"error": {"type": "...", "message": "..."}}`.
 
 ```bash
 # Get a free key (1,000 calls every 30 days, no card)

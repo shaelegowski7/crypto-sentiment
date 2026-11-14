@@ -11,9 +11,11 @@ Social posts are collected but kept separate: they are never averaged in with
 news.  Everything that turns headlines into a number -- the index, daily
 summaries, the dashboard chart, correlation, signals, divergence, backtests,
 the SignalQuality gate, alerts, trade cards, the morning brief, exports --
-reads `news_headlines(db)`.  Social posts are only reachable on purpose:
-`sources=social` on /v1 and MCP (and the bulk export), or `sources=all` on
-the headline *lists*, where each row carries its `source_kind`.
+reads `news_headlines(db)`.  Social posts are only reachable on purpose,
+through `sources=social|all` on the dashboard's headline list (/dashboard),
+where each row carries its `source_kind`.  /v1, MCP and the bulk export
+serve news only: social was withdrawn there on 2026-11-14 because the
+platforms' terms don't allow commercial use without a licence (see main.py).
 
 When adding a query that averages or counts sentiment, start from
 `news_headlines(db)`, not `db.query(models.Headline)`.  The plain query is
