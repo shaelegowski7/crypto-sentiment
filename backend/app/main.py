@@ -4,10 +4,10 @@ from sqlalchemy import or_ as sa_or, func as sa_func
 from fastapi import Request
 from . import models, schemas
 from .database import engine, get_db
-from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES, fetch_stocktwits_headlines, fetch_x_headlines, fetch_next_reddit_feed
+from .scraper import fetch_headlines, fetch_rss_headlines, BACKGROUND_TICKERS, fetch_background_headlines, fetch_hn_headlines, HN_QUERIES, fetch_stocktwits_headlines, fetch_x_headlines
 from .ai_sources import fetch_ai_headlines
 from .sentiment import analyse_sentiment
-from .sources import classify_source, filter_sources, news_headlines, social_headline_filter
+from .sources import classify_source, filter_sources, news_headlines, reddit_headline_filter, social_headline_filter
 from .prices import fetch_prices, fetch_latest_price, fetch_latest_prices_all, fetch_latest_stock_price
 from .candles import fetch_intraday_prices, INTRADAY_BACKFILL_PERIOD, INTRADAY_REFRESH_PERIOD
 from datetime import datetime, timedelta, timezone
@@ -1087,24 +1087,6 @@ def _ingest_headlines(db, headlines: list, label: str) -> int:
     return saved
 
 
-def scrape_reddit():
-    """One subreddit per tick, every 2 minutes: Reddit allows one
-    unauthenticated request a minute, so it can't ride along with the 15-min
-    RSS burst (see the Reddit note in scraper.py)."""
-    db = SessionLocal()
-    try:
-        headlines = fetch_next_reddit_feed()
-        if headlines:
-            saved = _ingest_headlines(db, headlines, "REDDIT")
-            db.commit()
-            print(f"[REDDIT] +{saved} new / {len(headlines)} fetched")
-    except Exception as e:
-        db.rollback()
-        print(f"[REDDIT] error: {e}")
-    finally:
-        db.close()
-
-
 def scrape_rss_only():
     """RSS-only headline ingestion.  Runs every 15 minutes — no prices, no
     GNews, no alerts.  RSS has no quota and FinBERT only fires on NEW rows
@@ -1350,21 +1332,12 @@ def reset_monthly_api_usage():
 
 
 # RSS scrape runs at minute 0/15/30/45.  max_instances=1+coalesce=True means
-# a slow run (Reddit/FXStreet latency spikes can push a tick past 15min) won't
+# a slow run (FXStreet latency spikes can push a tick past 15min) won't
 # pile up — APScheduler skips the overlap rather than spawning a parallel job.
 scheduler.add_job(
     scrape_rss_only,
     CronTrigger(minute="*/15"),
     id="rss_scrape",
-    max_instances=1,
-    coalesce=True,
-    replace_existing=True,
-)
-# Reddit on its own clock: one subreddit every 2 minutes (see scrape_reddit).
-scheduler.add_job(
-    scrape_reddit,
-    CronTrigger(minute="*/2"),
-    id="reddit_scrape",
     max_instances=1,
     coalesce=True,
     replace_existing=True,
@@ -1922,6 +1895,9 @@ def get_dashboard(ticker: str, days: int = 90, all: bool = False, page: int = 1,
     # `sources` explicitly. Filtering is applied before the count so
     # pagination stays correct for the filtered set.
     query_headlines = filter_sources(query_headlines, sources)
+    # Reddit posts stored before 2026-11-14 are never shown: Reddit's terms
+    # don't allow commercial use of its content without a licence.
+    query_headlines = query_headlines.filter(~reddit_headline_filter())
 
     # prices always returned in full for the chart
     prices = query_prices.order_by(models.Price.date.desc()).all()

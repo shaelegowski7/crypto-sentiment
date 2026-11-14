@@ -9,8 +9,8 @@ import torch
 #  - CI: `import app.main` (the smoke test) no longer downloads the model.
 _sentiment_pipeline = None
 
-# The scheduler runs jobs on a thread pool, and the 2-minute Reddit job and
-# the 15-minute RSS job both fire at :00 and :30.  After a deploy both can
+# The scheduler runs jobs on a thread pool, and the 15-minute RSS job and
+# the hourly scrape_all both fire at :00.  After a deploy both can
 # reach the first headline before the load finishes; without the lock each
 # would build its own pipeline, holding the model in memory twice.
 _pipeline_lock = threading.Lock()

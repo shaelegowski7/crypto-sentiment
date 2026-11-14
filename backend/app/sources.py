@@ -30,10 +30,8 @@ from sqlalchemy import or_ as sa_or, func as sa_func
 from . import models
 
 SOCIAL_SOURCE_TYPES = ("stocktwits", "x")
-SOCIAL_DOMAINS = (
-    "reddit.com", "old.reddit.com", "sh.reddit.com",
-    "twitter.com", "x.com", "youtube.com",
-)
+REDDIT_DOMAINS = ("reddit.com", "old.reddit.com", "sh.reddit.com")
+SOCIAL_DOMAINS = REDDIT_DOMAINS + ("twitter.com", "x.com", "youtube.com")
 
 
 def social_headline_filter():
@@ -47,6 +45,17 @@ def social_headline_filter():
         sa_func.coalesce(models.Headline.source_type, "").in_(SOCIAL_SOURCE_TYPES),
         sa_func.coalesce(models.Headline.source, "").ilike("newest submissions :%"),
         sa_func.lower(sa_func.coalesce(models.Headline.source, "")).in_(SOCIAL_DOMAINS),
+    )
+
+
+def reddit_headline_filter():
+    """SQLAlchemy predicate matching Reddit posts (the RSS feed titles and the
+    HN backfill rows whose linked domain is Reddit).  Reddit hasn't been
+    collected since 2026-11-14, and rows stored before then must not be shown
+    or served: its terms don't allow commercial use without a licence."""
+    return sa_or(
+        sa_func.coalesce(models.Headline.source, "").ilike("newest submissions :%"),
+        sa_func.lower(sa_func.coalesce(models.Headline.source, "")).in_(REDDIT_DOMAINS),
     )
 
 
@@ -75,7 +84,7 @@ def classify_source(source: str | None, source_type: str | None) -> str:
     if st in SOCIAL_SOURCE_TYPES:
         return st
     src = (source or "").lower()
-    if src.startswith("newest submissions :") or src in ("reddit.com", "old.reddit.com", "sh.reddit.com"):
+    if src.startswith("newest submissions :") or src in REDDIT_DOMAINS:
         return "reddit"
     if src in ("twitter.com", "x.com"):
         return "x"
