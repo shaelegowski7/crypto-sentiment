@@ -289,7 +289,7 @@ function pageHtml(t) {
   </p>
   <p>
     ${t.name} is ${t.blurb}, which makes ${t.display} an especially useful ticker for
-    sentiment-driven analysis. Our pipeline ${t.category === 'crypto' ? 'pulls from CoinTelegraph, CoinDesk, Decrypt, Blockworks, BeInCrypto and Reddit' : t.category === 'fx' ? 'pulls from FXStreet, ForexLive, DailyFX, ActionForex and Reddit' : 'pulls from Yahoo Finance and other major financial newswires'}, deduplicates by URL, and only stores headlines whose title actually mentions ${t.display} or a recognised alias.
+    sentiment-driven analysis. Our pipeline ${t.category === 'crypto' ? 'pulls from CoinTelegraph, CoinDesk, Decrypt, Blockworks and BeInCrypto' : t.category === 'fx' ? 'pulls from FXStreet, ForexLive and ActionForex' : 'pulls from Yahoo Finance and other major financial newswires'}, deduplicates by URL, and only stores headlines whose title actually mentions ${t.display} or a recognised alias.
   </p>
 
   <h2>Sentiment vs price correlation</h2>

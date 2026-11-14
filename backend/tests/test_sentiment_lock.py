@@ -1,6 +1,6 @@
 """FinBERT's lazy load runs once, however many scheduler threads ask at once.
 
-The 2-minute Reddit job and the 15-minute RSS job both fire at :00 and :30,
+The 15-minute RSS job and the hourly scrape_all both fire at :00,
 so after a deploy both can hit the first headline before the ~400MB model has
 loaded.  No database or model download needed: `pipeline` is replaced with a
 slow stand-in that counts how often it's built.

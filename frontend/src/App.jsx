@@ -1639,7 +1639,7 @@ function Dashboard() {
   const [apiKeyFull, setApiKeyFull] = useState(null)
   const [apiKeyLoading, setApiKeyLoading] = useState(false)
   const [apiKeyCopied, setApiKeyCopied] = useState(false)
-  // Headline feed defaults to editorial news — Reddit/StockTwits chatter is
+  // Headline feed defaults to editorial news — StockTwits/X chatter is
   // ~75% of raw volume and reads as noise in the feed. Sentiment scoring is
   // unaffected either way; this is display-only (see /dashboard `sources`).
   const [headlineSources, setHeadlineSources] = useState("news")

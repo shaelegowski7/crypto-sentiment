@@ -134,7 +134,11 @@ def test_dashboard_feed_defaults_to_news(db, client):
     assert body["pagination"]["total"] == NEWS_COUNT
     assert {r["source_kind"] for r in body["sentiment"]} == {"news"}
     everything = client.get(f"/dashboard/{TICKER}?days=2&sources=all").json()
-    assert everything["pagination"]["total"] == len(ROWS)
+    # Every row except the Reddit post, which is never shown.
+    assert everything["pagination"]["total"] == len(ROWS) - 1
+    assert "reddit" not in {r["source_kind"] for r in everything["sentiment"]}
+    social = client.get(f"/dashboard/{TICKER}?days=2&sources=social").json()
+    assert {r["source_kind"] for r in social["sentiment"]} == {"stocktwits", "x"}
 
 
 def test_ingest_skips_repeat_urls_in_one_batch(db, monkeypatch):
