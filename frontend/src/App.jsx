@@ -1639,10 +1639,9 @@ function Dashboard() {
   const [apiKeyFull, setApiKeyFull] = useState(null)
   const [apiKeyLoading, setApiKeyLoading] = useState(false)
   const [apiKeyCopied, setApiKeyCopied] = useState(false)
-  // Headline feed defaults to editorial news — StockTwits/X chatter is
-  // ~75% of raw volume and reads as noise in the feed. Sentiment scoring is
-  // unaffected either way; this is display-only (see /dashboard `sources`).
-  const [headlineSources, setHeadlineSources] = useState("news")
+  // The headline feed is editorial news only: social posts aren't shown
+  // (platform terms; see backend sources.py).
+  const headlineSources = "news"
   const [chartMode, setChartMode] = useState("line")
   const [candleInterval, setCandleInterval] = useState("1h")
   const [candleData, setCandleData] = useState([])
@@ -2576,14 +2575,6 @@ function Dashboard() {
             <div className="panel-header">
               <span className="panel-title">LATEST HEADLINES</span>
               <div className="panel-controls">
-                {[["news", "NEWS"], ["all", "ALL"]].map(([v, lbl]) => (
-                  <button
-                    key={v}
-                    className={`seg-btn ${headlineSources === v ? "active" : ""}`}
-                    onClick={() => { setHeadlineSources(v); setHeadlinePage(1) }}
-                  >{lbl}</button>
-                ))}
-                <div className="control-divider" />
                 <span className="panel-title" style={{ color: "#7d8590" }}>
                   {loading ? "—" : `${headlines.length} ITEMS · PG ${headlinePage}/${totalPages || 1}`}
                 </span>
