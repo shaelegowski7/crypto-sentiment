@@ -1,22 +1,28 @@
-fastapi
-uvicorn
-sqlalchemy>=2.0,<2.1   # PIN: 2.1 makes postgresql:// default to psycopg 3, which isn't installed (we use psycopg2-binary), so the app crashes at boot. Every Railway build failed from 2026-10-06 until this pin.
-psycopg2-binary
-python-dotenv
-anthropic
-requests
-yfinance
-transformers
-torch
-apscheduler
-pydantic
-scipy
-numpy
-resend
-stripe>=12,<16   # PIN: StripeObject stopped subclassing dict, so .get() on a Stripe resource raises AttributeError. Access fields via _sget() in main.py. Re-test the webhook before widening this.
-supabase
-feedparser
-lxml>=5.0.0
-slowapi
-prometheus_fastapi_instrumentator
-mcp>=1.28,<2.0.0
+# Every direct dependency is pinned to the exact version running in production
+# (Railway deployment fd054857, built 2026-10-21, read with `railway ssh -- pip freeze`
+# on 2026-11-14). Unpinned requirements let any upstream release break the next
+# deploy: sqlalchemy 2.1 did exactly that and every build failed from 2026-10-06
+# to 2026-10-12. To upgrade a package, bump its pin on a branch, let backend-ci
+# pass, then merge. Don't loosen a pin back to a bare name.
+fastapi==0.156.4
+uvicorn==0.54.0
+sqlalchemy==2.0.55   # PIN: 2.1 makes postgresql:// default to psycopg 3, which isn't installed (we use psycopg2-binary), so the app crashes at boot.
+psycopg2-binary==2.9.13
+python-dotenv==1.2.4
+anthropic==1.17.0
+requests==2.34.2
+yfinance==1.7.0
+transformers==5.20.2
+torch==2.14.1
+apscheduler==3.11.3
+pydantic==2.14.1
+scipy==1.17.1
+numpy==2.4.6
+resend==2.50.0
+stripe==15.6.1   # PIN: StripeObject stopped subclassing dict, so .get() on a Stripe resource raises AttributeError. Access fields via _sget() in main.py. Re-test the webhook before upgrading.
+supabase==2.33.0
+feedparser==6.0.14
+lxml==6.1.3
+slowapi==0.1.10
+prometheus_fastapi_instrumentator==8.1.0
+mcp==1.30.0
