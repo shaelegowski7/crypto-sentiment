@@ -1,13 +1,15 @@
 """Social posts vs editorial news (app/sources.py).
 
 Social posts are collected but kept separate: no sentiment number averages
-them in with news, and they're reachable only on purpose (`sources=social`,
-or `sources=all` on a labelled headline list).
+them in with news.  The dashboard's headline list can show them on purpose
+(`sources=social|all`); /v1, MCP and the bulk export serve news only.
 
 Imports app.main, so like test_smoke.py this needs a reachable DATABASE_URL.
 Rows are seeded under a fake ticker (and, for the index, in 2001) so nothing
 the scheduler scrapes during the run can land in the assertions.
 """
+import inspect
+import typing
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -160,12 +162,12 @@ def test_v1_sentiment_defaults_to_news(db, client):
     assert _kinds(body) == {"news"}
 
 
-def test_v1_sentiment_social_and_all(db, client):
-    social = client.get(f"/v1/sentiment/{TICKER}?sources=social").json()
-    assert social["returned"] == SOCIAL_COUNT
-    assert _kinds(social) == {"reddit", "stocktwits", "x"}
-    everything = client.get(f"/v1/sentiment/{TICKER}?sources=all").json()
-    assert everything["returned"] == len(ROWS)
+@pytest.mark.parametrize("sources", ["social", "all"])
+def test_v1_sentiment_does_not_serve_social(db, client, sources):
+    # Withdrawn 2026-11-14: the platforms' terms don't allow commercial use.
+    # A 422, not a silent fallback to news, so callers notice.
+    resp = client.get(f"/v1/sentiment/{TICKER}?sources={sources}")
+    assert resp.status_code == 422
 
 
 def test_v1_sentiment_rejects_unknown_sources(db, client):
@@ -174,15 +176,20 @@ def test_v1_sentiment_rejects_unknown_sources(db, client):
     assert resp.json()["error"]["type"] == "invalid_request_error"
 
 
-def test_v1_summary_keeps_news_and_social_apart(db, client):
+def test_v1_summary_is_news_only(db, client):
     news = client.get(f"/v1/summary/{TICKER}?days=2").json()
-    social = client.get(f"/v1/summary/{TICKER}?days=2&sources=social").json()
     # Summed, not data[0], in case the run straddles midnight UTC.
     assert news["sources"] == "news"
     assert sum(d["article_count"] for d in news["data"]) == NEWS_COUNT
-    assert sum(d["article_count"] for d in social["data"]) == SOCIAL_COUNT
-    # No mixed daily average.
-    assert client.get(f"/v1/summary/{TICKER}?days=2&sources=all").status_code == 422
+    assert client.get(f"/v1/summary/{TICKER}?days=2&sources=news").status_code == 200
+    for sources in ("social", "all"):
+        assert client.get(f"/v1/summary/{TICKER}?days=2&sources={sources}").status_code == 422
+
+
+def test_export_does_not_serve_social(db, client, monkeypatch):
+    monkeypatch.setenv("ADMIN_SECRET", "test-secret")
+    resp = client.get("/admin/dataset/export?secret=test-secret&sources=social")
+    assert resp.status_code == 422
 
 
 @pytest.fixture
@@ -193,16 +200,20 @@ def mcp_session(monkeypatch):
     monkeypatch.setattr(mcp_server, "_bill", lambda *args, **kwargs: None)
 
 
-def test_mcp_get_sentiment_sources(db, mcp_session):
-    assert mcp_server.get_sentiment(None, TICKER)["returned"] == NEWS_COUNT
-    social = mcp_server.get_sentiment(None, TICKER, sources="social")
-    assert social["returned"] == SOCIAL_COUNT
-    assert _kinds(social) == {"reddit", "stocktwits", "x"}
-    assert mcp_server.get_sentiment(None, TICKER, sources="all")["returned"] == len(ROWS)
+def test_mcp_get_sentiment_is_news_only(db, mcp_session):
+    body = mcp_server.get_sentiment(None, TICKER)
+    assert body["returned"] == NEWS_COUNT
+    assert _kinds(body) == {"news"}
 
 
-def test_mcp_get_summary_sources(db, mcp_session):
+def test_mcp_get_summary_is_news_only(db, mcp_session):
     news = mcp_server.get_summary(None, TICKER, days=2)
-    social = mcp_server.get_summary(None, TICKER, days=2, sources="social")
     assert sum(d["article_count"] for d in news["data"]) == NEWS_COUNT
-    assert sum(d["article_count"] for d in social["data"]) == SOCIAL_COUNT
+
+
+@pytest.mark.parametrize("tool", ["get_sentiment", "get_summary"])
+def test_mcp_tools_only_accept_news(tool):
+    # The MCP SDK validates arguments against these annotations, so a client
+    # passing sources="social" gets a validation error, not social posts.
+    annotation = inspect.signature(getattr(mcp_server, tool)).parameters["sources"].annotation
+    assert typing.get_args(annotation) == ("news",)

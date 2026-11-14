@@ -71,16 +71,17 @@ mcp = FastMCP(
     ),
     instructions=(
         "SentimentFX exposes FinBERT-scored news sentiment (-1 to +1) and "
-        "GBP prices for 42 assets spanning crypto, forex, US equities, ETFs "
+        "prices for 42 assets spanning crypto, forex, US equities, ETFs "
         "and commodity futures.  Use `list_tickers` first to see what's "
         "available.  `get_summary` for daily sentiment aggregates, "
         "`get_sentiment` for the raw scored headlines, `get_prices` for "
         "historical closes, `get_correlation` for a 180-day Pearson stat "
         "between daily sentiment shifts and next-day price returns.  Every "
-        "sentiment number is built from editorial news only.  Reddit, "
-        "StockTwits and X posts are kept separate: pass sources='social' to "
-        "`get_sentiment` or `get_summary` to get them on their own.  All "
-        "responses are in GBP; sentiment scores are pos_prob - neg_prob."
+        "headline and sentiment number is editorial news only; social posts "
+        "are not served.  Prices are in each asset's native currency: GBP "
+        "for crypto, USD for stocks, ETFs and commodities, and a raw "
+        "exchange rate for FX pairs (see each row's `currency`).  Sentiment "
+        "scores are pos_prob - neg_prob."
     ),
 )
 
@@ -208,7 +209,7 @@ def get_usage(ctx: Context) -> dict[str, Any]:
 
 @mcp.tool()
 def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
-                  sources: Literal["news", "social", "all"] = "news") -> dict[str, Any]:
+                  sources: Literal["news"] = "news") -> dict[str, Any]:
     """Return the most recent FinBERT-scored news headlines for `ticker`.
 
     Each headline has a `sentiment_score` in [-1, +1] (positive_prob -
@@ -217,11 +218,9 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
     headlines actually returned — same billing as GET /v1/sentiment/{ticker}.
     An empty result costs nothing.
 
-    `limit` is capped at 100.  Social posts are kept separate from news:
-    the default `sources="news"` returns editorial news, `"social"` returns
-    only Reddit, StockTwits and X posts, and `"all"` returns both, labelled
-    by `source_kind`.  Titles come back reverse-chronological so the first
-    item is the freshest.
+    `limit` is capped at 100.  Only editorial news is served (`sources`
+    accepts "news" only).  Titles come back reverse-chronological so the
+    first item is the freshest.
     """
     limit = max(1, min(limit, 100))
     api_key, db = _open_authed_session(ctx)
@@ -262,14 +261,13 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
 
 @mcp.tool()
 def get_summary(ctx: Context, ticker: str, days: int = 30,
-                sources: Literal["news", "social"] = "news") -> dict[str, Any]:
+                sources: Literal["news"] = "news") -> dict[str, Any]:
     """Return daily aggregated news sentiment for `ticker` over the last `days`.
 
     Each entry has `avg_sentiment` (unweighted mean of that day's scores),
     `article_count`, and a directional `label` (positive / negative /
-    neutral, thresholded at ±0.1).  `sources="social"` returns a separate
-    daily average of Reddit, StockTwits and X posts; news and social are
-    never averaged together.  Costs 1 API credit per day actually returned —
+    neutral, thresholded at ±0.1).  News only (`sources` accepts "news"
+    only).  Costs 1 API credit per day actually returned —
     same as GET /v1/summary/{ticker}.  A window with no coverage costs nothing.
     """
     days = max(1, min(days, 365))

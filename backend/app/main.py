@@ -2761,7 +2761,7 @@ def admin_dataset_export(
     start: str = None,
     end: str = None,
     include_body: bool = False,
-    sources: str = Query("news", pattern="^(news|social)$"),
+    sources: str = Query("news", pattern="^news$"),
     db: Session = Depends(get_db),
 ):
     """Bulk export — the actual deliverable handed to a licensee.
@@ -2771,10 +2771,10 @@ def admin_dataset_export(
     opt-in because full article text dwarfs everything else in the payload and
     most buyers want the scored headline, not the prose.
 
-    Headlines export news by default; `sources=social` exports the Reddit /
-    StockTwits / X posts as their own file.  There's no mixed option: the two
-    stay separate files, and social posts may carry their platform's
-    commercial-use terms, so they only go to a licensee on purpose.
+    Headlines export news only.  `sources=social` was withdrawn on 2026-11-14:
+    Reddit's terms don't allow its content to be sold without a licence, and
+    StockTwits and X have similar terms, so social posts never go to a
+    licensee.  The parameter stays (news only) so existing export URLs work.
     """
     if not os.getenv("ADMIN_SECRET") or secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3722,23 +3722,22 @@ def api_usage(request: Request, response: Response, api_key=Depends(get_api_key)
     }
 
 
-# `sources` on /v1/sentiment and /v1/summary (and their MCP mirrors): news is
-# the default and social posts are their own option, never averaged in with
-# news (see sources.py).  Only the headline list offers "all", because each
-# row there is labelled with its source_kind; a mixed daily average is exactly
-# what keeping them separate rules out.  Literals rather than /dashboard's
-# free string, so a typo is a 422 instead of silently returning something.
-_SENTIMENT_SOURCES_DESC = ("`news` (default) returns editorial news; `social` returns Reddit, "
-                           "StockTwits and X posts only; `all` returns both, each labelled by `source_kind`.")
-_SUMMARY_SOURCES_DESC = ("`news` (default) averages editorial news; `social` averages Reddit, "
-                         "StockTwits and X posts on their own.")
+# `sources` on /v1/sentiment and /v1/summary (and their MCP mirrors) accepts
+# only "news".  `social` and `all` were withdrawn on 2026-11-14: Reddit's terms
+# don't allow its content to be used commercially without a licence, and a
+# paid API key serving post titles is commercial use (StockTwits and X have
+# similar terms).  The parameter stays so existing `?sources=news` calls keep
+# working, and stays a Literal so `?sources=social` is a 422 instead of
+# silently returning news.  Bringing social back needs a licence from each
+# platform first.
+_SOURCES_DESC = "Only `news` (editorial news) is available. Social posts are not served."
 
 
-@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored news headlines for a given ticker. Use `limit` to control how many results are returned (1-100). Social posts (Reddit, StockTwits, X) are kept separate: `sources=social` returns only those, and `sources=all` returns both, with each row's `source_kind` saying which it is. Costs 1 API credit per 25 headlines actually returned; a 404 costs nothing.")
+@app.get("/v1/sentiment/{ticker}", summary="Get latest sentiment", description="Returns the latest FinBERT-scored news headlines for a given ticker. Use `limit` to control how many results are returned (1-100). Costs 1 API credit per 25 headlines actually returned; a 404 costs nothing.")
 @limiter.limit("30/minute")
 def api_sentiment(request: Request, response: Response, ticker: str,
                   limit: int = Query(25, ge=1, le=100),
-                  sources: Literal["news", "social", "all"] = Query("news", description=_SENTIMENT_SOURCES_DESC),
+                  sources: Literal["news"] = Query("news", description=_SOURCES_DESC),
                   db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     import math
     query = filter_sources(db.query(models.Headline).filter(
@@ -3774,11 +3773,11 @@ def api_sentiment(request: Request, response: Response, ticker: str,
     }
 
 
-@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily news sentiment for a given ticker over the specified number of days (1-365). `sources=social` returns a separate daily average of Reddit, StockTwits and X posts; the two are never mixed. Costs 1 API credit per day actually returned; a 404 costs nothing.")
+@app.get("/v1/summary/{ticker}", summary="Get daily sentiment summary", description="Returns aggregated daily news sentiment for a given ticker over the specified number of days (1-365). Costs 1 API credit per day actually returned; a 404 costs nothing.")
 @limiter.limit("20/minute")
 def api_summary(request: Request, response: Response, ticker: str,
                 days: int = Query(30, ge=1, le=365),
-                sources: Literal["news", "social"] = Query("news", description=_SUMMARY_SOURCES_DESC),
+                sources: Literal["news"] = Query("news", description=_SOURCES_DESC),
                 db: Session = Depends(get_db), api_key=Depends(get_api_key)):
     since = datetime.utcnow() - timedelta(days=days)
     query = filter_sources(db.query(models.Headline).filter(
