@@ -1259,7 +1259,8 @@
 .auth-btn-primary:active:not(:disabled) { transform: translateY(1px); }
 .auth-btn-primary:disabled { opacity: 0.6; cursor: default; }
 
-.auth-btn-google {
+.auth-btn-google,
+.auth-btn-github {
   width: 100%;
   background: transparent;
   border: 1px solid var(--border2);
@@ -1272,7 +1273,11 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
-.auth-btn-google:hover { background: var(--surface2); border-color: var(--muted); }
+/* Stacked OAuth buttons sit close together; the gap before the divider stays on the last one. */
+.auth-btn-google:has(+ .auth-btn-github) { margin-bottom: 10px; }
+
+.auth-btn-google:hover,
+.auth-btn-github:hover { background: var(--surface2); border-color: var(--muted); }
 
 .auth-divider {
   display: flex;
