@@ -1,6 +1,9 @@
 import os
 import json
+import hashlib
+import hmac
 import logging
+from urllib.parse import urlencode
 from datetime import datetime, timedelta, timezone
 from anthropic import Anthropic
 import resend
@@ -64,6 +67,34 @@ anthropic_client = Anthropic()  # reads ANTHROPIC_API_KEY from env
 
 def get_supabase():
     return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+
+UNSUBSCRIBE_BASE = "https://api.sentimentfx.org/api/brief/unsubscribe"
+
+
+def _unsubscribe_key() -> bytes:
+    # No new env var: the service key is already secret, already set wherever
+    # briefs are sent, and rotating it just invalidates old unsubscribe links
+    # (which then fall back to "turn it off in Account settings").
+    return (os.getenv("SUPABASE_SERVICE_KEY") or "").encode()
+
+
+def unsubscribe_token(user_id: str) -> str:
+    """HMAC of the user id, so an unsubscribe link only works for its recipient.
+
+    Without it, anyone who learned a user id could switch that user's brief off.
+    """
+    return hmac.new(_unsubscribe_key(), user_id.encode(), hashlib.sha256).hexdigest()
+
+
+def verify_unsubscribe_token(user_id: str, token: str | None) -> bool:
+    if not token or not _unsubscribe_key():
+        return False
+    return hmac.compare_digest(unsubscribe_token(user_id), token)
+
+
+def unsubscribe_url(user_id: str) -> str:
+    return f"{UNSUBSCRIBE_BASE}?{urlencode({'user_id': user_id, 'token': unsubscribe_token(user_id)})}"
 
 
 def fetch_ticker_data(db_session, ticker: str) -> dict:
@@ -376,8 +407,7 @@ def send_morning_briefs(db_session):
         email = users_map.get(user_id)
         if not email:
             continue
-        unsubscribe_url = f"https://api.sentimentfx.org/api/brief/unsubscribe?user_id={user_id}"
-        html = build_email_html(ticker_data, ai_summary, unsubscribe_url)
+        html = build_email_html(ticker_data, ai_summary, unsubscribe_url(user_id))
         try:
             resend.Emails.send({
                 "from": "SentimentFX <hello@sentimentfx.org>",

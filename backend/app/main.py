@@ -27,7 +27,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, HTMLResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from collections import defaultdict
@@ -5965,7 +5965,7 @@ def test_brief(email: str, db: Session = Depends(get_db), admin=Depends(require_
                 seen_urls.add(url)
         ticker_data.append(data)
     ai_summary = generate_ai_summary(ticker_data)
-    html = build_email_html(ticker_data, ai_summary, "https://api.sentimentfx.org/api/brief/unsubscribe?user_id=test")
+    html = build_email_html(ticker_data, ai_summary, "https://app.sentimentfx.org/")
     resend_lib.Emails.send({
         "from": "SentimentFX <hello@sentimentfx.org>",
         "to": email,
@@ -5975,11 +5975,46 @@ def test_brief(email: str, db: Session = Depends(get_db), admin=Depends(require_
     return {"message": f"Test brief sent to {email}"}
 
 
-@app.post("/api/brief/unsubscribe")
-def unsubscribe_brief(user_id: str, db: Session = Depends(get_db)):
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
-    supabase.from_("profiles").update({"morning_brief_enabled": False}).eq("id", user_id).execute()
-    return {"message": "Unsubscribed from morning brief."}
+def _unsubscribe_page(title: str, body: str, status_code: int = 200) -> HTMLResponse:
+    return HTMLResponse(
+        status_code=status_code,
+        content=(
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            f"<title>{html.escape(title)} · SentimentFX</title></head>"
+            "<body style='font-family:system-ui,sans-serif;background:#0b0f17;color:#e6e9ef;"
+            "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:16px'>"
+            "<div style='max-width:420px;text-align:center'>"
+            f"<h1 style='font-size:20px'>{html.escape(title)}</h1>"
+            f"<p style='color:#8b95a7;line-height:1.5'>{body}</p>"
+            "<p><a href='https://app.sentimentfx.org/' style='color:#5aa9ff'>Open SentimentFX</a></p>"
+            "</div></body></html>"
+        ),
+    )
+
+
+# GET because the brief's UNSUBSCRIBE link is clicked in an email client;
+# POST kept for one-click unsubscribe.  This was POST-only, and also called
+# create_client without importing it, so every click 405'd and a POST 500'd.
+@app.api_route("/api/brief/unsubscribe", methods=["GET", "POST"], response_class=HTMLResponse)
+def unsubscribe_brief(user_id: str, token: str | None = None):
+    from app.brief import verify_unsubscribe_token
+    if not verify_unsubscribe_token(user_id, token):
+        # Links sent before tokens existed land here too.
+        return _unsubscribe_page(
+            "Link expired",
+            "This unsubscribe link isn't valid any more. Sign in and switch off the "
+            "morning brief under Account settings.",
+            status_code=400,
+        )
+    from supabase import create_client
+    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb.from_("profiles").update({"morning_brief_enabled": False}).eq("id", user_id).execute()
+    return _unsubscribe_page(
+        "You're unsubscribed",
+        "You won't get the morning brief any more. You can switch it back on under "
+        "Account settings.",
+    )
 
 
 async def _get_user_from_token(authorization: str):
