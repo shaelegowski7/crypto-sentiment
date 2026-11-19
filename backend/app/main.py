@@ -3300,6 +3300,21 @@ async def stripe_webhook(request: Request):
         # retry (any non-2xx, including a Stripe API error raised here) is safe.
         subscription = event["data"]["object"]
         customer_id = _sget(subscription, "customer")
+
+        # A subscription holding only the old £0.01 metered price never
+        # carried a plan, so its ending can't change one.  Without this, the
+        # derivation below finds "no live plan" for a comped account (tier set
+        # by hand in Supabase, no Stripe plan) and demotes it to free -- the
+        # same case reconcile-plans deliberately leaves alone.
+        ended_items = _sget(_sget(subscription, "items"), "data", []) or []
+        if ended_items and all(
+            _sget(_sget(_sget(i, "price"), "recurring"), "usage_type") == "metered"
+            for i in ended_items
+        ):
+            print(f"[WEBHOOK] metered-only subscription {_sget(subscription, 'id')} ended "
+                  f"for {customer_id}: no plan change")
+            return {"status": "ok"}
+
         customer = stripe.Customer.retrieve(customer_id)
         customer_email = (_sget(customer, "email") or "").strip().lower()
 

@@ -167,3 +167,21 @@ def test_unlimited_key_is_never_touched(world):
     world["db"].refresh(key)
     assert key.unlimited is True
     assert key.free_calls == 0
+
+
+def test_metered_only_subscription_ending_changes_nothing(world):
+    # A comped account (Pro set by hand in Supabase, no Stripe plan) whose only
+    # subscription is the old metered one: cancelling it in the Stripe cleanup
+    # used to derive "no live plan" and demote it to free.
+    key = world["make_key"](monthly_allowance=15000, stripe_customer_id="cus_f1")
+    world["customers"]["cus_f1"] = key.email
+    world["subs"]["cus_f1"] = [_sub("sub_meter", "canceled", METERED_PRICE, "metered")]
+    ended = _sub("sub_meter", "canceled", METERED_PRICE, "metered")
+    ended["customer"] = "cus_f1"
+    world["event"] = {"type": "customer.subscription.deleted", "data": {"object": ended}}
+    resp = client.post("/webhook", content=b"{}", headers={"stripe-signature": "t"})
+    assert resp.status_code == 200
+
+    world["db"].refresh(key)
+    assert key.monthly_allowance == 15000
+    assert world["supabase"].tiers == []
