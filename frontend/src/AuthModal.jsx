@@ -61,12 +61,12 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
     setLoading(false)
   }
 
-  const handleGoogle = async () => {
+  const handleOAuth = async (provider) => {
     await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider,
       // window.location.href (not .origin) so the OAuth round-trip lands the
       // user back on the same path they started from — /leaderboard,
-      // /track-record, or /.  Without this, every Google login dumps users
+      // /track-record, or /.  Without this, every OAuth login dumps users
       // on the dashboard regardless of where they clicked Log In.
       options: { redirectTo: window.location.href }
     })
@@ -103,8 +103,11 @@ export default function AuthModal({ onClose, initialMode = "login" }) {
           )
         ) : (
           <>
-            <button className="auth-btn-google" onClick={handleGoogle}>
+            <button className="auth-btn-google" onClick={() => handleOAuth("google")}>
               Continue with Google
+            </button>
+            <button className="auth-btn-github" onClick={() => handleOAuth("github")}>
+              Continue with GitHub
             </button>
 
             <div className="auth-divider">
