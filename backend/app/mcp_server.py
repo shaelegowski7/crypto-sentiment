@@ -214,7 +214,7 @@ def get_sentiment(ctx: Context, ticker: str, limit: int = 25,
 
     Each headline has a `sentiment_score` in [-1, +1] (positive_prob -
     negative_prob), a categorical `sentiment_label`, and a `source_kind`
-    (news / reddit / stocktwits / x / youtube).  Costs 1 API credit per 25
+    (always "news").  Costs 1 API credit per 25
     headlines actually returned — same billing as GET /v1/sentiment/{ticker}.
     An empty result costs nothing.
 
